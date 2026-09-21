@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  @apply bg-surface-muted text-ink antialiased;
+  font-feature-settings: "kern";
+}
+
+/* Focus states for accessibility (spec §129) */
+:focus-visible {
+  @apply outline-none ring-2 ring-svetlana-500 ring-offset-2 ring-offset-white;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+}
+.btn-primary {
+  @apply bg-svetlana-600 text-white hover:bg-svetlana-700;
+}
+.btn-ghost {
+  @apply bg-white text-ink hover:bg-surface-muted border border-surface-line;
+}
+.btn-accent {
+  @apply bg-accent text-white hover:bg-accent-dark;
+}
+.btn-danger {
+  @apply bg-bad text-white hover:opacity-90;
+}
+
+.card {
+  @apply bg-white rounded-2xl shadow-card border border-surface-line;
+}
+
+.input {
+  @apply w-full rounded-xl border border-surface-line bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint;
+}
+
+.chip {
+  @apply inline-flex items-center gap-1 rounded-full bg-svetlana-50 px-2.5 py-1 text-xs font-medium text-svetlana-700;
+}
+
+/* Svetlana assistant panel */
+.sv-bubble {
+  @apply max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed;
+}
+.sv-bubble-assistant {
+  @apply bg-white border border-surface-line text-ink rounded-tl-sm shadow-card;
+}
+.sv-bubble-user {
+  @apply bg-svetlana-600 text-white rounded-tr-sm ml-auto;
+}
+
+.prose-steps {
+  @apply mt-2 space-y-1 text-xs text-ink-soft;
+}

@@ -1,0 +1,93 @@
+/**
+ * Tool registry bootstrap.
+ *
+ * Every tool the platform exposes is registered here exactly once. Agents ask
+ * the registry (never the domain layer directly), so authorization,
+ * confirmation gating and audit logging are uniformly enforced (spec §44).
+ */
+import { toolRegistry } from "./registry";
+import type { ToolDefinition } from "./registry";
+
+import {
+  searchProductsTool,
+  searchCheaperTool,
+  compareProductsTool,
+  getProductTool,
+} from "./catalog";
+import {
+  getOrderTool,
+  cartAddTool,
+  createOrderTool,
+  cancelOrderTool,
+  wishlistAddTool,
+} from "./commerce";
+import {
+  analyzeSellerSalesTool,
+  confirmInventoryTool,
+  extendListingTool,
+  createProductDraftTool,
+  publishProductTool,
+  changePriceTool,
+  advisePriceTool,
+  priceHistoryTool,
+  findCompetitorsTool,
+  productHealthTool,
+  documentRequirementsTool,
+  createWorkflowRuleTool,
+} from "./seller";
+import {
+  planGiftTool,
+  upcomingEventsTool,
+  giftContextTool,
+  declareRelationshipTool,
+  verifiedCircleTool,
+  rememberPreferenceTool,
+  recallMemoryTool,
+} from "./social";
+
+const ALL_TOOLS: ToolDefinition[] = [
+  // Catalog
+  searchProductsTool,
+  searchCheaperTool,
+  compareProductsTool,
+  getProductTool,
+  // Commerce
+  getOrderTool,
+  cartAddTool,
+  createOrderTool,
+  cancelOrderTool,
+  wishlistAddTool,
+  // Seller
+  analyzeSellerSalesTool,
+  confirmInventoryTool,
+  extendListingTool,
+  createProductDraftTool,
+  publishProductTool,
+  changePriceTool,
+  advisePriceTool,
+  priceHistoryTool,
+  findCompetitorsTool,
+  productHealthTool,
+  documentRequirementsTool,
+  createWorkflowRuleTool,
+  // Social / memory
+  planGiftTool,
+  upcomingEventsTool,
+  giftContextTool,
+  declareRelationshipTool,
+  verifiedCircleTool,
+  rememberPreferenceTool,
+  recallMemoryTool,
+];
+
+let bootstrapped = false;
+
+export function registerAllTools(): void {
+  if (bootstrapped) return;
+  for (const tool of ALL_TOOLS) {
+    toolRegistry.register(tool);
+  }
+  bootstrapped = true;
+}
+
+export { toolRegistry };

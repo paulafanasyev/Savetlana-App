@@ -1,0 +1,1073 @@
+// =============================================================================
+// Svetlana AI Commerce — Prisma schema
+// =============================================================================
+// Relational schema for the marketplace core, AI layer, trust, payments,
+// delivery, relationships/gifts and privacy.
+//
+// Development/runtime DB in this container: SQLite (no SysV shm and no
+// /dev/shm are available, so a stock PostgreSQL server cannot start here).
+// Production target: PostgreSQL — only DATABASE_URL changes.
+//
+// Portability: JSON payloads are stored as JSON-in-TEXT and parsed by the
+// typed helpers in src/lib/db/json.ts (promotable to jsonb on Postgres).
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// Enums are stored as TEXT and validated app-side
+// (see src/lib/db/enums.ts). On PostgreSQL they can be promoted to native
+// enum types via a migration without changing application code.
+// Enum names: UserRole, SellerType, VerificationStatus, ProductStatus,
+//   AvailabilityStatus, OrderStatus, PaymentStatus, SettlementStatus,
+//   PayoutStatus, ShipmentStatus, RelationshipType, RelationshipStatus,
+//   DocumentStatus, RiskLevel, MemoryType, GiftStatus, ListingHistoryAction,
+//   EventType, ToolPermission, ToolRiskLevel, IntegrationProvider,
+//   ConsentType, DisputeStatus, DisputeReason, EvidenceVerification.
+// =============================================================================
+// USERS / ACCOUNTS
+// =============================================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  role         String   @default("BUYER")
+  avatarUrl    String?
+  locale       String   @default("ru")
+  isBlocked    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile           Profile?
+  sellerProfile     SellerProfile?
+  integrationLinks  IntegrationLink[]
+  carts             Cart[]
+  orders            Order[]
+  orderGroups       OrderGroup[]
+  payments          Payment[]
+  reviews           Review[]           @relation("reviewAuthor")
+  favorites         Favorite[]
+  wishlists         Wishlist[]
+  wishlistItems     WishlistItem[]
+  addresses         Address[]
+  events            Event[]
+  recommendations   Recommendation[]
+  memories          AiMemory[]
+  feedbacks         AiFeedback[]
+  conversations     AiConversation[]
+  notifications     Notification[]
+  priceAlerts       PriceAlert[]
+  consents          Consent[]
+  auditLogs         AuditLog[]
+  relationshipsFrom Relationship[]     @relation("fromUser")
+  relationshipsTo   Relationship[]     @relation("toUser")
+  giftEventsCreated GiftEvent[]
+  giftContributions GiftContribution[]
+  disputesOpened    Dispute[]          @relation("disputeBuyer")
+  reviewsFlagged    Review[]           @relation("reviewFlagger")
+  sessions          Session[]
+}
+
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  expiresAt DateTime
+  ipHash    String?
+  userAgent String?
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([userId])
+}
+
+model Profile {
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName        String?
+  phone              String?
+  birthday           DateTime?
+  // Privacy / personalization switches (Privacy Center)
+  personalizationOn  Boolean   @default(true)
+  analyticsOn        Boolean   @default(true)
+  memoryOn           Boolean   @default(true)
+  // Structured preference memory, editable by the user
+  preferences        String    @default("{}")
+  dislikedAttributes String    @default("[]")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      String?
+  line1      String
+  line2      String?
+  city       String
+  region     String?
+  postalCode String?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+// =============================================================================
+// SELLER / VERIFICATION / TRUST
+// =============================================================================
+
+model SellerProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sellerType        String   @default("INDIVIDUAL")
+  slug              String   @unique
+  displayName       String
+  description       String?
+  logoUrl           String?
+  inn               String?
+  ogrn              String?
+  // NPD (self-employed) status, verified through an official source when wired
+  npdStatus         String   @default("UNVERIFIED")
+  identityStatus    String   @default("UNVERIFIED")
+  businessStatus    String   @default("UNVERIFIED")
+  bankAccountMasked String?
+  // Trust profile: multi-signal, never a single magic score
+  trustSignals      String   @default("{}")
+  isActivated       Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  companies           Company[]
+  verificationRecords VerificationRecord[]
+  documents           SellerDocument[]
+  products            Product[]
+  orders              Order[]
+  settlements         Settlement[]
+  payouts             Payout[]
+  integrationLinks    IntegrationLink[]
+  workflowRules       WorkflowRule[]
+  disputesResponded   Dispute[]            @relation("disputeSeller")
+}
+
+model Company {
+  id              String        @id @default(cuid())
+  sellerProfileId String
+  sellerProfile   SellerProfile @relation(fields: [sellerProfileId], references: [id], onDelete: Cascade)
+  legalName       String
+  inn             String
+  ogrn            String?
+  kpp             String?
+  legalAddress    String?
+  egrulData       String        @default("{}")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model VerificationRecord {
+  id            String        @id @default(cuid())
+  sellerId      String
+  sellerProfile SellerProfile @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  kind          String // identity | npd | business | document
+  status        String        @default("PENDING")
+  source        String // esia | fns | manual_review | document_ocr
+  externalRef   String?
+  checkedFields String        @default("{}")
+  evidenceUrl   String?
+  note          String?
+  verifiedAt    DateTime?
+  createdAt     DateTime      @default(now())
+
+  @@index([sellerId])
+}
+
+model SellerDocument {
+  id              String        @id @default(cuid())
+  sellerId        String
+  sellerProfile   SellerProfile @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  kind            String // company_doc | certificate | declaration | license | product_doc
+  title           String
+  fileUrl         String
+  fileHash        String
+  mimeType        String
+  sizeBytes       Int
+  status          String        @default("UPLOADED")
+  // We never claim legal validity from OCR alone
+  ocrText         String?
+  verifiedBy      String?
+  verifiedAt      DateTime?
+  expiresAt       DateTime?
+  rejectionReason String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([sellerId])
+}
+
+// =============================================================================
+// CATALOG
+// =============================================================================
+
+model Category {
+  id        String     @id @default(cuid())
+  slug      String     @unique
+  name      String
+  parentId  String?
+  parent    Category?  @relation("categoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("categoryTree")
+  products  Product[]
+  createdAt DateTime   @default(now())
+
+  @@index([parentId])
+}
+
+model Product {
+  id                String        @id @default(cuid())
+  sellerId          String
+  sellerProfile     SellerProfile @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  categoryId        String?
+  category          Category?     @relation(fields: [categoryId], references: [id])
+  sku               String        @unique
+  title             String
+  description       String?
+  // Flexible attributes: colour, size, material, package contents, etc.
+  attributes        String        @default("{}")
+  keywords          String        @default("[]")
+  seoSlug           String?       @unique
+  status            String        @default("DRAFT")
+  aiDraft           Boolean       @default(false)
+  // AI-generated content is always marked until the seller approves it
+  aiGeneratedFrom   String?
+  priceKopecks      Int           @default(0)
+  oldPriceKopecks   Int?
+  currency          String        @default("RUB")
+  rating            Float         @default(0)
+  reviewsCount      Int           @default(0)
+  views             Int           @default(0)
+  ordersCount       Int           @default(0)
+  requiresDocuments Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  variants        ProductVariant[]
+  images          ProductImage[]
+  documents       ProductDocument[]
+  inventory       Inventory?
+  listing         Listing?
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+  reviews         Review[]
+  favorites       Favorite[]
+  wishlistItems   WishlistItem[]
+  priceAlerts     PriceAlert[]
+  events          Event[]
+  recommendations Recommendation[]
+  listingHistory  ListingHistory[]
+  competitorRefs  CompetitorListing[]
+  embedding       ProductEmbedding?
+
+  @@index([sellerId])
+  @@index([categoryId])
+  @@index([status])
+}
+
+model ProductVariant {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name       String // e.g. "Цвет: Синий / Размер: 42"
+  sku        String?
+  priceDelta Int      @default(0)
+  quantity   Int      @default(0)
+  createdAt  DateTime @default(now())
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  isPrimary Boolean  @default(false)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model ProductDocument {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  kind      String
+  title     String
+  fileUrl   String
+  status    String   @default("UPLOADED")
+  createdAt DateTime @default(now())
+}
+
+// =============================================================================
+// AVAILABILITY / LISTING LIFECYCLE  (spec §9, §10, §11, §24)
+// =============================================================================
+
+model Inventory {
+  id                String    @id @default(cuid())
+  productId         String    @unique
+  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity          Int       @default(0)
+  availability      String    @default("UNKNOWN")
+  // Seller confirmation of availability — no confirmation means we never
+  // promise guaranteed availability to the buyer
+  confirmedBySeller Boolean   @default(false)
+  confirmedAt       DateTime?
+  saleUntil         DateTime?
+  autoExtend        Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model Listing {
+  id          String    @id @default(cuid())
+  productId   String    @unique
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  publishedAt DateTime?
+  expiresAt   DateTime?
+  isLive      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model ListingHistory {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sellerId  String?
+  action    String
+  // Immutable snapshot of what changed: {priceFrom, priceTo, ...}
+  change    String   @default("{}")
+  note      String?
+  actorId   String?
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@index([action])
+}
+
+// =============================================================================
+// CART / ORDERS
+// =============================================================================
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id           String   @id @default(cuid())
+  cartId       String
+  cart         Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId    String?
+  quantity     Int      @default(1)
+  // Price snapshot at add time — the buyer sees the price they agreed to.
+  priceKopecks Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([cartId, productId, variantId])
+}
+
+// A buyer checkout produces one OrderGroup containing one Order per seller
+// (multi-seller cart split, spec §37).
+model OrderGroup {
+  id             String   @id @default(cuid())
+  buyerId        String
+  buyer          User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  // Idempotency key from checkout (spec §125): the same key can never create a
+  // second set of orders, so a retried checkout cannot double-charge.
+  idempotencyKey String   @unique
+  totalKopecks   Int      @default(0)
+  currency       String   @default("RUB")
+  createdAt      DateTime @default(now())
+
+  orders Order[]
+}
+
+model Order {
+  id                 String        @id @default(cuid())
+  groupId            String?
+  group              OrderGroup?   @relation(fields: [groupId], references: [id])
+  buyerId            String
+  buyer              User          @relation(fields: [buyerId], references: [id])
+  sellerId           String
+  sellerProfile      SellerProfile @relation(fields: [sellerId], references: [id])
+  number             String        @unique
+  status             String        @default("CREATED")
+  subtotalKopecks    Int           @default(0)
+  deliveryKopecks    Int           @default(0)
+  platformFeeKopecks Int           @default(0)
+  paymentFeeKopecks  Int           @default(0)
+  totalKopecks       Int           @default(0)
+  currency           String        @default("RUB")
+  deliveryAddress    String        @default("{}")
+  note               String?
+  cancelledAt        DateTime?
+  confirmedAt        DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  items       OrderItem[]
+  payment     Payment?
+  shipment    DeliveryShipment?
+  settlements Settlement[]
+  reviews     Review[]
+  disputes    Dispute[]
+  history     OrderHistory[]
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+}
+
+model OrderItem {
+  id            String   @id @default(cuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  variantId     String?
+  titleSnapshot String
+  priceKopecks  Int
+  quantity      Int
+  imageUrl      String?
+  createdAt     DateTime @default(now())
+}
+
+model OrderHistory {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus String?
+  toStatus   String
+  reason     String?
+  actorId    String?
+  createdAt  DateTime @default(now())
+
+  @@index([orderId])
+}
+
+// =============================================================================
+// PAYMENTS / SETTLEMENTS / PAYOUTS  (spec §25, §26)
+// =============================================================================
+
+model Payment {
+  id            String    @id @default(cuid())
+  orderId       String    @unique
+  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  buyerId       String
+  buyer         User      @relation(fields: [buyerId], references: [id])
+  provider      String // payment partner adapter key
+  providerRef   String? // provider-side operation id
+  status        String    @default("PENDING")
+  amountKopecks Int       @default(0)
+  currency      String    @default("RUB")
+  feeKopecks    Int       @default(0)
+  errorMessage  String?
+  // Sandbox/mock execution is always recorded explicitly
+  sandbox       Boolean   @default(false)
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  refunds Refund[]
+}
+
+model Refund {
+  id            String   @id @default(cuid())
+  paymentId     String
+  payment       Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  orderId       String
+  amountKopecks Int
+  reason        String
+  status        String   @default("PENDING")
+  providerRef   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Settlement {
+  id                 String        @id @default(cuid())
+  orderId            String
+  order              Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerId           String
+  sellerProfile      SellerProfile @relation(fields: [sellerId], references: [id])
+  grossKopecks       Int           @default(0)
+  platformFeeKopecks Int           @default(0)
+  paymentFeeKopecks  Int           @default(0)
+  deliveryKopecks    Int           @default(0)
+  adjustmentsKopecks Int           @default(0)
+  payoutKopecks      Int           @default(0)
+  status             String        @default("PENDING")
+  payoutId           String?
+  payout             Payout?       @relation("settlementPayout", fields: [payoutId], references: [id])
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([sellerId])
+}
+
+model Payout {
+  id            String        @id @default(cuid())
+  sellerId      String
+  sellerProfile SellerProfile @relation(fields: [sellerId], references: [id])
+  provider      String
+  providerRef   String?
+  amountKopecks Int           @default(0)
+  currency      String        @default("RUB")
+  status        String        @default("PENDING")
+  settlements   Settlement[]  @relation("settlementPayout")
+  createdAt     DateTime      @default(now())
+  processedAt   DateTime?
+}
+
+// =============================================================================
+// DELIVERY  (spec §23, §24, §33, §34)
+// =============================================================================
+
+model DeliveryProvider {
+  id                   String   @id @default(cuid())
+  adapterKey           String   @unique // e.g. "sandbox_courier", "seller_own"
+  name                 String
+  description          String?
+  isEnabled            Boolean  @default(true)
+  supportsPickupPoints Boolean  @default(false)
+  supportsCourier      Boolean  @default(true)
+  createdAt            DateTime @default(now())
+}
+
+model DeliveryShipment {
+  id                 String    @id @default(cuid())
+  orderId            String    @unique
+  order              Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  providerKey        String
+  carrierName        String
+  trackingNumber     String?
+  status             String    @default("CREATED")
+  eta                DateTime?
+  shipTo             String    @default("{}")
+  priceKopecks       Int       @default(0)
+  proofOfDeliveryUrl String?
+  // Sandbox shipments come from the sandbox carrier and must never be shown
+  // to a buyer as real carrier tracking (spec §49).
+  sandbox            Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  events DeliveryEvent[]
+}
+
+model DeliveryEvent {
+  id          String           @id @default(cuid())
+  shipmentId  String
+  shipment    DeliveryShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  status      String
+  message     String?
+  description String?
+  occurredAt  DateTime         @default(now())
+  rawPayload  String           @default("{}")
+
+  @@unique([shipmentId, status, occurredAt])
+  @@index([shipmentId])
+}
+
+// =============================================================================
+// REVIEWS / DISPUTES
+// =============================================================================
+
+model Review {
+  id               String   @id @default(cuid())
+  productId        String
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderId          String?
+  order            Order?   @relation(fields: [orderId], references: [id])
+  authorId         String
+  author           User     @relation("reviewAuthor", fields: [authorId], references: [id])
+  rating           Int
+  body             String
+  verifiedPurchase Boolean  @default(false)
+  aiAnalysis       String   @default("{}") // themes/sentiment, recomputed by Review Agent
+  isHidden         Boolean  @default(false)
+  hiddenReason     String?
+  flaggedById      String?
+  flaggedBy        User?    @relation("reviewFlagger", fields: [flaggedById], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([productId])
+  @@index([orderId])
+}
+
+model Dispute {
+  id            String        @id @default(cuid())
+  orderId       String
+  order         Order         @relation(fields: [orderId], references: [id])
+  buyerId       String
+  buyer         User          @relation("disputeBuyer", fields: [buyerId], references: [id])
+  sellerId      String
+  sellerProfile SellerProfile @relation("disputeSeller", fields: [sellerId], references: [id])
+  reason        String
+  status        String        @default("OPEN")
+  description   String
+  evidenceUrls  String        @default("[]")
+  resolution    String?
+  // Svetlana collects evidence but a human makes final legally binding verdicts
+  requiresHuman Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+// =============================================================================
+// COMPETITOR INTELLIGENCE  (spec §13, §26) — public data only
+// =============================================================================
+
+model CompetitorListing {
+  id           String   @id @default(cuid())
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sellerName   String
+  sellerUrl    String?
+  priceKopecks Int
+  currency     String   @default("RUB")
+  rating       Float?
+  reviewsCount Int?
+  notes        String?
+  observedAt   DateTime @default(now())
+
+  @@index([productId])
+}
+
+// =============================================================================
+// BUYER COLLECTIONS / ALERTS
+// =============================================================================
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model Wishlist {
+  id        String         @id @default(cuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String         @default("Избранное")
+  isPrivate Boolean        @default(true)
+  items     WishlistItem[]
+  createdAt DateTime       @default(now())
+}
+
+model WishlistItem {
+  id         String   @id @default(cuid())
+  wishlistId String
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@unique([wishlistId, productId])
+}
+
+model PriceAlert {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  thresholdKopecks Int
+  firedAt          DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@unique([userId, productId])
+}
+
+// =============================================================================
+// RELATIONSHIP GRAPH  (spec §16) — consent-based, mutual confirmation
+// =============================================================================
+
+model Relationship {
+  id         String   @id @default(cuid())
+  fromUserId String
+  fromUser   User     @relation("fromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId   String
+  toUser     User     @relation("toUser", fields: [toUserId], references: [id], onDelete: Cascade)
+  type       String
+  status     String   @default("SUGGESTED")
+  source     String   @default("manual") // manual | social_suggestion | verified_profile
+  confidence Float?
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  confirmations RelationshipConfirmation[]
+
+  @@unique([fromUserId, toUserId, type])
+  @@index([toUserId])
+}
+
+model RelationshipConfirmation {
+  id             String       @id @default(cuid())
+  relationshipId String
+  relationship   Relationship @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+  requestedById  String
+  decidedAt      DateTime?
+  decision       String?
+  token          String       @unique
+  createdAt      DateTime     @default(now())
+}
+
+// =============================================================================
+// GIFTS  (spec §21, §22)
+// =============================================================================
+
+model GiftEvent {
+  id                    String     @id @default(cuid())
+  creatorId             String
+  creator               User       @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  recipientName         String
+  recipientRelationship String?
+  occasion              String // birthday | anniversary | holiday | custom
+  eventDate             DateTime
+  budgetKopecks         Int        @default(0)
+  interests             String     @default("[]")
+  wishlistHint          String?
+  // Privacy mode: never reveal the gift to the recipient
+  stealthMode           Boolean    @default(true)
+  status                String     @default("DRAFT")
+  groupId               String?
+  group                 GiftGroup?
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+}
+
+model GiftGroup {
+  id               String             @id @default(cuid())
+  giftEventId      String             @unique
+  giftEvent        GiftEvent          @relation(fields: [giftEventId], references: [id], onDelete: Cascade)
+  targetKopecks    Int                @default(0)
+  collectedKopecks Int                @default(0)
+  contributions    GiftContribution[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+}
+
+model GiftContribution {
+  id            String    @id @default(cuid())
+  groupId       String
+  group         GiftGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  participantId String
+  participant   User      @relation(fields: [participantId], references: [id])
+  amountKopecks Int       @default(0)
+  isConfirmed   Boolean   @default(false) // explicit opt-in, never auto-charged
+  note          String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([groupId, participantId])
+}
+
+// =============================================================================
+// AI LAYER  (spec §3, §4, §29, §10, §44, §51)
+// =============================================================================
+
+model AiConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?
+  context   String   @default("{}") // session memory
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages AiMessage[]
+}
+
+model AiMessage {
+  id             String         @id @default(cuid())
+  conversationId String
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // user | assistant | tool
+  content        String
+  // Structured provenance: which agents/tools produced this answer
+  trace          String         @default("{}")
+  providerUsed   String?
+  agentUsed      String?
+  verification   String         @default("NOT_PROVEN")
+  createdAt      DateTime       @default(now())
+
+  @@index([conversationId])
+}
+
+model AiToolCall {
+  id             String   @id @default(cuid())
+  messageId      String?
+  conversationId String?
+  toolName       String
+  agentName      String
+  permission     String
+  riskLevel      String
+  input          String   @default("{}")
+  output         String   @default("{}")
+  status         String   @default("pending") // pending | success | error | denied | requires_confirmation
+  durationMs     Int?
+  errorMessage   String?
+  executedById   String?
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([toolName])
+}
+
+model AiMemory {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String
+  key        String
+  value      String
+  confidence Float?
+  source     String   @default("user_stated")
+  // Every inference is labelled with its evidence basis
+  evidence   String?
+  isEditable Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, key])
+}
+
+model AiFeedback {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId        String?
+  recommendationId String?
+  signal           String // useful | not_useful | too_expensive | not_my_style | not_suitable | already_have
+  comment          String?
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Recommendation {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  score       Float
+  reason      String // human-readable explanation, always present
+  signals     String   @default("{}")
+  isSponsored Boolean  @default(false) // ads must never masquerade as organic
+  dismissed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+// =============================================================================
+// EVENTS / ANALYTICS (consent-aware)
+// =============================================================================
+
+model Event {
+  id        String   @id @default(cuid())
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type      String
+  payload   String   @default("{}")
+  anonymous Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([type])
+}
+
+// =============================================================================
+// RISK / AUDIT / PRIVACY
+// =============================================================================
+
+model RiskEvent {
+  id          String    @id @default(cuid())
+  actorType   String // order | user | seller | payment | shipment
+  actorId     String
+  level       String    @default("LOW")
+  ruleId      String // deterministic rule that fired
+  description String
+  signals     String    @default("{}")
+  // Every risk decision is explainable and auditable
+  explanation String?
+  actionTaken String?
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([actorId])
+  @@index([level])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole  String
+  action     String
+  targetType String
+  targetId   String?
+  before     String?
+  after      String?
+  ipHash     String?
+  createdAt  DateTime @default(now())
+
+  @@index([targetType, targetId])
+}
+
+model Consent {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  granted   Boolean   @default(false)
+  source    String    @default("privacy_center")
+  version   String    @default("1.0")
+  grantedAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([userId, type])
+}
+
+// =============================================================================
+// INTEGRATIONS  (spec §17, §18, §19, §20, §36)
+// =============================================================================
+
+model IntegrationLink {
+  id             String         @id @default(cuid())
+  userId         String?
+  user           User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sellerId       String?
+  sellerProfile  SellerProfile? @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  provider       String
+  externalId     String
+  externalScope  String         @default("[]") // permissions actually granted
+  status         String         @default("UNVERIFIED")
+  accessTokenRef String? // reference to a secret store, never the token
+  linkedAt       DateTime       @default(now())
+  unlinkedAt     DateTime?
+
+  @@unique([provider, externalId])
+  @@index([userId])
+}
+
+// =============================================================================
+// NOTIFICATIONS / WORKFLOWS
+// =============================================================================
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String
+  title     String
+  body      String
+  url       String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model WorkflowRule {
+  id            String        @id @default(cuid())
+  sellerId      String
+  sellerProfile SellerProfile @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  trigger       String // inventory_low | availability_expiring | new_review | competitor_price_drop
+  condition     String        @default("{}")
+  action        String // notify_seller | draft_review_reply | ask_renew
+  isEnabled     Boolean       @default(true)
+  createdByAi   Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+// =============================================================================
+// AI OBSERVABILITY (spec §51, §87)
+// =============================================================================
+// Model-level calls are tracked separately from tool calls: this is where
+// provider latency, token spend, fallback and policy blocks are recorded.
+// Sensitive content is never stored here — only metadata and verdicts.
+
+model AiModelCall {
+  id             String   @id @default(cuid())
+  traceId        String   @unique
+  conversationId String?
+  agentName      String?
+  taskClass      String
+  provider       String
+  model          String?
+  status         String   @default("success") // success | error | blocked_policy
+  latencyMs      Int      @default(0)
+  tokensIn       Int?
+  tokensOut      Int?
+  dataClass      String? // privacy verdict for the outbound payload
+  findings       String   @default("[]")
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+
+  @@index([taskClass])
+  @@index([provider])
+  @@index([status])
+}
+
+// =============================================================================
+// VECTOR LAYER (spec §42)
+// =============================================================================
+// Product embeddings are stored separately from the product row so the vector
+// index can be rebuilt (or swapped to pgvector later) without touching
+// transactional data. `vector` is a JSON array of numbers.
+
+model ProductEmbedding {
+  id          String   @id @default(cuid())
+  productId   String   @unique
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  vector      String // JSON number[]
+  dimensions  Int
+  provider    String
+  contentHash String // recompute only when the indexed text changed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

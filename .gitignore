@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Android
+apps/android/.gradle/
+apps/android/build/
+apps/android/app/build/
+apps/android/local.properties
+*.apk
+*.aab
+*.dex
+
+# iOS (not buildable in this environment)
+apps/ios/build/
+apps/ios/Pods/
+
+# Env / secrets — NEVER commit
+.env
+.env.local
+.env.production
+.env.*.local
+*.key
+*.pem
+secrets/
+
+# Prisma
+apps/web/prisma/**/*.db
+apps/web/prisma/**/*.db-journal
+apps/web/prisma/migrations/dev.db*
+
+# Tests
+coverage/
+test-results/
+
+# Logs / OS
+*.log
+npm-debug.log*
+.DS_Store
+.idea/
+.vscode/
+*.tsbuildinfo
+next-env.d.ts
