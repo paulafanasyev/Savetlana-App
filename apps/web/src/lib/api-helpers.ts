@@ -22,6 +22,13 @@ export function apiRoute(handler: RouteHandler): (request: Request, ctx: { param
       const response = await handler(request, { params: ctx.params ?? {} });
       return safeHeaders(response);
     } catch (error) {
+      // next/navigation's redirect() throws a sentinel error that the App
+      // Router turns into a real 303. It must propagate, not be reported as
+      // a 500 — the mutation has already committed at this point.
+      const digest = (error as { digest?: string })?.digest;
+      if (digest?.startsWith("NEXT_REDIRECT")) {
+        throw error;
+      }
       if (error instanceof ApiError) {
         return safeHeaders(apiErrorResponse(error));
       }
