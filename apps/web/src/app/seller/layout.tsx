@@ -11,6 +11,7 @@ const NAV: { href: string; label: string }[] = [
   { href: "/seller/disputes", label: "Споры" },
   { href: "/seller/documents", label: "Документы" },
   { href: "/seller/analytics", label: "Аналитика" },
+  { href: "/svetlana", label: "Светлана" },
 ];
 
 export default async function SellerLayout({ children }: { children: ReactNode }) {

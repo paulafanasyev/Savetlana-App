@@ -93,4 +93,9 @@ export function registerAllTools(): void {
   bootstrapped = true;
 }
 
+// Auto-register on first import so every consumer (API routes, agents, tests)
+// sees a populated registry. registerAllTools is idempotent, so explicit
+// callers are still safe.
+registerAllTools();
+
 export { toolRegistry };
