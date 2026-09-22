@@ -17,6 +17,7 @@
  */
 import { prisma } from "../prisma";
 import { env } from "../env";
+import { canTransition } from "./orders";
 import { toKopecks } from "../utils";
 
 export const PLATFORM_FEE_PERCENT = env.platformFeePercent;
@@ -32,12 +33,14 @@ export interface SettlementBreakdown {
 
 export function computeSettlement(params: {
   grossKopecks: number;
+  /** Partner-reported processing fee, passed through — never invented here. */
+  paymentFeeKopecks?: number;
   deliveryKopecks?: number;
   adjustmentsKopecks?: number;
 }): SettlementBreakdown {
   const gross = Math.max(0, params.grossKopecks);
   const platformFee = Math.round((gross * PLATFORM_FEE_PERCENT) / 100);
-  const paymentFee = 0; // supplied by the partner at capture, never invented here
+  const paymentFee = Math.max(0, params.paymentFeeKopecks ?? 0);
   const delivery = Math.max(0, params.deliveryKopecks ?? 0);
   const adjustments = params.adjustmentsKopecks ?? 0;
   const payout = Math.max(
@@ -215,8 +218,13 @@ export async function markOrderPaid(orderId: string, sandbox: boolean): Promise<
   await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUniqueOrThrow({
       where: { id: orderId },
-      select: { id: true, sellerId: true, subtotalKopecks: true, deliveryKopecks: true },
+      select: { id: true, sellerId: true, subtotalKopecks: true, deliveryKopecks: true, status: true },
     });
+    // Guard the transition: a cancelled or already-completed order must never
+    // be flipped to PAID by a late/duplicated payment webhook (spec §124).
+    if (!canTransition(order.status, "PAID")) {
+      throw new Error(`недопустимый переход статуса заказа при оплате: ${order.status} → PAID`);
+    }
     await tx.order.update({
       where: { id: orderId },
       data: { status: "PAID", confirmedAt: new Date() },

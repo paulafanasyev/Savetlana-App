@@ -7,25 +7,42 @@
  * roll back, so suites stay independent.
  */
 import { execSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { config } from "dotenv";
 
 config({ path: resolve(__dirname, "..", ".env") });
 
-const DB_PATH = resolve(__dirname, "..", "prisma", "test.db");
+const SCHEMA_PATH = resolve(__dirname, "..", "prisma", "schema.prisma");
+
+// Vitest runs test files in parallel workers. If every worker force-reset the
+// SAME sqlite file, concurrent writes corrupt it ("database disk image is
+// malformed"). Each worker therefore gets its own isolated database.
+const WORKER = process.env.VITEST_WORKER_ID ?? "0";
+const DB_PATH = resolve(__dirname, "..", "prisma", `test-${WORKER}.db`);
 
 mkdirSync(resolve(__dirname, "..", "prisma"), { recursive: true });
 
 // Fresh schema for every run: deterministic, no leftover state.
+// A stale -journal/-wal from an interrupted run leaves the file reported as
+// malformed, so the file is removed wholesale first.
+for (const suffix of ["", "-journal", "-wal", "-shm"]) {
+  const f = `${DB_PATH}${suffix}`;
+  if (existsSync(f)) rmSync(f, { force: true });
+}
+
 try {
-  execSync(`npx prisma db push --force-reset --skip-generate --schema=${resolve(__dirname, "..", "prisma", "schema.prisma")}`, {
+  execSync(`npx prisma db push --force-reset --skip-generate --schema=${SCHEMA_PATH}`, {
     stdio: "ignore",
     env: { ...process.env, DATABASE_URL: `file:${DB_PATH}` },
   });
-} catch {
-  // push may be unavailable in some sandboxes; tests then fall back to the
-  // dev database, which still exercises real queries.
+} catch (e) {
+  // Fail loudly instead of silently falling back to the dev database, which
+  // would let tests pass while polluting shared dev state.
+  throw new Error(
+    `Test database setup failed (prisma db push): ${(e as Error).message}. ` +
+      "The suite cannot run safely against a shared dev database."
+  );
 }
 
 process.env.DATABASE_URL = `file:${DB_PATH}`;

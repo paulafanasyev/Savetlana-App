@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
@@ -21,10 +23,11 @@ function CatalogInner() {
   const params = useSearchParams();
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState(params.get("q") ?? "");
+  // useSearchParams() can be null during server rendering.
+  const [q, setQ] = useState(params?.get("q") ?? "");
 
-  const query = params.get("q") ?? "";
-  const category = params.get("category") ?? "";
+  const query = params?.get("q") ?? "";
+  const category = params?.get("category") ?? "";
 
   useEffect(() => {
     const url = new URL("/api/catalog/search", location.origin);

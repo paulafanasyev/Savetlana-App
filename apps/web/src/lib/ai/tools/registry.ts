@@ -20,6 +20,7 @@ export type ToolPermission =
   | "READ_TRACKING"
   | "READ_PROFILE"
   | "READ_ANALYTICS"
+  | "READ_RISK"
   | "CART_WRITE"
   | "WISHLIST_WRITE"
   | "CREATE_ORDER"
@@ -131,6 +132,7 @@ const ROLE_PERMISSIONS: Record<string, ToolPermission[]> = {
     "READ_TRACKING",
     "READ_ANALYTICS",
     "READ_PROFILE",
+    "READ_RISK",
   ],
 };
 

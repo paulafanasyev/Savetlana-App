@@ -44,12 +44,22 @@ export interface TokenPayload {
   sub: string;
   role: string;
   exp: number;
+  /**
+   * Unique token id. Without it two tokens minted for the same user within the
+   * same second (e.g. register + login back-to-back) would be byte-identical,
+   * which violates the unique constraint on svetlana_session.token.
+   */
+  jti: string;
 }
 
-export async function createToken(payload: Omit<TokenPayload, "exp">): Promise<string> {
+export async function createToken(payload: Omit<TokenPayload, "exp" | "jti">): Promise<string> {
   const key = await getKey();
   const expiresInSec = parseExpiresIn(env.jwtExpiresIn);
-  const body: TokenPayload = { ...payload, exp: Math.floor(Date.now() / 1000) + expiresInSec };
+  const body: TokenPayload = {
+    ...payload,
+    exp: Math.floor(Date.now() / 1000) + expiresInSec,
+    jti: crypto.randomUUID(),
+  };
   const enc = new TextEncoder();
   const header = base64url(enc.encode(JSON.stringify({ alg: ALG, typ: "JWT" })));
   const payloadB64 = base64url(enc.encode(JSON.stringify(body)));

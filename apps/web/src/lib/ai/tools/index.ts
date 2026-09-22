@@ -44,6 +44,7 @@ import {
   rememberPreferenceTool,
   recallMemoryTool,
 } from "./social";
+import { assessOrderRiskTool } from "./risk";
 
 const ALL_TOOLS: ToolDefinition[] = [
   // Catalog
@@ -78,6 +79,8 @@ const ALL_TOOLS: ToolDefinition[] = [
   verifiedCircleTool,
   rememberPreferenceTool,
   recallMemoryTool,
+  // Risk
+  assessOrderRiskTool,
 ];
 
 let bootstrapped = false;

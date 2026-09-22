@@ -17,10 +17,12 @@ export type DataClass =
   | "PRIVATE_CONTENT"; // private messages, closed documents — never leaves
 
 const SECRET_PATTERNS: RegExp[] = [
-  /\b(?:sk|pk|ak|rk)_[A-Za-z0-9]{20,}\b/i, // stripe-ish keys
+  /\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{16,}\b/i, // sk_live_…, pk_test_…
+  /\b(?:sk|pk|ak|rk)_[A-Za-z0-9]{20,}\b/i, // other key prefixes
   /\bAI_GATEWAY_API_KEY[=:].*/i,
-  /\b(?:Bearer|Authorization)[=:]\s?[A-Za-z0-9\-_.]{20,}/i,
-  /\b[A-Za-z0-9]{40,}\b/, // generic high-entropy blobs
+  // "Bearer <jwt>" (space) and "Authorization: <jwt>" (colon) both occur in
+  // real headers — matching only "=" would leak both.
+  /\b(?:Bearer|Authorization)[:\s]+[A-Za-z0-9\-_.]{20,}/i,
   /\bjwt_secret[=:].*/i,
   /-----BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY-----/,
 ];
@@ -28,7 +30,9 @@ const SECRET_PATTERNS: RegExp[] = [
 const FINANCIAL_PATTERNS: RegExp[] = [
   /\b(?:\d[ -]?){13,19}\b/, // card numbers
   /\b(?:\d{4}[ ]?){3}\d{1,4}\b/,
-  /\b(?:сч[её]т|расч[её]тный сч[её]т|БИК|КПП|корр\.?\s?сч[её]т)[:\s]*[A-Za-z0-9\s\-]{6,}/i,
+  // No \b before Cyrillic — an ASCII word boundary never matches at the start
+  // of a Cyrillic word, so "счёт …" would slip through as PUBLIC.
+  /(?:сч[её]т|расч[её]тный сч[её]т|БИК|КПП|корр\.?\s?сч[её]т)[:\s]*[A-Za-z0-9\s\-]{6,}/i,
   /\b4\d{3}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b/,
 ];
 

@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Header } from "@/components/Header";
 
+// The whole app is auth-gated and interactive, so pages render per request.
+// Setting this at the root propagates to every route and synthesized page.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: {
     default: "Светлана — AI-маркетплейс",

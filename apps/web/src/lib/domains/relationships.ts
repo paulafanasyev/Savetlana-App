@@ -14,14 +14,14 @@ import { audit } from "./audit";
 import { recordEvent } from "./events";
 
 export const RELATIONSHIP_TYPES = [
-  "parent",
-  "child",
-  "spouse",
-  "sibling",
-  "relative",
-  "friend",
-  "colleague",
-  "business_contact",
+  "PARENT",
+  "CHILD",
+  "SPOUSE",
+  "SIBLING",
+  "RELATIVE",
+  "FRIEND",
+  "COLLEAGUE",
+  "BUSINESS_CONTACT",
 ] as const;
 
 export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];

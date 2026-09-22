@@ -78,7 +78,7 @@ export class SandboxCarrierAdapter implements DeliveryProviderAdapter {
           occurredAt: created,
         },
         {
-          status: "HANDED_TO_CARRIER",
+          status: "HANDED_OVER",
           description: "Передано перевозчику (sandbox)",
           occurredAt: new Date(created.getTime() + 3 * 60 * 60 * 1000),
         },
@@ -134,14 +134,25 @@ export class SellerOwnDeliveryAdapter implements DeliveryProviderAdapter {
   }
 }
 
-export function getDeliveryProvider(key: string): DeliveryProviderAdapter {
+/**
+ * Resolves the carrier adapter for a key. Real carriers plug in here.
+ *
+ * Honest resolution (spec §49): an unknown carrier is NOT silently treated as
+ * the sandbox. Returns `null` so callers must decide — either fail loudly or
+ * record a seller-declared shipment that never fabricates carrier data.
+ */
+export function getDeliveryProvider(key: string): DeliveryProviderAdapter | null {
   if (key === "SELLER_OWN_DELIVERY") return new SellerOwnDeliveryAdapter();
-  return new SandboxCarrierAdapter();
+  if (key === "sandbox-carrier") return new SandboxCarrierAdapter();
+  return null;
 }
+
+/** Provider key for a shipment whose tracking number came from the seller. */
+export const SELLER_DECLARED_KEY = "SELLER_DECLARED";
 
 export const SHIPMENT_STATES = [
   "CREATED",
-  "HANDED_TO_CARRIER",
+  "HANDED_OVER",
   "IN_TRANSIT",
   "DELIVERED",
   "FAILED",
@@ -150,8 +161,8 @@ export const SHIPMENT_STATES = [
 ] as const;
 
 const SHIPMENT_TRANSITIONS: Record<string, string[]> = {
-  CREATED: ["HANDED_TO_CARRIER", "CANCELLED", "FAILED"],
-  HANDED_TO_CARRIER: ["IN_TRANSIT", "FAILED", "CANCELLED"],
+  CREATED: ["HANDED_OVER", "CANCELLED", "FAILED"],
+  HANDED_OVER: ["IN_TRANSIT", "FAILED", "CANCELLED"],
   IN_TRANSIT: ["DELIVERED", "FAILED", "RETURNED"],
   DELIVERED: [],
   FAILED: ["RETURNED", "CREATED"],
@@ -170,27 +181,44 @@ export function canTransitionShipment(from: string, to: string): boolean {
  */
 export async function createShipment(params: ShipmentParams) {
   const adapter = getDeliveryProvider(params.carrier);
-  if (!adapter.available) {
-    throw new Error(`carrier ${params.carrier} is not available`);
+
+  // A seller who already has a carrier tracking number is the source of truth
+  // (spec §123): record it verbatim and never fabricate a replacement.
+  // Marked SELLER_DECLARED — live carrier sync is unavailable for it, so the
+  // tracking screen shows the seller's data as-is instead of inventing events.
+  const sellerDeclared = !adapter && params.trackingNumber;
+  if (!adapter && !sellerDeclared) {
+    throw new Error(
+      `carrier "${params.carrier}" has no adapter configured (PENDING_EXTERNAL_ACCESS)`,
+    );
   }
-  const created = await adapter.createShipment(params);
+
+  const created = adapter
+    ? await adapter.createShipment(params)
+    : {
+        trackingNumber: params.trackingNumber as string,
+        estimatedDelivery: params.estimatedDelivery,
+        priceKopecks: params.deliveryKopecks ?? 0,
+      };
 
   const shipment = await prisma.deliveryShipment.create({
     data: {
       orderId: params.orderId,
-      providerKey: adapter.key,
+      providerKey: adapter ? adapter.key : SELLER_DECLARED_KEY,
       carrierName: params.carrier,
       trackingNumber: created.trackingNumber,
       status: "CREATED",
       eta: created.estimatedDelivery,
-      sandbox: adapter.sandbox,
+      sandbox: adapter ? adapter.sandbox : false,
     },
   });
   await prisma.deliveryEvent.create({
     data: {
       shipmentId: shipment.id,
       status: "CREATED",
-      description: "Отправление создано",
+      description: sellerDeclared
+        ? "Отправление зарегистрировано продавцом (трек-номер указан продавцом, синхронизация с перевозчиком недоступна)"
+        : "Отправление создано",
     },
   });
   await prisma.order.update({
@@ -211,11 +239,20 @@ export async function createShipment(params: ShipmentParams) {
 export async function syncTracking(shipmentId: string) {
   const shipment = await prisma.deliveryShipment.findUniqueOrThrow({
     where: { id: shipmentId },
+    include: { events: { orderBy: { occurredAt: "asc" } } },
   });
-  const adapter = getDeliveryProvider(shipment.providerKey);
   if (!shipment.trackingNumber) {
     throw new Error(`Shipment ${shipment.id} has no tracking number yet`);
   }
+  const adapter = getDeliveryProvider(shipment.providerKey);
+
+  // No real carrier adapter (seller-declared or PENDING_EXTERNAL_ACCESS):
+  // return the persisted timeline verbatim. Never invent carrier events
+  // (spec §49 — no fake delivery tracking presented as real).
+  if (!adapter) {
+    return shipment;
+  }
+
   const tracking = await adapter.getTracking(shipment.trackingNumber);
   const eta = await adapter.getEta(shipment.trackingNumber);
 
@@ -238,14 +275,14 @@ export async function syncTracking(shipmentId: string) {
     });
   }
 
-  const targetOrderStatus =
-    tracking.status === "DELIVERED"
-      ? "DELIVERED"
-      : tracking.status === "IN_TRANSIT"
-        ? "IN_TRANSIT"
-        : tracking.status === "HANDED_TO_CARRIER"
-          ? "HANDED_TO_CARRIER"
-          : undefined;
+  // The carrier speaks *shipment* vocabulary (HANDED_OVER), the order speaks
+  // *order* vocabulary (HANDED_TO_CARRIER). Translate explicitly (spec §123).
+  const SHIPMENT_TO_ORDER_STATUS: Record<string, string> = {
+    DELIVERED: "DELIVERED",
+    IN_TRANSIT: "IN_TRANSIT",
+    HANDED_OVER: "HANDED_TO_CARRIER",
+  };
+  const targetOrderStatus = SHIPMENT_TO_ORDER_STATUS[tracking.status];
 
   return prisma.deliveryShipment.update({
     where: { id: shipment.id },

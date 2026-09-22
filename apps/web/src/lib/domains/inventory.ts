@@ -31,9 +31,12 @@ export function computeAvailability(
   saleUntil: Date | null,
   now = new Date()
 ): AvailabilityState {
+  // Zero stock is a hard physical fact, independent of confirmation — we must
+  // never report a confirmed-in-stock item the seller cannot actually ship.
+  if (quantity <= 0) return "OUT_OF_STOCK";
+  // Positive stock without a fresh confirmation is not promiseable (spec §10).
   if (!confirmed) return "UNKNOWN";
   if (saleUntil && saleUntil.getTime() < now.getTime()) return "UNKNOWN";
-  if (quantity <= 0) return "OUT_OF_STOCK";
   if (quantity <= 3) return "LIMITED";
   return "AVAILABLE";
 }

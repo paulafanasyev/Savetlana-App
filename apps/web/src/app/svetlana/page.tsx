@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 
 export const metadata = { title: "Светлана — AI-помощник" };

@@ -62,8 +62,8 @@ export function generateToken(bytes = 32): string {
 }
 
 export function maskString(value: string, visible = 4): string {
-  if (value.length <= visible * 2) return "•".repeat(value.length);
-  return value.slice(0, visible) + "•".repeat(value.length - visible * 2) + value.slice(-visible);
+  if (value.length <= visible * 2) return "*".repeat(value.length);
+  return value.slice(0, visible) + "*".repeat(value.length - visible * 2) + value.slice(-visible);
 }
 
 export function hashIp(ip: string, salt: string): string {

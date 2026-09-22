@@ -35,7 +35,7 @@ const TRANSITIONS: Record<string, string[]> = {
   PAYMENT_PENDING: ["PAID", "CANCELLED"],
   PAID: ["CONFIRMED", "DISPUTED", "CANCELLED"],
   CONFIRMED: ["PROCESSING", "DISPUTED"],
-  PROCESSING: ["READY", "DISPUTED"],
+  PROCESSING: ["READY", "HANDED_TO_CARRIER", "DISPUTED"],
   READY: ["HANDED_TO_CARRIER", "DISPUTED"],
   HANDED_TO_CARRIER: ["IN_TRANSIT", "DISPUTED"],
   IN_TRANSIT: ["DELIVERED", "DISPUTED"],
@@ -87,21 +87,10 @@ export interface CreatedOrders {
 export async function createOrdersFromCart(
   input: CreateOrderInput
 ): Promise<CreatedOrders> {
-  const cart = await getCartView(input.buyerId);
-  if (cart.lines.length === 0) {
-    throw new Error("корзина пуста");
-  }
-  const unavailable = cart.lines.filter((l) => !l.available);
-  if (unavailable.length > 0) {
-    throw new Error(
-      `часть товаров недоступна в нужном количестве: ${unavailable
-        .map((l) => l.title)
-        .join(", ")}`
-    );
-  }
-
-  // Idempotency: a repeated checkout with the same key returns the original
-  // group instead of creating duplicate orders.
+  // Idempotency first: a repeated checkout with the same key returns the
+  // original group instead of creating duplicate orders. This check must run
+  // before the cart validation — a replay after a successful checkout finds an
+  // already-cleared cart and would otherwise wrongly throw (spec §125).
   const existingGroup = await prisma.orderGroup.findUnique({
     where: { idempotencyKey: input.idempotencyKey },
     include: { orders: { select: { id: true, number: true, sellerId: true, totalKopecks: true, _count: { select: { items: true } } } } },
@@ -117,6 +106,19 @@ export async function createOrdersFromCart(
         itemsCount: o._count.items,
       })),
     };
+  }
+
+  const cart = await getCartView(input.buyerId);
+  if (cart.lines.length === 0) {
+    throw new Error("корзина пуста");
+  }
+  const unavailable = cart.lines.filter((l) => !l.available);
+  if (unavailable.length > 0) {
+    throw new Error(
+      `часть товаров недоступна в нужном количестве: ${unavailable
+        .map((l) => l.title)
+        .join(", ")}`
+    );
   }
 
   const bySeller = new Map<string, typeof cart.lines>();
@@ -169,6 +171,13 @@ export async function createOrdersFromCart(
       });
       await tx.orderHistory.create({
         data: { orderId: order.id, toStatus: "CREATED", reason: "checkout", actorId: input.buyerId },
+      });
+      // Checkout hands the order to the payment step immediately. Transitioning
+      // here (rather than letting the payment layer write PAID straight over
+      // CREATED) keeps a single authoritative state machine (spec §124).
+      await tx.order.update({ where: { id: order.id }, data: { status: "PAYMENT_PENDING" } });
+      await tx.orderHistory.create({
+        data: { orderId: order.id, toStatus: "PAYMENT_PENDING", reason: "awaiting payment", actorId: input.buyerId },
       });
       created.push({
         id: order.id,

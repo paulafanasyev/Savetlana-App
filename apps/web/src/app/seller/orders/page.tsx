@@ -1,6 +1,7 @@
 import { requireSellerServer } from "@/lib/auth";
 import { getOrdersForSeller } from "@/lib/domains/orders";
 import { rub, orderStatusLabel, timeAgo } from "@/lib/format";
+import { FulfillActions } from "./FulfillActions";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,12 @@ export default async function SellerOrdersPage() {
                 Оплата: {o.payment ? o.payment.status : "нет данных"}
                 {o.shipment ? ` · Доставка: ${o.shipment.carrierName} — ${o.shipment.status}` : ""}
               </div>
+              {/*
+                Manual fulfillment controls (spec §112: the seller can work
+                fully without AI). Confirm is available once paid; shipping is
+                available once confirmed. Both are explicit human actions.
+              */}
+              <FulfillActions orderId={o.id} status={o.status} hasShipment={Boolean(o.shipment)} />
             </div>
           ))}
         </div>
