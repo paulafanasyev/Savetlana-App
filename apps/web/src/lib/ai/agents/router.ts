@@ -92,7 +92,7 @@ export function routeAgent(text: string, side: "buyer" | "seller"): RouteResult 
  * role-level permissions via the registry; this just shapes the prompt.
  */
 export const AGENT_TOOLS: Record<AgentKey, string[]> = {
-  buyer: ["search_products", "compare_products", "get_product", "cart_add", "create_order", "get_order", "cancel_order", "wishlist_add", "recall_memory", "remember_preference"],
+  buyer: ["search_products", "compare_products", "get_product", "cart_add", "create_order", "get_order", "cancel_order", "request_return", "create_dispute", "wishlist_add", "recall_memory", "remember_preference"],
   seller: ["analyze_seller_sales", "product_health", "advise_price", "change_price", "confirm_inventory", "extend_listing", "create_product_draft", "publish_product", "find_competitors", "document_requirements", "create_workflow_rule"],
   search: ["search_products", "search_cheaper", "compare_products", "get_product"],
   vision: ["search_products", "search_cheaper", "compare_products"],
@@ -111,5 +111,5 @@ export const AGENT_TOOLS: Record<AgentKey, string[]> = {
   document: ["document_requirements"],
   memory: ["remember_preference", "recall_memory"],
   notification: ["create_workflow_rule"],
-  support: ["get_order", "get_product"],
+  support: ["get_order", "get_product", "request_return", "create_dispute"],
 };

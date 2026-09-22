@@ -56,8 +56,14 @@ export function Header() {
               </button>
               {open && (
                 <div className="card absolute right-0 mt-2 w-48 overflow-hidden p-1 shadow-float">
+                  <Link href="/profile" className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
+                    Мой профиль
+                  </Link>
                   <Link href="/orders" className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
                     Мои заказы
+                  </Link>
+                  <Link href="/notifications" className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
+                    Уведомления
                   </Link>
                   <Link href="/privacy" className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
                     Конфиденциальность

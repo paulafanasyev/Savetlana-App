@@ -7,6 +7,7 @@
  */
 import { getCartView, addToCart } from "../../domains/cart";
 import { createOrdersFromCart, getOrdersForBuyer, transitionOrder } from "../../domains/orders";
+import { openDispute } from "../../domains/disputes";
 import { prisma } from "../../prisma";
 import { fromKopecks, generateOrderNumber } from "../../utils";
 import type { ToolDefinition, ToolResult, ToolContext } from "./registry";
@@ -264,3 +265,129 @@ function validDeliveryAddress(
   }
   return out;
 }
+
+const RETURN_REASONS = [
+  "ITEM_NOT_AS_DESCRIBED",
+  "ITEM_DAMAGED",
+  "WRONG_ITEM",
+  "NO_LONGER_NEEDED",
+] as const;
+
+/**
+ * Request a return on a delivered/completed order (spec §29 return states).
+ * The order state machine must permit RETURN_REQUESTED — this tool never
+ * fabricates the transition; it verifies the persisted state afterwards.
+ */
+export const requestReturnTool: ToolDefinition = {
+  name: "request_return",
+  description:
+    "Запросить возврат товара. Доступно только для доставленных или завершённых заказов. Требует подтверждения пользователя.",
+  permission: "REQUEST_RETURN",
+  riskLevel: "FINANCIAL",
+  needsConfirmation: true,
+  parameters: looseObjectSchema({
+    orderId: { type: "string" },
+    reason: { type: "string" },
+    comment: { type: "string" },
+  }),
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const orderId = typeof args.orderId === "string" ? args.orderId : undefined;
+    if (!orderId) return denied("укажите orderId");
+    const reason = typeof args.reason === "string" ? args.reason : undefined;
+    if (!reason || !RETURN_REASONS.includes(reason as never)) {
+      return denied(`укажите причину: ${RETURN_REASONS.join(", ")}`);
+    }
+    const comment = typeof args.comment === "string" ? args.comment.slice(0, 1000) : undefined;
+
+    try {
+      const result = await transitionOrder({
+        orderId,
+        actorId: ctx.userId,
+        actorRole: "buyer",
+        actingUserId: ctx.userId,
+        to: "RETURN_REQUESTED",
+        note: comment ?? `возврат: ${reason}`,
+      });
+      if (!result.ok) {
+        return denied(`невозможно запросить возврат: ${result.note ?? "недопустимый статус заказа"}`);
+      }
+      const order = result.order;
+      await notify({
+        userId: ctx.userId,
+        kind: "order_status",
+        title: `Оформлен возврат по заказу ${order.number}`,
+        body: "Запрос передан продавцу. Если он не ответит в срок, спор можно эскалировать.",
+        url: `/orders/${order.id}`,
+      });
+      return ok(
+        { orderId: order.id, status: order.status, reason },
+        `Оформила запрос на возврат по заказу ${order.number}. Статус: возврат запрошен.`
+      );
+    } catch (e) {
+      return denied(e instanceof Error ? e.message : "не удалось оформить возврат");
+    }
+  },
+};
+
+const DISPUTE_REASONS = [
+  "ITEM_NOT_RECEIVED",
+  "ITEM_NOT_AS_DESCRIBED",
+  "ITEM_DAMAGED",
+  "PAYMENT_DISPUTE",
+  "RETURN_DISPUTE",
+  "DELIVERY_DISPUTE",
+] as const;
+
+/**
+ * Open a dispute (spec §42). Svetlana collects the request and evidence, but
+ * the final verdict on a dispute requiring adjudication belongs to a human
+ * (ESCALATED_HUMAN) — never to the AI.
+ */
+export const createDisputeTool: ToolDefinition = {
+  name: "create_dispute",
+  description:
+    "Открыть спор по заказу. Используется, если продавец не решил проблему. Сбор доказательств автоматический, итоговое решение принимает человек.",
+  permission: "CREATE_DISPUTE",
+  riskLevel: "HIGH_RISK_WRITE",
+  needsConfirmation: true,
+  parameters: looseObjectSchema({
+    orderId: { type: "string" },
+    reason: { type: "string" },
+    description: { type: "string" },
+  }),
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const orderId = typeof args.orderId === "string" ? args.orderId : undefined;
+    if (!orderId) return denied("укажите orderId");
+    const reason = typeof args.reason === "string" ? args.reason : undefined;
+    if (!reason || !DISPUTE_REASONS.includes(reason as never)) {
+      return denied(`укажите причину: ${DISPUTE_REASONS.join(", ")}`);
+    }
+    const description =
+      typeof args.description === "string" && args.description.trim().length >= 10
+        ? args.description.slice(0, 2000)
+        : undefined;
+    if (!description) return denied("опишите проблему (минимум 10 символов)");
+
+    try {
+      const dispute = await openDispute({
+        orderId,
+        buyerId: ctx.userId,
+        reason: reason as never,
+        description,
+      });
+      await notify({
+        userId: ctx.userId,
+        kind: "dispute_update",
+        title: `Открыт спор по заказу ${dispute.orderId}`,
+        body: "Спор передан на сбор доказательств. Если потребуется, подключится специалист.",
+        url: `/orders/${orderId}`,
+      });
+      return ok(
+        { disputeId: dispute.id, status: dispute.status },
+        `Открыла спор по заказу. Статус: сбор доказательств. Итоговое решение принимает человек, не я.`
+      );
+    } catch (e) {
+      return denied(e instanceof Error ? e.message : "не удалось открыть спор");
+    }
+  },
+};

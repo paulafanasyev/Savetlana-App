@@ -20,6 +20,8 @@ import {
   createOrderTool,
   cancelOrderTool,
   wishlistAddTool,
+  requestReturnTool,
+  createDisputeTool,
 } from "./commerce";
 import {
   analyzeSellerSalesTool,
@@ -58,6 +60,8 @@ const ALL_TOOLS: ToolDefinition[] = [
   createOrderTool,
   cancelOrderTool,
   wishlistAddTool,
+  requestReturnTool,
+  createDisputeTool,
   // Seller
   analyzeSellerSalesTool,
   confirmInventoryTool,

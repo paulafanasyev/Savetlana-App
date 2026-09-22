@@ -118,6 +118,8 @@ export default function OrderDetailPage() {
         </div>
 
         {needsPayment && <PayButton orderId={order.id} onPaid={load} />}
+
+        {canRequestReturn(order.status) && <ReturnActions orderId={order.id} onChanged={load} />}
       </div>
 
       <div className="card mt-3 p-5">
@@ -158,6 +160,134 @@ export default function OrderDetailPage() {
             Продавец ещё не передал заказ перевозчику. Отслеживание появится, когда отправление будет создано.
           </p>
         )}
+      </div>
+    </div>
+  );
+}
+
+function canRequestReturn(status: string): boolean {
+  return status === "DELIVERED" || status === "COMPLETED";
+}
+
+const RETURN_REASONS: { value: string; label: string }[] = [
+  { value: "ITEM_NOT_AS_DESCRIBED", label: "Не соответствует описанию" },
+  { value: "ITEM_DAMAGED", label: "Повреждён" },
+  { value: "WRONG_ITEM", label: "Прислали не то" },
+  { value: "NO_LONGER_NEEDED", label: "Больше не нужен" },
+];
+
+const DISPUTE_REASONS: { value: string; label: string }[] = [
+  { value: "ITEM_NOT_RECEIVED", label: "Товар не получен" },
+  { value: "ITEM_NOT_AS_DESCRIBED", label: "Не соответствует описанию" },
+  { value: "ITEM_DAMAGED", label: "Повреждён при доставке" },
+  { value: "PAYMENT_DISPUTE", label: "Спор по оплате" },
+  { value: "RETURN_DISPUTE", label: "Спор по возврату" },
+  { value: "DELIVERY_DISPUTE", label: "Спор по доставке" },
+];
+
+function ReturnActions({ orderId, onChanged }: { orderId: string; onChanged: () => void }) {
+  const [open, setOpen] = useState<"none" | "return" | "dispute">("none");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const [description, setDescription] = useState("");
+
+  async function submit(kind: "return" | "dispute") {
+    if (!reason) {
+      setMessage("Выберите причину");
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/${kind}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(kind === "return" ? { reason } : { reason, description }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setMessage(body?.error ?? "Не удалось отправить запрос");
+        return;
+      }
+      setMessage(
+        kind === "return"
+          ? "Запрос на возврат оформлен. Продавец получил уведомление."
+          : "Спор открыт. Сбор доказательств начнётся автоматически."
+      );
+      setOpen("none");
+      onChanged();
+    } catch {
+      setMessage("Не удалось связаться с сервером");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (open === "none") {
+    return (
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
+        <button className="btn btn-ghost px-3 py-2 text-sm" onClick={() => setOpen("return")}>
+          Оформить возврат
+        </button>
+        <button className="btn btn-ghost px-3 py-2 text-sm" onClick={() => setOpen("dispute")}>
+          Открыть спор
+        </button>
+      </div>
+    );
+  }
+
+  const options = open === "return" ? RETURN_REASONS : DISPUTE_REASONS;
+
+  return (
+    <div className="mt-4 border-t border-line pt-4">
+      <h3 className="text-sm font-bold text-ink">
+        {open === "return" ? "Возврат товара" : "Открытие спора"}
+      </h3>
+      <div className="mt-3 space-y-3">
+        <label className="block text-xs text-ink-soft">
+          Причина
+          <select
+            className="input mt-1 w-full"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          >
+            <option value="">Выберите причину…</option>
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {open === "dispute" && (
+          <label className="block text-xs text-ink-soft">
+            Опишите проблему
+            <textarea
+              className="input mt-1 min-h-[80px] w-full"
+              placeholder="Минимум 10 символов"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </label>
+        )}
+        <div className="flex gap-2">
+          <button
+            className="btn btn-primary px-4 py-2 text-sm"
+            disabled={busy}
+            onClick={() => void submit(open)}
+          >
+            {busy ? "Отправляем…" : "Отправить"}
+          </button>
+          <button
+            className="btn btn-ghost px-4 py-2 text-sm"
+            disabled={busy}
+            onClick={() => setOpen("none")}
+          >
+            Отмена
+          </button>
+        </div>
+        {message && <p className="text-xs text-bad">{message}</p>}
       </div>
     </div>
   );

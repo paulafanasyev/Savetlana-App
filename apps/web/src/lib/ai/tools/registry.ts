@@ -25,6 +25,8 @@ export type ToolPermission =
   | "WISHLIST_WRITE"
   | "CREATE_ORDER"
   | "CANCEL_ORDER"
+  | "REQUEST_RETURN"
+  | "CREATE_DISPUTE"
   | "CREATE_PRODUCT_DRAFT"
   | "EDIT_PRODUCT_DRAFT"
   | "PUBLISH_PRODUCT"
@@ -100,6 +102,8 @@ const ROLE_PERMISSIONS: Record<string, ToolPermission[]> = {
     "WISHLIST_WRITE",
     "CREATE_ORDER",
     "CANCEL_ORDER",
+    "REQUEST_RETURN",
+    "CREATE_DISPUTE",
     "READ_MEMORY",
     "WRITE_MEMORY",
     "GIFT_WRITE",
