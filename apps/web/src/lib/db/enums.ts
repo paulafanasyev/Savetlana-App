@@ -78,6 +78,7 @@ export const DisputeReason_VALUES = ["ITEM_NOT_RECEIVED", "ITEM_NOT_AS_DESCRIBED
 export type DisputeReason = (typeof DisputeReason_VALUES)[number];
 
 export const EvidenceVerification_VALUES = ["VERIFIED", "NOT_PROVEN", "PENDING"] as const;
+export const LinkStatus_VALUES = ["UNVERIFIED", "ACTIVE", "REVOKED", "UNAVAILABLE"] as const;
 export type EvidenceVerification = (typeof EvidenceVerification_VALUES)[number];
 
 // ---------------------------------------------------------------------------
@@ -112,6 +113,7 @@ const ALL_ENUMS: EnumRecord = {
   DisputeStatus: DisputeStatus_VALUES,
   DisputeReason: DisputeReason_VALUES,
   EvidenceVerification: EvidenceVerification_VALUES,
+  LinkStatus: LinkStatus_VALUES,
 };
 
 /** Returns true when the value is a legal member of the named enum. */

@@ -75,12 +75,19 @@ export const env = {
   esiaClientId: optional("ESIA_CLIENT_ID"),
   esiaClientSecret: optional("ESIA_CLIENT_SECRET"),
   esiaRedirectUri: optional("ESIA_REDIRECT_URI"),
+  esiaBaseUrl: optional("ESIA_BASE_URL"),
   alipayMerchantId: optional("ALIPAY_MERCHANT_ID"),
   alipayPrivateKey: optional("ALIPAY_PRIVATE_KEY"),
+  internationalBridgeBaseUrl: optional("INTERNATIONAL_BRIDGE_BASE_URL"),
+  internationalBridgeApiKey: optional("INTERNATIONAL_BRIDGE_API_KEY"),
+  internationalBridgeMerchantId: optional("INTERNATIONAL_BRIDGE_MERCHANT_ID"),
 
   // --- Platform config ----------------------------------------------------
   platformFeePercent: Number(optional("PLATFORM_FEE_PERCENT") ?? "1.5"),
   defaultCurrency: optional("DEFAULT_CURRENCY") ?? "RUB",
+  publicAppUrl:
+    optional("PUBLIC_APP_URL") ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"),
   nodeEnv: optional("NODE_ENV") ?? "development",
   isProduction: process.env.NODE_ENV === "production",
 
@@ -115,8 +122,20 @@ export const integrationStatus = {
   payment: env.paymentProviderApiKey ? "READY" : "PENDING_EXTERNAL_ACCESS",
   delivery: env.deliveryProviderApiKey ? "READY" : "PENDING_EXTERNAL_ACCESS",
   vk: env.vkAppId && env.vkClientSecret ? "READY" : "PENDING_EXTERNAL_ACCESS",
-  esia: env.esiaClientId && env.esiaClientSecret ? "READY" : "PENDING_EXTERNAL_ACCESS",
-  alipay: env.alipayMerchantId && env.alipayPrivateKey ? "READY" : "PENDING_EXTERNAL_ACCESS",
+  esia:
+    env.esiaClientId && env.esiaClientSecret && env.esiaRedirectUri
+      ? "READY"
+      : "PENDING_EXTERNAL_ACCESS",
+  alipay:
+    env.alipayMerchantId && env.alipayPrivateKey
+      ? "READY"
+      : "PENDING_EXTERNAL_ACCESS",
+  internationalPayments:
+    env.internationalBridgeBaseUrl &&
+    env.internationalBridgeApiKey &&
+    env.internationalBridgeMerchantId
+      ? "READY"
+      : "PENDING_EXTERNAL_ACCESS",
 } as const;
 
 export type IntegrationKey = keyof typeof integrationStatus;

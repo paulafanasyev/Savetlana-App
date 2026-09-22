@@ -17,6 +17,7 @@
  */
 import { prisma } from "../prisma";
 import { audit } from "./audit";
+import { esiaOfficialSource, isEsiaLive } from "./esia";
 
 export type VerificationStatus =
   | "UNVERIFIED"
@@ -105,7 +106,14 @@ class SandboxOfficialSource implements OfficialSourceAdapter {
   }
 }
 
-export const officialSource: OfficialSourceAdapter = new SandboxOfficialSource();
+/**
+ * Resolves the official source. ЕСИА is used when its credentials and feature
+ * flag are configured; otherwise the sandbox rule engine, which validates INN
+ * format but never returns VERIFIED.
+ */
+export const officialSource: OfficialSourceAdapter = isEsiaLive()
+  ? esiaOfficialSource
+  : new SandboxOfficialSource();
 
 /**
  * Submits a seller's declared data to the authoritative source and records

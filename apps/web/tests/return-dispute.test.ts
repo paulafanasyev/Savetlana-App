@@ -12,6 +12,7 @@ import { prisma } from "../src/lib/prisma";
 import { toolRegistry } from "../src/lib/ai/tools";
 import { hashPassword } from "../src/lib/auth";
 import { transitionOrder } from "../src/lib/domains/orders";
+import type { OrderStatus } from "../src/lib/db/enums";
 
 const EMAIL = `return-buyer@${process.env.VITEST_WORKER_ID ?? "0"}.test`;
 const SELLER_EMAIL = `return-seller@${process.env.VITEST_WORKER_ID ?? "0"}.test`;
@@ -108,14 +109,16 @@ beforeAll(async () => {
   });
 
   const advance = async (id: string, to: string) => {
-    const path: Record<string, string[]> = {
+    const path: Record<string, readonly string[]> = {
       PAID: ["PAYMENT_PENDING", "PAID"],
       DELIVERED: ["PAYMENT_PENDING", "PAID", "CONFIRMED", "PROCESSING", "READY", "HANDED_TO_CARRIER", "IN_TRANSIT", "DELIVERED"],
     };
-    for (const step of path[to]) {
+    const steps = path[to];
+    if (!steps) throw new Error(`unknown target status ${to}`);
+    for (const step of steps) {
       const res = await transitionOrder({
         orderId: id,
-        to: step,
+        to: step as OrderStatus,
         actorId: userId,
         actorRole: "buyer",
         actingUserId: userId,

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireUserServer } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { timeAgo } from "@/lib/format";
+import { isVkLive } from "@/lib/domains/vk";
+import { isEsiaLive } from "@/lib/domains/esia";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +19,7 @@ export default async function ProfilePage() {
       locale: true,
       createdAt: true,
       profile: { select: { displayName: true, phone: true, personalizationOn: true, analyticsOn: true, memoryOn: true } },
+      integrationLinks: { select: { provider: true, status: true, linkedAt: true }, where: { status: "ACTIVE" } },
       _count: { select: { orders: true, favorites: true, reviews: true, wishlists: true } },
     },
   });
@@ -92,6 +95,31 @@ export default async function ProfilePage() {
         </p>
       </section>
 
+      <section className="card mb-6 p-6">
+        <h2 className="mb-2 text-lg font-semibold text-ink">Подключённые сервисы</h2>
+        <p className="mb-4 text-xs text-ink-soft">
+          Подключение происходит только через официальный OAuth. Платформа
+          запрашивает минимально необходимые разрешения и никогда не хранит
+          токены в открытом виде.
+        </p>
+        <ul className="space-y-3 text-sm">
+          <IntegrationRow
+            label="ВКонтакте"
+            connected={user.integrationLinks.some((l) => l.provider === "vk")}
+            live={isVkLive()}
+            connectHref="/api/integrations/vk/connect"
+            unavailableNote="VK-интеграция ожидает настройки (PENDING_EXTERNAL_ACCESS)"
+          />
+          <IntegrationRow
+            label="ЕСИА / Госуслуги"
+            connected={user.integrationLinks.some((l) => l.provider === "esia")}
+            live={isEsiaLive()}
+            connectHref="/api/integrations/esia/connect"
+            unavailableNote="ЕСИА-интеграция ожидает настройки (PENDING_EXTERNAL_ACCESS)"
+          />
+        </ul>
+      </section>
+
       <section className="card p-6">
         <h2 className="mb-4 text-lg font-semibold text-ink">Настройки AI</h2>
         <ul className="space-y-3 text-sm">
@@ -130,5 +158,45 @@ function Toggle({ on }: { on: boolean }) {
         }`}
       />
     </span>
+  );
+}
+
+function IntegrationRow(params: {
+  label: string;
+  connected: boolean;
+  live: boolean;
+  connectHref: string;
+  unavailableNote: string;
+}) {
+  if (params.connected) {
+    return (
+      <li className="flex items-center justify-between gap-4 rounded-lg bg-surface-muted px-4 py-3">
+        <span className="font-medium text-ink">{params.label}</span>
+        <span className="inline-flex items-center gap-2 text-xs text-green-700">
+          <span className="h-2 w-2 rounded-full bg-green-600" /> подключено
+        </span>
+      </li>
+    );
+  }
+  if (!params.live) {
+    return (
+      <li className="flex items-center justify-between gap-4 rounded-lg border border-dashed border-surface-line px-4 py-3">
+        <span className="font-medium text-ink-soft">{params.label}</span>
+        <span className="text-xs text-ink-soft" title={params.unavailableNote}>
+          недоступно
+        </span>
+      </li>
+    );
+  }
+  return (
+    <li className="flex items-center justify-between gap-4 px-4 py-3">
+      <span className="font-medium text-ink">{params.label}</span>
+      <a
+        href={params.connectHref}
+        className="btn btn-secondary px-3 py-1.5 text-xs"
+      >
+        Подключить
+      </a>
+    </li>
   );
 }
