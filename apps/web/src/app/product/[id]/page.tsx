@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { rub, availabilityLabel } from "@/lib/format";
 import { AddToCartButton } from "@/components/AddToCartButton";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
-import { summarizeReviews } from "@/lib/domains/reviews";
+import { summarizeReviews, listReviews } from "@/lib/domains/reviews";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ export default async function ProductPage({ params }: PageProps) {
   if (!product) notFound();
 
   const reviewSummary = await summarizeReviews(product.id);
+  const recentReviews = await listReviews(product.id, 6);
   const attrs = safeJson(product.attributes);
 
   return (
@@ -118,7 +120,10 @@ export default async function ProductPage({ params }: PageProps) {
             )}
           </div>
 
-          <AddToCartButton productId={product.id} />
+          <div className="flex flex-wrap gap-3">
+            <AddToCartButton productId={product.id} />
+            <FavoriteButton productId={product.id} />
+          </div>
 
           {product.description && (
             <div>
@@ -160,9 +165,12 @@ export default async function ProductPage({ params }: PageProps) {
           <SvetlanaChat side="buyer" title="Спросите Светлану о товаре" />
           <div className="card p-4">
             <h3 className="text-sm font-bold text-ink">Продавец</h3>
-            <div className="mt-2 text-base font-semibold text-svetlana-700">
-              {product.sellerProfile.displayName}
-            </div>
+            <Link
+              href={`/sellers/${product.sellerProfile.id}`}
+              className="mt-2 block text-base font-semibold text-svetlana-700 hover:underline"
+            >
+              {product.sellerProfile.displayName} →
+            </Link>
             {product.sellerProfile.description && (
               <p className="mt-1 text-xs text-ink-soft line-clamp-3">{product.sellerProfile.description}</p>
             )}
@@ -205,6 +213,32 @@ export default async function ProductPage({ params }: PageProps) {
               Оценка тональности: {reviewSummary.sentimentBasis === "live-model" ? " live-моделью" : reviewSummary.sentimentBasis === "rating-derived" ? "по распределению оценок" : "недостаточно данных (NOT_PROVEN)"}
             </p>
           </div>
+        )}
+
+        {recentReviews.length > 0 ? (
+          <div className="mt-6 space-y-3">
+            {recentReviews.map((r) => (
+              <div key={r.id} className="card p-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-ink">{r.authorName}</span>
+                  <span className="text-ink-soft">
+                    {r.verifiedPurchase ? "✓ проверенная покупка" : "покупка не подтверждена"}
+                  </span>
+                </div>
+                <div className="mt-1 text-xs text-ink-faint">
+                  {"★".repeat(r.rating)}
+                  <span className="text-ink-faint">{"★".repeat(5 - r.rating)}</span>
+                  {" · "}
+                  {new Date(r.createdAt).toLocaleDateString("ru-RU")}
+                </div>
+                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-soft">{r.body}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-ink-soft">
+            Отзывов пока нет. После получения заказа вы сможете оставить первый.
+          </p>
         )}
       </section>
     </div>

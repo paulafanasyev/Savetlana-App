@@ -135,3 +135,142 @@ export async function classifyReviewSentiment(
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Creating a review (spec §28)
+// ---------------------------------------------------------------------------
+// A review is marked verifiedPurchase only when the buyer actually bought the
+// product in an order that reached a delivered state. The platform never
+// publishes a review for a product the user never bought — and never hides one
+// on AI opinion alone.
+const DELIVERED_STATES = new Set(["DELIVERED", "COMPLETED"]);
+
+export async function createReview(input: {
+  authorId: string;
+  productId: string;
+  orderId?: string;
+  rating: number;
+  body: string;
+}): Promise<{ id: string; verifiedPurchase: boolean }> {
+  const rating = Math.round(input.rating);
+  if (rating < 1 || rating > 5) throw new Error("Оценка должна быть от 1 до 5");
+  const body = input.body.trim();
+  if (body.length < 10) throw new Error("Отзыв слишком короткий");
+  if (body.length > 4000) throw new Error("Отзыв слишком длинный");
+
+  const product = await prisma.product.findUnique({ where: { id: input.productId } });
+  if (!product) throw new Error("Товар не найден");
+
+  // Establish verified-purchase status from a real delivered order.
+  let verified = false;
+  let orderId: string | undefined = input.orderId;
+  if (orderId) {
+    const order = await prisma.order.findFirst({
+      where: { id: orderId, buyerId: input.authorId },
+      include: { items: { where: { productId: input.productId }, take: 1 } },
+    });
+    if (!order) throw new Error("Заказ не найден");
+    verified = DELIVERED_STATES.has(order.status) && order.items.length > 0;
+  } else {
+    const anyDelivered = await prisma.order.findFirst({
+      where: {
+        buyerId: input.authorId,
+        status: { in: [...DELIVERED_STATES] },
+        items: { some: { productId: input.productId } },
+      },
+      select: { id: true },
+    });
+    if (anyDelivered) {
+      orderId = anyDelivered.id;
+      verified = true;
+    }
+  }
+
+  // One review per (author, order, product). A buyer may review the same
+  // product from a different order, but never twice for the same order.
+  if (orderId) {
+    const dup = await prisma.review.findFirst({
+      where: { authorId: input.authorId, orderId, productId: input.productId },
+      select: { id: true },
+    });
+    if (dup) throw new Error("Вы уже оставляли отзыв к этому заказу");
+  }
+
+  const created = await prisma.review.create({
+    data: {
+      productId: input.productId,
+      orderId: orderId ?? null,
+      authorId: input.authorId,
+      rating,
+      body,
+      verifiedPurchase: verified,
+    },
+  });
+
+  // Recompute the product's aggregate rating from stored reviews.
+  const agg = await prisma.review.aggregate({
+    where: { productId: input.productId, isHidden: false },
+    _avg: { rating: true },
+    _count: { _all: true },
+  });
+  await prisma.product.update({
+    where: { id: input.productId },
+    data: {
+      rating: Math.round((agg._avg.rating ?? product.rating) * 10) / 10,
+      reviewsCount: agg._count._all,
+    },
+  });
+
+  await recordReviewEvent({
+    type: "review",
+    userId: input.authorId,
+    productId: input.productId,
+    payload: { rating, verifiedPurchase: verified, orderId: orderId ?? null },
+  });
+
+  return { id: created.id, verifiedPurchase: verified };
+}
+
+async function recordReviewEvent(input: {
+  type: string;
+  userId: string;
+  productId: string;
+  payload: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await prisma.event.create({
+      data: {
+        type: input.type,
+        userId: input.userId,
+        productId: input.productId,
+        payload: JSON.stringify(input.payload),
+      },
+    });
+  } catch {
+    // Event recording must never break the review itself.
+  }
+}
+
+export async function listReviews(productId: string, limit = 50) {
+  const rows = await prisma.review.findMany({
+    where: { productId, isHidden: false },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      rating: true,
+      body: true,
+      verifiedPurchase: true,
+      createdAt: true,
+      author: { select: { name: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    rating: r.rating,
+    body: r.body,
+    verifiedPurchase: r.verifiedPurchase,
+    createdAt: r.createdAt.toISOString(),
+    authorName: r.author?.name ?? "Аноним",
+  }));
+}

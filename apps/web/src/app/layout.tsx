@@ -36,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="flex flex-wrap justify-center gap-4 pt-2">
               <a href="/privacy" className="hover:text-svetlana-700">Конфиденциальность</a>
               <a href="/svetlana" className="hover:text-svetlana-700">Светлана</a>
+              <a href="/favorites" className="hover:text-svetlana-700">Избранное</a>
               <a href="/seller" className="hover:text-svetlana-700">Кабинет продавца</a>
             </div>
           </div>
