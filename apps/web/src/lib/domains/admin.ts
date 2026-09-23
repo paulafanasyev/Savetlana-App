@@ -138,6 +138,144 @@ export async function listAdminOrders(limit = 50) {
   }));
 }
 
+/**
+ * All sellers with marketplace KPIs (spec §37 admin "Sellers" section):
+ * product count, order count, paid revenue and trust/verification state.
+ */
+export async function listAdminSellers(limit = 50) {
+  const sellers = await prisma.sellerProfile.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      displayName: true,
+      sellerType: true,
+      slug: true,
+      isActivated: true,
+      identityStatus: true,
+      businessStatus: true,
+      npdStatus: true,
+      createdAt: true,
+      user: { select: { email: true, isBlocked: true } },
+      _count: { select: { products: true, orders: true } },
+    },
+  });
+  // Revenue is the sum of PAID/COMPLETED orders only — nothing is counted
+  // that was never actually collected.
+  const revenue = await prisma.order.groupBy({
+    by: ["sellerId"],
+    where: { status: { in: ["PAID", "CONFIRMED", "PROCESSING", "HANDED_TO_CARRIER", "DELIVERED", "COMPLETED"] } },
+    _sum: { totalKopecks: true },
+  });
+  const bySeller = new Map(revenue.map((r) => [r.sellerId, r._sum.totalKopecks ?? 0]));
+  return sellers.map((s) => ({
+    id: s.id,
+    displayName: s.displayName,
+    sellerType: s.sellerType,
+    slug: s.slug,
+    isActivated: s.isActivated,
+    identityStatus: s.identityStatus,
+    businessStatus: s.businessStatus,
+    npdStatus: s.npdStatus,
+    email: s.user.email,
+    isBlocked: s.user.isBlocked,
+    products: s._count.products,
+    orders: s._count.orders,
+    revenueKopecks: bySeller.get(s.id) ?? 0,
+    createdAt: s.createdAt.toISOString(),
+  }));
+}
+
+/**
+ * Platform-wide product inventory (spec §37 admin "Products" section),
+ * including drafts and hidden items the public catalog deliberately excludes.
+ */
+export async function listAdminProducts(limit = 50) {
+  const products = await prisma.product.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      title: true,
+      sku: true,
+      status: true,
+      priceKopecks: true,
+      createdAt: true,
+      sellerProfile: { select: { id: true, displayName: true } },
+      _count: { select: { reviews: true, orderItems: true } },
+    },
+  });
+  return products.map((p) => ({
+    id: p.id,
+    title: p.title,
+    sku: p.sku,
+    status: p.status,
+    priceKopecks: p.priceKopecks,
+    sellerName: p.sellerProfile.displayName,
+    reviews: p._count.reviews,
+    sales: p._count.orderItems,
+    createdAt: p.createdAt.toISOString(),
+  }));
+}
+
+/**
+ * Money movement audit (spec §37 "Payments", §26). Every row carries its
+ * sandbox flag so a sandbox disbursement can never be mistaken for real money.
+ */
+export async function listAdminPayments(limit = 50) {
+  const [payments, payouts] = await Promise.all([
+    prisma.payment.findMany({
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        orderId: true,
+        provider: true,
+        providerRef: true,
+        status: true,
+        amountKopecks: true,
+        sandbox: true,
+        createdAt: true,
+        buyer: { select: { name: true } },
+      },
+    }),
+    prisma.payout.findMany({
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        sellerId: true,
+        provider: true,
+        providerRef: true,
+        status: true,
+        amountKopecks: true,
+        createdAt: true,
+        sellerProfile: { select: { displayName: true } },
+      },
+    }),
+  ]);
+  return {
+    payments: payments.map((p) => ({
+      ...p,
+      buyerName: p.buyer?.name ?? null,
+      createdAt: p.createdAt.toISOString(),
+    })),
+    payouts: payouts.map((p) => ({
+      id: p.id,
+      sellerId: p.sellerId,
+      provider: p.provider,
+      providerRef: p.providerRef,
+      status: p.status,
+      amountKopecks: p.amountKopecks,
+      // A payout is sandbox when it ran through the sandbox provider — the
+      // flag is derived, not stored, because the provider key is authoritative.
+      sandbox: p.provider === "sandbox-payout",
+      sellerName: p.sellerProfile.displayName,
+      createdAt: p.createdAt.toISOString(),
+    })),
+  };
+}
+
 export async function listVerificationQueue(limit = 50) {
   const sellers = await prisma.sellerProfile.findMany({
     where: { isActivated: true },

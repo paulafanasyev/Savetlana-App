@@ -7,7 +7,10 @@ export const dynamic = "force-dynamic";
 const NAV: { href: string; label: string }[] = [
   { href: "/admin", label: "Обзор" },
   { href: "/admin/users", label: "Пользователи" },
+  { href: "/admin/sellers", label: "Продавцы" },
+  { href: "/admin/products", label: "Товары" },
   { href: "/admin/orders", label: "Заказы" },
+  { href: "/admin/payments", label: "Платежи" },
   { href: "/admin/verification", label: "Верификация" },
   { href: "/admin/risk", label: "Риски" },
   { href: "/admin/ai", label: "AI мониторинг" },

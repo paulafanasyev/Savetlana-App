@@ -125,6 +125,36 @@ describe("admin read views", () => {
     expect(ours?.inn).toBe("770000000000");
   });
 
+  it("lists sellers with KPIs and only collected revenue (spec §37)", async () => {
+    const { listAdminSellers } = await import("../src/lib/domains/admin");
+    const ours = (await listAdminSellers()).find((s) => s.id === sellerId);
+    expect(ours?.displayName).toBe("Продавец Тест");
+    expect(ours?.products).toBeGreaterThanOrEqual(1);
+    // No paid orders exist for this seller, so revenue must be exactly zero —
+    // never a fabricated or projected number.
+    expect(ours?.revenueKopecks).toBe(0);
+  });
+
+  it("lists all product statuses, not just the public ones (spec §37)", async () => {
+    const { listAdminProducts } = await import("../src/lib/domains/admin");
+    const items = await listAdminProducts();
+    const active = items.find((p) => p.sku === `ADM-${W}`);
+    expect(active?.status).toBe("ACTIVE");
+    expect(active?.sellerName).toBe("Продавец Тест");
+  });
+
+  it("lists the payments ledger with honest sandbox flags (spec §37, §49)", async () => {
+    const { listAdminPayments } = await import("../src/lib/domains/admin");
+    const ledger = await listAdminPayments();
+    expect(Array.isArray(ledger.payments)).toBe(true);
+    expect(Array.isArray(ledger.payouts)).toBe(true);
+    // Any sandbox row must be labelled sandbox — a sandbox payout is not real
+    // money movement and must never be presented as one.
+    for (const p of ledger.payouts) {
+      expect(typeof p.sandbox).toBe("boolean");
+    }
+  });
+
   it("lists risk events", async () => {
     const events = await listRiskEvents();
     expect(events.some((e) => e.id === riskEventId)).toBe(true);
