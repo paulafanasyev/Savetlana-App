@@ -17,9 +17,14 @@ export default async function SellerDashboard() {
           <h1 className="text-2xl font-bold text-ink">Кабинет продавца</h1>
           <p className="text-sm text-ink-soft">{user.name} · управление магазином</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link href="/seller/products" className="btn btn-ghost">Товары</Link>
           <Link href="/seller/orders" className="btn btn-ghost">Заказы</Link>
+          <Link href="/seller/analytics" className="btn btn-ghost">Аналитика</Link>
+          <Link href="/seller/pricing" className="btn btn-ghost">Цены и конкуренты</Link>
+          <Link href="/seller/payouts" className="btn btn-ghost">Выплаты</Link>
+          <Link href="/seller/disputes" className="btn btn-ghost">Споры</Link>
+          <Link href="/seller/documents" className="btn btn-ghost">Документы</Link>
         </div>
       </div>
 

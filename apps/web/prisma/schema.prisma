@@ -536,7 +536,12 @@ model Payout {
   sellerId      String
   sellerProfile SellerProfile @relation(fields: [sellerId], references: [id])
   provider      String
+  // The partner-side operation id, once the partner responds.
   providerRef   String?
+  // Client-side idempotency key. Stored before the partner call so a retried
+  // request can never create a second disbursement (spec §125). It is kept
+  // separate from providerRef, which is overwritten with the partner's own id.
+  idempotencyKey String?  @unique
   amountKopecks Int           @default(0)
   currency      String        @default("RUB")
   status        String        @default("PENDING")

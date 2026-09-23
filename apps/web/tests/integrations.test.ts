@@ -14,7 +14,7 @@ describe("international payments adapter (spec §36, §105)", () => {
     const bridge = getInternationalPaymentBridge();
     // No PENDING_EXTERNAL_ACCESS credentials in this environment.
     expect(bridge.live).toBe(isInternationalPaymentsLive());
-    expect(bridge.sandbox ?? true).toBe(true);
+    expect(bridge.live).toBe(false);
   });
 
   it("exposes Alipay/Alipay+ as provider adapters, not a hardcoded path", () => {
@@ -144,7 +144,7 @@ describe("ESIA adapter (spec §18, §20)", () => {
     if (!adapter.live) {
       const res = await adapter.checkIdentity({ inn: "500100732259" });
       expect(res.status).toBe("UNAVAILABLE");
-      expect(res.verified ?? res.status).not.toBe("VERIFIED");
+      expect(res.status).not.toBe("VERIFIED");
     }
   });
 

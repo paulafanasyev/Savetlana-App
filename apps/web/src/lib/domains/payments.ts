@@ -19,6 +19,7 @@ import { prisma } from "../prisma";
 import { env } from "../env";
 import { canTransition } from "./orders";
 import { toKopecks } from "../utils";
+import type { PayoutStatus } from "../db/enums";
 
 export const PLATFORM_FEE_PERCENT = env.platformFeePercent;
 
@@ -251,6 +252,273 @@ export async function markOrderPaid(orderId: string, sandbox: boolean): Promise<
       },
     });
   });
+}
+
+export interface PayoutProvider {
+  readonly key: string;
+  readonly sandbox: boolean;
+  readonly available: boolean;
+  /**
+   * Requests the partner to disburse funds to the seller's account.
+   * The platform records the result; the partner moves the money.
+   */
+  createPayout(params: {
+    sellerId: string;
+    amountKopecks: number;
+    settlementIds: string[];
+    idempotencyKey: string;
+  }): Promise<{ providerRef: string; status: string }>;
+}
+
+export class SandboxPayoutProvider implements PayoutProvider {
+  readonly key = "sandbox-payout";
+  readonly sandbox = true;
+  readonly available = true;
+
+  async createPayout(params: {
+    sellerId: string;
+    amountKopecks: number;
+    settlementIds: string[];
+    idempotencyKey: string;
+  }): Promise<{ providerRef: string; status: string }> {
+    return {
+      providerRef: `sbpo_${params.idempotencyKey.slice(0, 16)}_${params.sellerId.slice(-6)}`,
+      status: "SUCCEEDED",
+    };
+  }
+}
+
+export class PartnerPayoutProvider implements PayoutProvider {
+  readonly key = "partner-payout";
+  readonly sandbox = false;
+  readonly available = Boolean(env.paymentProviderApiKey);
+
+  async createPayout(params: {
+    sellerId: string;
+    amountKopecks: number;
+    settlementIds: string[];
+    idempotencyKey: string;
+  }): Promise<{ providerRef: string; status: string }> {
+    if (!this.available) throw new Error("payout partner not configured");
+    const response = await fetch(`${env.paymentProviderBaseUrl}/payouts`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.paymentProviderApiKey}`,
+      },
+      body: JSON.stringify({
+        seller_id: params.sellerId,
+        amount: params.amountKopecks,
+        settlement_ids: params.settlementIds,
+        idempotency_key: params.idempotencyKey,
+      }),
+    });
+    if (!response.ok) throw new Error(`payout partner HTTP ${response.status}`);
+    const json = (await response.json()) as { id: string; status: string };
+    return { providerRef: json.id, status: json.status };
+  }
+}
+
+export function getPayoutProvider(): PayoutProvider {
+  const partner = new PartnerPayoutProvider();
+  if (partner.available) return partner;
+  return new SandboxPayoutProvider();
+}
+
+/**
+ * Consolidated payout (spec §26): groups all COMPLETED settlements for a seller
+ * into a single disbursement request executed by the payment partner.
+ *
+ * The platform never moves money itself — it records what the partner did.
+ * Idempotent on `idempotencyKey`: a retried request returns the existing payout.
+ */
+export async function createConsolidatedPayout(input: {
+  sellerId: string;
+  actorId: string;
+  idempotencyKey: string;
+}): Promise<{
+  payoutId: string | null;
+  amountKopecks: number;
+  status: string;
+  provider: string;
+  sandbox: boolean;
+  settledCount: number;
+}> {
+  return prisma.$transaction(async (tx) => {
+    // Idempotency: the key is stored before the partner call, so a retried
+    // request finds the row and never double-disburses (spec §125).
+    const existing = await tx.payout.findUnique({
+      where: { idempotencyKey: input.idempotencyKey },
+    });
+    if (existing) {
+      return {
+        payoutId: existing.id,
+        amountKopecks: existing.amountKopecks,
+        status: existing.status,
+        provider: existing.provider,
+        sandbox: existing.provider === "sandbox-payout",
+        settledCount: 0,
+      };
+    }
+
+    const pending = await tx.settlement.findMany({
+      where: { sellerId: input.sellerId, status: "PENDING", payoutId: null },
+      orderBy: { createdAt: "asc" },
+    });
+    if (pending.length === 0) {
+      return {
+        payoutId: null,
+        amountKopecks: 0,
+        status: "NOTHING_TO_PAYOUT",
+        provider: "none",
+        sandbox: false,
+        settledCount: 0,
+      };
+    }
+
+    const total = pending.reduce((sum, s) => sum + s.payoutKopecks, 0);
+    const provider = getPayoutProvider();
+
+    // Reserve the row first so a duplicate request cannot create a second one.
+    const payout = await tx.payout.create({
+      data: {
+        sellerId: input.sellerId,
+        provider: provider.key,
+        idempotencyKey: input.idempotencyKey,
+        amountKopecks: total,
+        status: "IN_PROGRESS",
+        settlements: { connect: pending.map((s) => ({ id: s.id })) },
+      },
+    });
+    // Earmark the settlements for this payout while the partner holds the request.
+    await tx.settlement.updateMany({
+      where: { id: { in: pending.map((s) => s.id) } },
+      data: { status: "AVAILABLE", payoutId: payout.id },
+    });
+
+    const result = await provider.createPayout({
+      sellerId: input.sellerId,
+      amountKopecks: total,
+      settlementIds: pending.map((s) => s.id),
+      idempotencyKey: input.idempotencyKey,
+    });
+
+    // Map the partner's status onto the canonical PayoutStatus enum
+    // (spec §124: persisted values must stay within the defined vocabulary).
+    const status: PayoutStatus = result.status === "SUCCEEDED" ? "SUCCEEDED" : "IN_PROGRESS";
+    await tx.payout.update({
+      where: { id: payout.id },
+      data: {
+        providerRef: result.providerRef,
+        status,
+        processedAt: status === "SUCCEEDED" ? new Date() : null,
+      },
+    });
+    // On success the settlement is fully paid out. (While the partner holds the
+    // request it stays AVAILABLE, which was set when the row was reserved above.)
+    if (status === "SUCCEEDED") {
+      await tx.settlement.updateMany({
+        where: { id: { in: pending.map((s) => s.id) } },
+        data: { status: "PAID" },
+      });
+    }
+
+    await tx.auditLog.create({
+      data: {
+        actorId: input.actorId,
+        actorRole: "SELLER",
+        action: "PAYOUT_REQUESTED",
+        targetType: "Payout",
+        targetId: payout.id,
+        before: String(null),
+        after: JSON.stringify({ amountKopecks: total, provider: provider.key, sandbox: provider.sandbox }),
+      },
+    });
+
+    return {
+      payoutId: payout.id,
+      amountKopecks: total,
+      status,
+      provider: provider.key,
+      sandbox: provider.sandbox,
+      settledCount: pending.length,
+    };
+  });
+}
+
+/** Seller settlement statement (spec §26): gross → fees → payout. */
+export async function sellerSettlementStatement(sellerId: string): Promise<{
+  settlements: Array<{
+    id: string;
+    orderId: string;
+    grossKopecks: number;
+    platformFeeKopecks: number;
+    paymentFeeKopecks: number;
+    deliveryKopecks: number;
+    adjustmentsKopecks: number;
+    payoutKopecks: number;
+    status: string;
+    createdAt: Date;
+    payoutProviderRef: string | null;
+  }>;
+  totals: {
+    grossKopecks: number;
+    platformFeeKopecks: number;
+    paymentFeeKopecks: number;
+    deliveryKopecks: number;
+    adjustmentsKopecks: number;
+    payoutKopecks: number;
+    pendingKopecks: number;
+  };
+}> {
+  const rows = await prisma.settlement.findMany({
+    where: { sellerId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      orderId: true,
+      grossKopecks: true,
+      platformFeeKopecks: true,
+      paymentFeeKopecks: true,
+      deliveryKopecks: true,
+      adjustmentsKopecks: true,
+      payoutKopecks: true,
+      status: true,
+      createdAt: true,
+      payout: { select: { providerRef: true } },
+    },
+    take: 200,
+  });
+
+  const sum = (sel: (r: (typeof rows)[number]) => number) =>
+    rows.reduce((acc, r) => acc + sel(r), 0);
+
+  return {
+    settlements: rows.map((r) => ({
+      id: r.id,
+      orderId: r.orderId,
+      grossKopecks: r.grossKopecks,
+      platformFeeKopecks: r.platformFeeKopecks,
+      paymentFeeKopecks: r.paymentFeeKopecks,
+      deliveryKopecks: r.deliveryKopecks,
+      adjustmentsKopecks: r.adjustmentsKopecks,
+      payoutKopecks: r.payoutKopecks,
+      status: r.status,
+      createdAt: r.createdAt,
+      payoutProviderRef: r.payout?.providerRef ?? null,
+    })),
+    totals: {
+      grossKopecks: sum((r) => r.grossKopecks),
+      platformFeeKopecks: sum((r) => r.platformFeeKopecks),
+      paymentFeeKopecks: sum((r) => r.paymentFeeKopecks),
+      deliveryKopecks: sum((r) => r.deliveryKopecks),
+      adjustmentsKopecks: sum((r) => r.adjustmentsKopecks),
+      payoutKopecks: sum((r) => r.payoutKopecks),
+      pendingKopecks: rows
+        .filter((r) => r.status === "PENDING")
+        .reduce((acc, r) => acc + r.payoutKopecks, 0),
+    },
+  };
 }
 
 export { toKopecks };

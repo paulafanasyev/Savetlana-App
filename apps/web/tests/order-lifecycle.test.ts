@@ -11,7 +11,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { prisma } from "../src/lib/prisma";
 import { getCartView } from "../src/lib/domains/cart";
 import { createOrdersFromCart, transitionOrder, getOrdersForBuyer } from "../src/lib/domains/orders";
-import { capturePayment, getPaymentProvider } from "../src/lib/domains/payments";
+import { capturePayment, getPaymentProvider, createConsolidatedPayout, sellerSettlementStatement } from "../src/lib/domains/payments";
 import { createShipment, syncTracking } from "../src/lib/domains/delivery";
 import { evaluateOrderRisk } from "../src/lib/domains/risk";
 
@@ -270,5 +270,74 @@ describe("order lifecycle (release gate)", () => {
     expect(provider.key).toBeTruthy();
     // A provider must never be silently considered production-ready.
     expect(typeof provider.sandbox).toBe("boolean");
+  });
+
+  it("consolidates pending settlements into one payout (spec §26)", async () => {
+    // The lifecycle order above was paid, so its settlement is PENDING.
+    const before = await prisma.settlement.findMany({
+      where: { sellerId: TEST_SELLER_ID, status: "PENDING" },
+    });
+    expect(before.length).toBeGreaterThan(0);
+
+    const result = await createConsolidatedPayout({
+      sellerId: TEST_SELLER_ID,
+      actorId: TEST_USER_ID,
+      idempotencyKey: "payout-test-1",
+    });
+
+    expect(result.status).toBe("SUCCEEDED");
+    expect(result.settledCount).toBe(before.length);
+    // The sandbox payout provider must be labelled as such (spec §49).
+    expect(result.sandbox).toBe(true);
+    expect(result.amountKopecks).toBe(
+      before.reduce((sum, s) => sum + s.payoutKopecks, 0),
+    );
+
+    // Every settled row is now linked to the payout and fully paid out.
+    const after = await prisma.settlement.findMany({
+      where: { sellerId: TEST_SELLER_ID, payoutId: result.payoutId },
+    });
+    expect(after.length).toBe(before.length);
+    expect(after.every((s) => s.status === "PAID")).toBe(true);
+  });
+
+  it("makes a retried payout idempotent (spec §125)", async () => {
+    const first = await createConsolidatedPayout({
+      sellerId: TEST_SELLER_ID,
+      actorId: TEST_USER_ID,
+      idempotencyKey: "payout-test-2",
+    });
+    expect(first.status).toBe("NOTHING_TO_PAYOUT");
+
+    // Replaying the same key must not create a second disbursement.
+    const second = await createConsolidatedPayout({
+      sellerId: TEST_SELLER_ID,
+      actorId: TEST_USER_ID,
+      idempotencyKey: "payout-test-1",
+    });
+    const original = await prisma.payout.findUniqueOrThrow({
+      where: { idempotencyKey: "payout-test-1" },
+    });
+    expect(second.payoutId).toBe(original.id);
+    expect(second.status).toBe("SUCCEEDED");
+  });
+
+  it("records the payout in an auditable trail", async () => {
+    const logs = await prisma.auditLog.findMany({
+      where: { action: "PAYOUT_REQUESTED", actorId: TEST_USER_ID },
+    });
+    expect(logs.length).toBeGreaterThan(0);
+    const parsed = JSON.parse(logs[logs.length - 1].after ?? "{}");
+    expect(parsed.amountKopecks).toBeGreaterThan(0);
+    expect(parsed.sandbox).toBe(true);
+  });
+
+  it("produces a seller settlement statement with all fee lines", async () => {
+    const statement = await sellerSettlementStatement(TEST_SELLER_ID);
+    expect(statement.settlements.length).toBeGreaterThan(0);
+    const s = statement.settlements[0];
+    // Platform commission must be separate from payment processing (spec §26).
+    expect(s.platformFeeKopecks).toBeGreaterThan(0);
+    expect(statement.totals.payoutKopecks).toBeGreaterThan(0);
   });
 });
