@@ -225,12 +225,17 @@ function simpleHash(input: string): string {
 /**
  * Public product detail — the rich card (spec §25): product + seller trust +
  * availability confirmation age + reviews aggregate.
+ *
+ * Only ACTIVE products are reachable publicly: HIDDEN is the seller's "remove
+ * from public view" action (spec §9), so it must not be fetchable by id/slug
+ * by a buyer. The seller cabinet reads its own listings through a
+ * seller-scoped query instead.
  */
 export async function getPublicProduct(idOrSlug: string) {
   return prisma.product.findFirst({
     where: {
       OR: [{ id: idOrSlug }, { seoSlug: idOrSlug }, { sku: idOrSlug }],
-      status: { in: ["ACTIVE", "HIDDEN"] },
+      status: "ACTIVE",
     },
     include: {
       sellerProfile: {

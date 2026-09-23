@@ -15,7 +15,7 @@ interface PageProps {
 
 export default async function ProductPage({ params }: PageProps) {
   const product = await prisma.product.findFirst({
-    where: { id: params.id, status: { in: ["ACTIVE", "HIDDEN"] } },
+    where: { id: params.id, status: "ACTIVE" },
     include: {
       images: { orderBy: { position: "asc" } },
       variants: true,
