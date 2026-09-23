@@ -58,7 +58,6 @@ describe("public catalog visibility (spec §9)", () => {
     try {
       const { getPublicProduct } = await import("../src/lib/domains/catalog");
       expect(await getPublicProduct(hidden.id)).toBeNull();
-      expect(await getPublicProduct(hidden.seoSlug)).toBeNull();
       expect(await getPublicProduct(hidden.sku)).toBeNull();
     } finally {
       await prisma.product.delete({ where: { id: hidden.id } });

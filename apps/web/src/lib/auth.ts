@@ -10,6 +10,7 @@ import bcrypt from "bcryptjs";
 import { env } from "./env";
 import { prisma } from "./prisma";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import type { Session, User } from "@prisma/client";
 
 const ALG = "HS256";
@@ -273,13 +274,31 @@ export async function serverRequest(): Promise<Request> {
 }
 
 export async function requireUserServer(): Promise<AuthContext> {
-  return requireUser(await serverRequest());
+  // Inside a React Server Component an thrown ApiError renders as a 500 page.
+  // The idiomatic App Router behaviour for an unauthenticated page request is
+  // a redirect to login (spec §38: graceful, human-understandable auth flow).
+  try {
+    return await requireUser(await serverRequest());
+  } catch (e) {
+    if (e instanceof ApiError && e.statusCode === 401) redirect("/login");
+    throw e;
+  }
 }
 
 export async function requireSellerServer(): Promise<AuthContext & { sellerId: string }> {
-  return requireSeller(await serverRequest());
+  try {
+    return await requireSeller(await serverRequest());
+  } catch (e) {
+    if (e instanceof ApiError && e.statusCode === 401) redirect("/login");
+    throw e;
+  }
 }
 
 export async function requireAdminServer(): Promise<AuthContext> {
-  return requireAdmin(await serverRequest());
+  try {
+    return await requireAdmin(await serverRequest());
+  } catch (e) {
+    if (e instanceof ApiError && e.statusCode === 401) redirect("/login");
+    throw e;
+  }
 }
