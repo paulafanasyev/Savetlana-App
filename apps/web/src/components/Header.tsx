@@ -62,6 +62,15 @@ export function Header() {
                   <Link href="/orders" className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
                     Мои заказы
                   </Link>
+                  <Link href="/favorites" className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
+                    Избранное
+                  </Link>
+                  <Link href="/gifts" className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
+                    Подарки
+                  </Link>
+                  <Link href="/recommendations" className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
+                    Рекомендации
+                  </Link>
                   <Link href="/notifications" className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
                     Уведомления
                   </Link>
