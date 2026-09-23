@@ -134,6 +134,32 @@ Provider Router (AI_PROVIDER_ORDER)
 - Vision → vision-модель
 - Ranking → отдельный ranking-слой (не LLM)
 
+## Vision pipeline (spec §6, §10)
+
+`domains/vision.ts` + `POST /api/vision/search`:
+
+```
+photo upload (type allowlist + 10MB cap)
+  → object detection
+  → attribute + category mapping
+  → visual embedding
+  → vector search over cached product embeddings
+  → ranking (exact / similar / related)
+  → explainable candidates
+```
+
+**Статус распознавания всегда честный:**
+
+| Статус | Значение |
+|---|---|
+| `VERIFIED` | реальная vision-модель распознала изображение |
+| `MOCK_VERIFIED` | sandbox-провайдер; результата нет, это не настоящее распознавание |
+| `NOT_PROVEN` | провайдер не смог обработать фото; пользователь перенаправляется на текстовый поиск |
+
+Сейчас подключён только sandbox-провайдер, поэтому все результаты — `MOCK_VERIFIED`. Подключение реальной vision-моделью не требует изменения API или UI — достаточно добавить adapter в `getVisionProvider()`. Тест: `tests/vision.test.ts`.
+
+Инструмент `vision_search` даёт Светлане тот же векторный слой из чата.
+
 ## Recommendation Engine (spec §28)
 
 **Не LLM.** `domains/recommendations.ts` — отдельный ranking-слой:

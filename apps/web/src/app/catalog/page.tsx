@@ -23,6 +23,7 @@ function CatalogInner() {
   const params = useSearchParams();
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [photo, setPhoto] = useState<VisionResult | null>(null);
   // useSearchParams() can be null during server rendering.
   const [q, setQ] = useState(params?.get("q") ?? "");
 
@@ -48,7 +49,7 @@ function CatalogInner() {
       </h1>
 
       <form
-        className="mb-6 flex gap-2"
+        className="mb-6 flex flex-wrap gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           const u = new URL(location.pathname, location.origin);
@@ -58,7 +59,7 @@ function CatalogInner() {
         }}
       >
         <input
-          className="input"
+          className="input min-w-[12rem] flex-1"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Что ищем? Например: ноутбук для учёбы до 100 тысяч"
@@ -67,7 +68,37 @@ function CatalogInner() {
         <button className="btn btn-primary shrink-0" type="submit">
           Найти
         </button>
+        <PhotoSearch onResult={(d) => {
+          setPhoto(d);
+          setItems(d.candidates.map((c) => ({
+            id: c.productId,
+            title: c.title,
+            priceKopecks: c.priceKopecks,
+            rating: 0,
+            reviewsCount: 0,
+            availability: c.availability,
+            seller: { id: "", name: c.sellerName },
+            signals: [`совпадение: ${c.match}`, `схожесть: ${Math.round(c.similarity * 100)}%`],
+          })));
+        }} />
       </form>
+
+      {photo && (
+        <div className={`card mb-6 p-4 text-sm ${photo.status === "MOCK_VERIFIED" ? "bg-amber-50" : "bg-svetlana-50"}`}>
+          <div className="font-medium text-ink">{photo.explanation}</div>
+          {photo.status === "MOCK_VERIFIED" && (
+            <div className="mt-1 text-xs text-amber-800">
+              Распознавание работает в тестовом режиме — результат не является
+              настоящим анализом фотографии.
+            </div>
+          )}
+          {photo.candidates.length > 0 && (
+            <div className="mt-2 text-ink-soft">
+              Показаны {photo.candidates.length} похожих товаров из каталога.
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div>
@@ -121,5 +152,81 @@ export default function CatalogPage() {
     <Suspense fallback={<div className="p-8 text-center text-ink-soft">Загрузка каталога…</div>}>
       <CatalogInner />
     </Suspense>
+  );
+}
+
+interface VisionCandidate {
+  productId: string;
+  title: string;
+  priceKopecks: number;
+  sellerName: string;
+  availability: string;
+  similarity: number;
+  match: string;
+}
+
+interface VisionResult {
+  status: string;
+  explanation: string;
+  candidates: VisionCandidate[];
+}
+
+/**
+ * Photo search entry point (spec §6). Uploads an image to the vision pipeline
+ * and surfaces the result — including the honest sandbox warning when the
+ * recognition is not from a real model.
+ */
+function PhotoSearch({ onResult }: { onResult: (d: VisionResult) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("photo", file);
+      const res = await fetch("/api/vision/search", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Не удалось распознать фотографию.");
+        return;
+      }
+      onResult(data as VisionResult);
+    } catch {
+      setError("Не удалось загрузить фотографию. Попробуйте ещё раз.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="relative shrink-0">
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="sr-only"
+        id="photo-search-input"
+        disabled={busy}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void upload(file);
+          e.target.value = "";
+        }}
+      />
+      <label
+        htmlFor="photo-search-input"
+        className="btn btn-ghost inline-flex cursor-pointer items-center gap-2"
+        title="Найти товар по фотографии"
+      >
+        <span aria-hidden>📷</span>
+        <span className="hidden sm:inline">{busy ? "Распознаём…" : "По фото"}</span>
+      </label>
+      {error && (
+        <div className="absolute right-0 top-full mt-2 w-64 rounded-lg border border-line bg-white p-3 text-xs text-bad shadow-float">
+          {error}
+        </div>
+      )}
+    </div>
   );
 }
