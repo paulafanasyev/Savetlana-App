@@ -214,3 +214,82 @@ export const getProductTool: ToolDefinition = {
     );
   },
 };
+
+/**
+ * Vision search from conversation (spec §6). The user describes a photo they
+ * uploaded, or references a recognised label; the tool runs the same vector
+ * pipeline as the photo endpoint. Results always carry an honesty status.
+ */
+export const visionSearchTool: ToolDefinition = {
+  name: "vision_search",
+  description:
+    "Поиск по фотографии: распознанный объект → векторный поиск по каталогу → ранжирование. Используй, когда пользователь описывает фотографию товара.",
+  permission: "READ_PRODUCTS",
+  riskLevel: "READ",
+  needsConfirmation: false,
+  parameters: looseObjectSchema({
+    label: { type: "string", description: "что распознано на фотографии" },
+    limit: { type: "number" },
+  }),
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const label = typeof args.label === "string" ? args.label.trim() : "";
+    if (!label) {
+      return {
+        ok: false,
+        error: "не удалось распознать объект на фотографии — опишите товар словами",
+        verification: "NOT_PROVEN",
+      };
+    }
+    // Reuse the vector layer: embed the recognised label the same way the
+    // photo pipeline does, then rank the catalog.
+    const { aiGateway, newTraceId } = await import("../../ai/gateway");
+    const { getProductEmbedding, cosine } = await import("../../domains/catalog");
+    const trace = newTraceId("embed");
+    const queryVec = (await aiGateway.embed({ texts: [label], traceId: trace })).vectors[0];
+
+    const products = await prisma.product.findMany({
+      where: { status: "ACTIVE" },
+      include: {
+        sellerProfile: { select: { displayName: true } },
+        inventory: { select: { availability: true } },
+      },
+      take: 500,
+    });
+    const scored = await Promise.all(
+      products.map(async (product) => {
+        const vec = await getProductEmbedding(product, trace);
+        return { product, similarity: vec ? cosine(queryVec, vec) : 0 };
+      }),
+    );
+    scored.sort((a, b) => b.similarity - a.similarity);
+    const limit = Math.min(asNumber(args.limit) ?? 8, 16);
+    const candidates = scored
+      .filter((s) => s.similarity > 0.05)
+      .slice(0, limit)
+      .map((s, idx) => ({
+        productId: s.product.id,
+        title: s.product.title,
+        priceKopecks: s.product.priceKopecks,
+        seller: s.product.sellerProfile.displayName,
+        availability: s.product.inventory?.availability ?? "UNKNOWN",
+        similarity: Math.round(s.similarity * 100) / 100,
+        match: idx === 0 ? "exact" : idx < 3 ? "similar" : "related",
+      }));
+
+    if (candidates.length === 0) {
+      return {
+        ok: true,
+        data: { label, candidates: [] },
+        summary: `Распознано «${label}», но похожих товаров в каталоге пока нет.`,
+        // The recognition came from the sandbox vision provider.
+        verification: "MOCK_VERIFIED",
+      };
+    }
+    return {
+      ok: true,
+      data: { label, candidates },
+      summary: `Распознано «${label}». Лучшее совпадение: «${candidates[0].title}» за ${fromKopecks(candidates[0].priceKopecks)} ₽.`,
+      verification: "MOCK_VERIFIED",
+    };
+  },
+};

@@ -95,7 +95,7 @@ export const AGENT_TOOLS: Record<AgentKey, string[]> = {
   buyer: ["search_products", "compare_products", "get_product", "cart_add", "create_order", "get_order", "cancel_order", "request_return", "create_dispute", "wishlist_add", "recall_memory", "remember_preference"],
   seller: ["analyze_seller_sales", "product_health", "advise_price", "change_price", "confirm_inventory", "extend_listing", "create_product_draft", "publish_product", "find_competitors", "document_requirements", "create_workflow_rule"],
   search: ["search_products", "search_cheaper", "compare_products", "get_product"],
-  vision: ["search_products", "search_cheaper", "compare_products"],
+  vision: ["vision_search", "search_products", "search_cheaper", "compare_products"],
   recommendation: ["search_products", "recall_memory"],
   gift: ["plan_gift", "upcoming_events", "gift_context"],
   relationship: ["declare_relationship", "verified_circle"],

@@ -165,7 +165,7 @@ export async function searchProducts(
  * Embedding for a product, computed lazily and cached in the vector table.
  * Recomputed only when the indexed text changes (contentHash).
  */
-async function getProductEmbedding(
+export async function getProductEmbedding(
   product: { id: string; title: string; description: string | null; keywords: string },
   traceId: string
 ): Promise<number[] | null> {
