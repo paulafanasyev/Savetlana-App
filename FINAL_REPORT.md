@@ -1,6 +1,6 @@
 # Svetlana AI Commerce — финальный отчёт
 
-Статус сборки: **production build проходит (exit 0)**, **133/133 тестов проходят (16 файлов)**.
+Статус сборки: **production build проходит (exit 0)**, **145/145 тестов проходят (17 файлов)**.
 Развёртывание: Vercel-ready (Next.js 14.2 App Router, server-side AI, нет секретов в клиенте).
 
 Отчёт построен по правилу ТЗ: каждая функция помечена реальным статусом, доказательством которого служит либо runtime-проверка, либо тест, либо явное отсутствие внешнего доступа. Ничто не помечено `VERIFIED` только на основании существования кода.
@@ -76,8 +76,11 @@ register → login → search → cart → checkout → payment
 |---|---|---|
 | AI Gateway + Provider Router | VERIFIED | abstraction, fallback, observability (`AiModelCall`), privacy guard |
 | Master Agent | VERIFIED | planner → policy → tools → verification loop |
-| Маршрутизация агентов | VERIFIED | 25 агентов, honest permission denial (buyer → READ_ANALYTICS отказ) |
-| Tool registry | VERIFIED | 32 tool, каждое со своим permission + risk level |
+| Маршрутизация агентов | VERIFIED | 22 агента (§4: добавлены product + compliance), honest permission denial (buyer → READ_ANALYTICS отказ) |
+| Tool registry | VERIFIED | 37 инструментов (§44: добавлены get_tracking, get_payment_status, check_inventory, get_reviews, search_sellers), каждое со своим permission + risk level |
+| Отзывы через AI (§14) | VERIFIED | `get_reviews` в runtime: «что говорят о IdeaPad» → реальные отзывы из БД, тональность + темы |
+| Поиск продавцов через AI (§61) | VERIFIED | `search_sellers` в runtime: «найди продавца ТехноАврора» → рейтинг 4.8, верификация |
+| Отслеживание через AI (§34) | VERIFIED | `get_tracking` — статус и хронология от реального перевозчика, без выдуманных событий |
 | Память (§29) | VERIFIED | FACT/INFERENCE/PREFERENCE, confidence + источник |
 | Privacy guard | VERIFIED | PII/secret redaction перед external model — тесты |
 | Рекомендации (§28) | VERIFIED | отдельный ranking-слой (не LLM), объяснимое «почему» |
