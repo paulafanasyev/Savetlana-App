@@ -40,8 +40,6 @@ export class ExternalAiProvider implements AiProvider {
       throw new Error("ExternalAiProvider is not configured (missing API key)");
     }
     const started = Date.now();
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), env.aiGatewayTimeoutMs);
 
     const body: Record<string, unknown> = {
       model: env.aiGatewayModel,
@@ -50,7 +48,9 @@ export class ExternalAiProvider implements AiProvider {
         content: m.content,
         ...(m.toolCallId ? { tool_call_id: m.toolCallId } : {}),
       })),
-      max_tokens: request.maxTokens ?? 1024,
+      // Reasoning models (e.g. Atria-Dawn-Preview) spend part of this budget on
+      // internal reasoning before the visible answer appears; keep it generous.
+      max_tokens: request.maxTokens ?? 2048,
       temperature: request.temperature ?? 0.4,
     };
     if (request.jsonMode) {
@@ -65,6 +65,10 @@ export class ExternalAiProvider implements AiProvider {
     const maxRetries = Math.max(0, env.aiGatewayMaxRetries);
 
     while (attempt <= maxRetries) {
+      // A fresh controller per attempt: the deadline must protect every
+      // outbound call, including retries after a slow first attempt.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), env.aiGatewayTimeoutMs);
       try {
         const response = await fetch(`${env.aiGatewayBaseUrl}/chat/completions`, {
           method: "POST",
@@ -86,19 +90,32 @@ export class ExternalAiProvider implements AiProvider {
         const json = await response.json();
         const choice = json.choices?.[0];
         const message = choice?.message ?? {};
+        const toolCalls = Array.isArray(message.tool_calls)
+          ? message.tool_calls.map((tc: any) => ({
+              id: String(tc.id ?? ""),
+              name: String(tc.function?.name ?? ""),
+              arguments:
+                typeof tc.function?.arguments === "string"
+                  ? safeParseJson(tc.function.arguments)
+                  : (tc.function?.arguments ?? {}),
+            }))
+          : undefined;
+
+        // Reasoning models can spend their whole budget on internal reasoning
+        // and return an empty content with finish_reason "length". That is a
+        // truncated answer, not a real one: retry once with a larger budget
+        // instead of handing the user an empty reply (spec §108, §148).
+        const hasContent = typeof message.content === "string" && message.content.trim() !== "";
+        if (!hasContent && (!toolCalls || toolCalls.length === 0) && choice?.finish_reason === "length" && attempt === 0) {
+          attempt++;
+          body.max_tokens = Math.min((body.max_tokens as number) * 4, 16384);
+          await sleep(Math.min(500 * 2 ** (attempt - 1), 4000));
+          continue;
+        }
 
         return {
-          content: typeof message.content === "string" ? message.content : "",
-          toolCalls: Array.isArray(message.tool_calls)
-            ? message.tool_calls.map((tc: any) => ({
-                id: String(tc.id ?? ""),
-                name: String(tc.function?.name ?? ""),
-                arguments:
-                  typeof tc.function?.arguments === "string"
-                    ? safeParseJson(tc.function.arguments)
-                    : (tc.function?.arguments ?? {}),
-              }))
-            : undefined,
+          content: hasContent ? (message.content as string) : "",
+          toolCalls,
           provider: this.key,
           model: json.model ?? env.aiGatewayModel,
           latencyMs: Date.now() - started,
@@ -108,6 +125,7 @@ export class ExternalAiProvider implements AiProvider {
           finishReason: choice?.finish_reason,
         };
       } catch (error) {
+        clearTimeout(timeout);
         lastError = error instanceof Error ? error : new Error(String(error));
         attempt++;
         if (attempt <= maxRetries) {
@@ -116,7 +134,6 @@ export class ExternalAiProvider implements AiProvider {
         }
       }
     }
-    clearTimeout(timeout);
     throw lastError ?? new Error("provider failed without error");
   }
 
@@ -125,12 +142,22 @@ export class ExternalAiProvider implements AiProvider {
       throw new Error("ExternalAiProvider is not configured (missing API key)");
     }
     const started = Date.now();
-    const response = await fetch(`${env.aiGatewayBaseUrl}/embeddings`, {
-      method: "POST",
-      headers: this.headers,
-      body: JSON.stringify({ model: "text-embedding", input: request.texts }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), env.aiGatewayTimeoutMs);
+    let response: Response;
+    try {
+      response = await fetch(`${env.aiGatewayBaseUrl}/embeddings`, {
+        method: "POST",
+        headers: this.headers,
+        body: JSON.stringify({ model: "text-embedding", input: request.texts }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
     if (!response.ok) {
+      // Atria-Dawn-Preview has no /embeddings endpoint; the gateway falls back
+      // to the deterministic local embedder for the vector layer.
       throw new Error(`embedding provider ${response.status}`);
     }
     const json = await response.json();

@@ -7,7 +7,12 @@
  */
 import { config } from "dotenv";
 
-config({ path: process.env.CI ? ".env" : ".env" });
+// `override: true` is deliberate. Some runtime containers export placeholder
+// values (e.g. AI_GATEWAY_BASE_URL=https://api.example.com/v1) that predate the
+// real configuration; dotenv without override silently keeps those stale
+// shadows and the AI gateway then points at a dead endpoint. On Vercel there is
+// no .env file at all, so this flag has no effect there — platform env wins.
+config({ path: ".env", override: true });
 
 function required(name: string, fallback?: string): string {
   const value = process.env[name] ?? fallback;
