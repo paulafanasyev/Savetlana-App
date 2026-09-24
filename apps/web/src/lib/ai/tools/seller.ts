@@ -10,6 +10,9 @@ import { sellerReport, productHealth, parseWorkflowRule, saveWorkflowRule } from
 import { confirmAvailability, extendListing } from "../../domains/inventory";
 import { adviseOnPrice, applyPriceChange, priceHistory } from "../../domains/pricing";
 import { findCompetitors, findCompetitorSellers } from "../../domains/competitors";
+import { scanExternalCompetitors, searchGlobally } from "../../domains/external-search";
+import { quoteDeliveryTier, type DeliveryTier } from "../../delivery-tiers";
+import type { ScanTier } from "../../marketplaces";
 import { requirementsForSeller } from "../../domains/documents";
 import { prisma } from "../../prisma";
 import { fromKopecks, slugify, toKopecks } from "../../utils";
@@ -475,6 +478,156 @@ export const createWorkflowRuleTool: ToolDefinition = {
     return ok(
       { ruleId: saved.id, trigger: saved.trigger, action: saved.action },
       `Правило создано: триггер «${saved.trigger}», действие «${saved.action}».`
+    );
+  },
+};
+
+export const scanGlobalCompetitorsTool: ToolDefinition = {
+  name: "scan_global_competitors",
+  description:
+    "Анализ конкурентов глобально по всему интернету, не только внутри платформы. Уровень 1 — Россия (Ozon, Wildberries), уровень 2 — глобально (AliExpress, Taobao, Amazon).",
+  permission: "READ_ANALYTICS",
+  riskLevel: "READ",
+  needsConfirmation: false,
+  parameters: looseObjectSchema({
+    productId: { type: "string" },
+    tier: { type: "number" },
+  }),
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const sellerId = requireSeller(ctx);
+    if (typeof sellerId !== "string") return sellerId;
+    const productId = productIdArg(args);
+    if (!productId) return denied("укажите productId вашего товара");
+    const owned = await ownProduct(ctx, productId);
+    if ("error" in owned) return denied(owned.error);
+
+    const tier: ScanTier = args.tier === 2 ? 2 : 1;
+    const scan = await scanExternalCompetitors(productId, { tier });
+
+    const reachable = scan.marketplaces.filter((m) => m.status === "OK");
+    const unreachable = scan.marketplaces.filter(
+      (m) => m.status === "UNREACHABLE" || m.status === "BLOCKED",
+    );
+    const scope =
+      tier === 2
+        ? "глобально (AliExpress, Taobao, Amazon)"
+        : "Россия (Ozon, Wildberries + платформа)";
+    return ok(
+      {
+        tier,
+        scope,
+        liveExternal: scan.liveExternal,
+        minExternalPriceKopecks: scan.minExternalPrice,
+        cheaperCount: scan.cheaperCount,
+        offers: scan.verifiedOffers.slice(0, 10),
+        marketplaces: scan.marketplaces.map((m) => ({
+          key: m.key,
+          status: m.status,
+          confidence: m.confidence,
+          offers: m.offers.length,
+        })),
+        unreachable: unreachable.map((m) => m.key),
+        verdict: scan.verdict,
+      },
+      reachable.length === 0
+        ? `Уровень ${tier} (${scope}): внешние площадки недоступны — PENDING_EXTERNAL_ACCESS. ${scan.verdict}`
+        : `Уровень ${tier} (${scope}): проверено ${reachable.length} площадок, найдено ${scan.verifiedOffers.length} предложений. ${scan.verdict}` +
+            (unreachable.length ? ` Недоступно: ${unreachable.map((m) => m.key).join(", ")}.` : "")
+    );
+  },
+};
+
+export const globalSearchTool: ToolDefinition = {
+  name: "global_search",
+  description:
+    "Глобальный поиск товара по всему интернету: платформа + внешние маркетплейсы. Уровень 1 — Россия, уровень 2 — глобально.",
+  permission: "READ_PRODUCTS",
+  riskLevel: "READ",
+  needsConfirmation: false,
+  parameters: looseObjectSchema({
+    query: { type: "string" },
+    tier: { type: "number" },
+    maxPrice: { type: "number" },
+  }),
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    if (typeof args.query !== "string" || args.query.trim().length < 2)
+      return denied("укажите поисковый запрос");
+    const tier: ScanTier = args.tier === 2 ? 2 : 1;
+    const maxPriceKopecks =
+      typeof args.maxPrice === "number" && Number.isFinite(args.maxPrice)
+        ? Math.round(args.maxPrice * 100)
+        : undefined;
+
+    const report = await searchGlobally(
+      { text: args.query.trim(), limit: 15, maxPriceKopecks },
+      tier,
+    );
+    const external = report.hits.filter((h) => h.source === "external");
+    return ok(
+      {
+        tier,
+        scope: report.tierLabel,
+        platformCount: report.bySource.platform,
+        externalCount: report.bySource.external,
+        liveExternal: report.liveExternal,
+        hits: report.hits.slice(0, 15),
+        availability: report.availability,
+        warnings: report.warnings,
+      },
+      `Уровень ${tier} (${report.tierLabel}): платформа ${report.bySource.platform}, внешние ${report.bySource.external}.` +
+        (report.liveExternal ? " Внешние площадки ответили." : " Внешние площадки недоступны (PENDING_EXTERNAL_ACCESS).") +
+        (external.length ? ` Самое дешёвое: ${external[0].title} — ${fromKopecks(external[0].priceKopecks)} ₽.` : "")
+    );
+  },
+};
+
+export const deliveryQuotesTool: ToolDefinition = {
+  name: "delivery_quotes",
+  description:
+    "Котировки доставки по уровням: 1 — платформа (реальные услуги исполняются, средняя цена по России), 2 — все существующие компании, 3 — международная доставка.",
+  permission: "READ_PRODUCTS",
+  riskLevel: "READ",
+  needsConfirmation: false,
+  parameters: looseObjectSchema({
+    tier: { type: "number" },
+    weightGrams: { type: "number" },
+    city: { type: "string" },
+    countryCode: { type: "string" },
+  }),
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const tier = args.tier === 3 ? 3 : args.tier === 2 ? 2 : 1;
+    const weightGrams =
+      typeof args.weightGrams === "number" && Number.isFinite(args.weightGrams)
+        ? args.weightGrams
+        : undefined;
+    const city = typeof args.city === "string" && args.city.trim() ? args.city.trim() : undefined;
+    const countryCode =
+      typeof args.countryCode === "string" && args.countryCode.trim()
+        ? args.countryCode.trim()
+        : undefined;
+
+    const report = await quoteDeliveryTier(tier as DeliveryTier, {
+      weightGrams,
+      city,
+      countryCode,
+    });
+    const priced = report.quotes.filter((q) => q.kopecks !== null);
+    const pending = report.quotes.filter((q) => q.kopecks === null);
+    const cheapest = priced.length ? priced.reduce((a, b) => (a.kopecks! < b.kopecks! ? a : b)) : null;
+
+    return ok(
+      {
+        tier: report.tier,
+        tierName: report.tierName,
+        liveCount: report.liveCount,
+        quotes: report.quotes,
+      },
+      `Уровень ${tier} (${report.tierName}): ${priced.length} перевозчиков с живой ценой, ${pending.length} ожидают доступ.` +
+        (cheapest
+          ? ` Самый дешёвый — ${cheapest.name}: ${fromKopecks(cheapest.kopecks!)} ₽ (${cheapest.days} дн.).`
+          : pending.length
+            ? ` Требуются credentials: ${pending.map((q) => q.needsCredential).filter(Boolean).join(", ")}.`
+            : " Нет доступных котировок.")
     );
   },
 };
