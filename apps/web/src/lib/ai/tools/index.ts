@@ -14,6 +14,8 @@ import {
   compareProductsTool,
   getProductTool,
   visionSearchTool,
+  getReviewsTool,
+  searchSellersTool,
 } from "./catalog";
 import {
   getOrderTool,
@@ -23,6 +25,9 @@ import {
   wishlistAddTool,
   requestReturnTool,
   createDisputeTool,
+  getTrackingTool,
+  getPaymentStatusTool,
+  checkInventoryTool,
 } from "./commerce";
 import {
   analyzeSellerSalesTool,
@@ -56,6 +61,8 @@ const ALL_TOOLS: ToolDefinition[] = [
   compareProductsTool,
   getProductTool,
   visionSearchTool,
+  getReviewsTool,
+  searchSellersTool,
   // Commerce
   getOrderTool,
   cartAddTool,
@@ -64,6 +71,9 @@ const ALL_TOOLS: ToolDefinition[] = [
   wishlistAddTool,
   requestReturnTool,
   createDisputeTool,
+  getTrackingTool,
+  getPaymentStatusTool,
+  checkInventoryTool,
   // Seller
   analyzeSellerSalesTool,
   confirmInventoryTool,

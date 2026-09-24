@@ -23,6 +23,8 @@ export type AgentKey =
   | "competitor"
   | "pricing"
   | "analytics"
+  | "product"
+  | "compliance"
   | "document"
   | "memory"
   | "notification"
@@ -45,6 +47,8 @@ const RULES: RouteRule[] = [
   { side: "seller", agent: "memory", pattern: /запомни .* (под заказ|обычно|всегда)|бизнес-память/i },
   { side: "seller", agent: "review", pattern: /отзывы покупателей|что говорят покупатели|ответить на отзыв/i },
   { side: "seller", agent: "seller", pattern: /карточк[а|у] товар|создай товар|оформи|выложи|ассортимент|что добавить/i },
+  { side: "seller", agent: "product", pattern: /создай товар|карточк[а|у] товар|оформи товар|выложи товар|сгенерируй.*описани|ai.*карточк/i },
+  { side: "seller", agent: "compliance", pattern: /соответстви|regulatory|разрешени|сертификат соответствия|маркировк|честный знак|обязательн.*требован/i },
   { side: "seller", agent: "notification", pattern: /напомни|правил[о|а] автоматиза|если .* сообщи/i },
 
   // Buyer-side intents
@@ -92,24 +96,26 @@ export function routeAgent(text: string, side: "buyer" | "seller"): RouteResult 
  * role-level permissions via the registry; this just shapes the prompt.
  */
 export const AGENT_TOOLS: Record<AgentKey, string[]> = {
-  buyer: ["search_products", "compare_products", "get_product", "cart_add", "create_order", "get_order", "cancel_order", "request_return", "create_dispute", "wishlist_add", "recall_memory", "remember_preference"],
+  buyer: ["search_products", "compare_products", "get_product", "search_sellers", "get_reviews", "check_inventory", "cart_add", "create_order", "get_order", "cancel_order", "get_tracking", "get_payment_status", "request_return", "create_dispute", "wishlist_add", "recall_memory", "remember_preference"],
   seller: ["analyze_seller_sales", "product_health", "advise_price", "change_price", "confirm_inventory", "extend_listing", "create_product_draft", "publish_product", "find_competitors", "document_requirements", "create_workflow_rule"],
-  search: ["search_products", "search_cheaper", "compare_products", "get_product"],
+  search: ["search_products", "search_cheaper", "compare_products", "get_product", "search_sellers"],
   vision: ["vision_search", "search_products", "search_cheaper", "compare_products"],
   recommendation: ["search_products", "recall_memory"],
   gift: ["plan_gift", "upcoming_events", "gift_context"],
   relationship: ["declare_relationship", "verified_circle"],
   order: ["get_order", "cancel_order", "cart_add"],
-  delivery: ["get_order"],
-  payment: ["get_order"],
+  delivery: ["get_tracking", "get_order"],
+  payment: ["get_payment_status", "get_order"],
   risk: ["assess_order_risk"],
   trust: ["document_requirements", "assess_order_risk"],
-  review: ["get_product"],
+  review: ["get_reviews", "get_product"],
   competitor: ["find_competitors", "advise_price"],
   pricing: ["advise_price", "change_price", "price_history"],
   analytics: ["analyze_seller_sales", "product_health"],
+  product: ["create_product_draft", "publish_product", "product_health", "check_inventory"],
+  compliance: ["document_requirements"],
   document: ["document_requirements"],
   memory: ["remember_preference", "recall_memory"],
   notification: ["create_workflow_rule"],
-  support: ["get_order", "get_product", "request_return", "create_dispute"],
+  support: ["get_order", "get_product", "get_tracking", "get_payment_status", "request_return", "create_dispute"],
 };

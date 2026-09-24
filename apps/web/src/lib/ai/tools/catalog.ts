@@ -3,6 +3,8 @@
  * These carry no state-change risk, so they never require confirmation.
  */
 import { searchProducts, getPublicProduct, type SearchFilters } from "../../domains/catalog";
+import { summarizeReviews, listReviews } from "../../domains/reviews";
+import { getPublicSellerProfile } from "../../domains/sellers";
 import { fromKopecks } from "../../utils";
 import type { ToolDefinition, ToolResult, ToolContext } from "./registry";
 import { looseObjectSchema } from "./registry";
@@ -291,5 +293,106 @@ export const visionSearchTool: ToolDefinition = {
       summary: `Распознано «${label}». Лучшее совпадение: «${candidates[0].title}» за ${fromKopecks(candidates[0].priceKopecks)} ₽.`,
       verification: "MOCK_VERIFIED",
     };
+  },
+};
+
+/**
+ * get_reviews (spec §14, §44) — AI-анализ отзывов: тональность, повторяющиеся
+ * преимущества и жалобы, распределение оценок. Все выводы strictly основаны
+ * на доступных отзывах, никаких выдуманных тем (spec §58).
+ */
+export const getReviewsTool: ToolDefinition = {
+  name: "get_reviews",
+  description:
+    "Анализ отзывов на товар: тональность, повторяющиеся преимущества и жалобы, средний рейтинг. Покупателю — что чаще отмечают, продавцу — что исправить.",
+  permission: "READ_REVIEWS",
+  riskLevel: "READ",
+  needsConfirmation: false,
+  parameters: looseObjectSchema({
+    productId: { type: "string", description: "идентификатор товара" },
+    limit: { type: "number", description: "сколько свежих отзывов показать" },
+  }),
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const productId = typeof args.productId === "string" ? args.productId : undefined;
+    if (!productId) return { ok: false, error: "укажите productId товара", verification: "NOT_PROVEN" };
+
+    const summary = await summarizeReviews(productId);
+    const fresh = await listReviews(productId, Math.min(asNumber(args.limit) ?? 5, 10));
+
+    if (summary.count === 0) {
+      return ok(
+        { count: 0, reviews: [] },
+        "На этот товар ещё нет отзывов. Оценить его по отзывам невозможно — это нужно честно сказать покупателю."
+      );
+    }
+
+    const parts: string[] = [
+      `Отзывов: ${summary.count}, средний рейтинг: ${summary.averageRating.toFixed(1)} из 5 (${summary.sentiment.toLowerCase()}).`,
+    ];
+    if (summary.topAdvantages.length > 0) {
+      parts.push(`Чаще хвалят: ${summary.topAdvantages.slice(0, 3).join(", ")}.`);
+    }
+    if (summary.topComplaints.length > 0) {
+      parts.push(`Чаще жалуются на: ${summary.topComplaints.slice(0, 3).join(", ")}.`);
+    }
+    return ok({ ...summary, reviews: fresh }, parts.join(" "));
+  },
+};
+
+/**
+ * search_sellers (spec §44, §61) — поиск продавцов по публичным данным.
+ * Показывает верификацию, рейтинг и количество завершённых заказов, чтобы
+ * покупатель мог оценить доверие (spec §41).
+ */
+export const searchSellersTool: ToolDefinition = {
+  name: "search_sellers",
+  description:
+    "Поиск продавцов по названию или slug. Возвращает публичный профиль: верификацию, рейтинг, отзывы, историю работы на платформе.",
+  permission: "READ_SELLERS",
+  riskLevel: "READ",
+  needsConfirmation: false,
+  parameters: looseObjectSchema({
+    query: { type: "string", description: "название или идентификатор продавца" },
+  }),
+  async execute(_ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const query = typeof args.query === "string" ? args.query.trim() : "";
+    if (!query) return { ok: false, error: "укажите запрос для поиска продавца", verification: "NOT_PROVEN" };
+
+    const sellers = await prisma.sellerProfile.findMany({
+      where: {
+        isActivated: true,
+        OR: [{ displayName: { contains: query } }, { slug: { contains: query } }],
+      },
+      take: 10,
+      select: { id: true, slug: true, displayName: true, sellerType: true },
+    });
+
+    if (sellers.length === 0) {
+      return ok({ items: [] }, `Продавцы «${query}» не найдены.`);
+    }
+
+    const profiles = await Promise.all(
+      sellers.map((s) => getPublicSellerProfile(s.slug).catch(() => null))
+    );
+    const items = profiles.filter(Boolean).map((p) => ({
+      id: p!.id,
+      slug: p!.slug,
+      displayName: p!.displayName,
+      sellerType: p!.sellerType,
+      identityStatus: p!.identityStatus,
+      businessStatus: p!.businessStatus,
+      npdStatus: p!.npdStatus,
+      rating: p!.stats.rating,
+      reviewsCount: p!.stats.reviewsCount,
+      completedOrders: p!.stats.completedOrders,
+      productsPublished: p!.stats.productsPublished,
+    }));
+
+    return ok(
+      { items },
+      items.length > 0
+        ? `Найдено продавцов: ${items.length}. «${items[0].displayName}» — рейтинг ${items[0].rating}, завершённых заказов: ${items[0].completedOrders}.`
+        : `Продавцы «${query}» не найдены.`
+    );
   },
 };

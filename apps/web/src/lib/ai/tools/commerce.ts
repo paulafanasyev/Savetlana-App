@@ -8,6 +8,8 @@
 import { getCartView, addToCart } from "../../domains/cart";
 import { createOrdersFromCart, getOrdersForBuyer, transitionOrder } from "../../domains/orders";
 import { openDispute } from "../../domains/disputes";
+import { syncTracking } from "../../domains/delivery";
+import { computeAvailability } from "../../domains/inventory";
 import { prisma } from "../../prisma";
 import { fromKopecks, generateOrderNumber } from "../../utils";
 import type { ToolDefinition, ToolResult, ToolContext } from "./registry";
@@ -389,5 +391,210 @@ export const createDisputeTool: ToolDefinition = {
     } catch (e) {
       return denied(e instanceof Error ? e.message : "не удалось открыть спор");
     }
+  },
+};
+
+/**
+ * get_tracking (spec §24, §34, §44) — единый экран отслеживания для AI.
+ * Статус берётся у реального перевозчика; если адаптера нет (продавец
+ * объявил свою доставку или PENDING_EXTERNAL_ACCESS) — хронология отдаётся
+ * как есть. Никаких выдуманных статусов (spec §49, §123).
+ */
+export const getTrackingTool: ToolDefinition = {
+  name: "get_tracking",
+  description:
+    "Реальное отслеживание заказа: перевозчик, трек-номер, ETA и хронология событий. Отвечает на «где мой заказ?» по данным перевозчика.",
+  permission: "READ_TRACKING",
+  riskLevel: "READ",
+  needsConfirmation: false,
+  parameters: looseObjectSchema({
+    orderId: { type: "string", description: "идентификатор заказа" },
+  }),
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const orderId = typeof args.orderId === "string" ? args.orderId : undefined;
+    if (!orderId) return denied("укажите orderId заказа");
+
+    const order = await prisma.order.findFirst({
+      where: { id: orderId, buyerId: ctx.userId },
+      select: { id: true, number: true, status: true },
+    });
+    if (!order) return denied("заказ не найден или принадлежит другому пользователю");
+
+    let shipment = await prisma.deliveryShipment.findFirst({
+      where: { orderId: order.id },
+      include: { events: { orderBy: { occurredAt: "asc" } } },
+    });
+
+    if (shipment) {
+      // Refresh from the carrier when an adapter exists. A carrier outage must
+      // not break the answer: fall back to the last known persisted state.
+      try {
+        shipment = (await syncTracking(shipment.id)) as typeof shipment;
+      } catch {
+        // keep persisted timeline
+      }
+    }
+
+    if (!shipment) {
+      return ok(
+        { orderNumber: order.number, orderStatus: order.status, shipment: null },
+        `Заказ ${order.number} ещё не передан в доставку. Статус заказа: ${order.status}.`
+      );
+    }
+
+    const events = shipment.events.map((e) => ({
+      status: e.status,
+      description: e.description,
+      occurredAt: e.occurredAt.toISOString(),
+    }));
+    const eta = shipment.eta ? shipment.eta.toISOString() : null;
+
+    return ok(
+      {
+        orderNumber: order.number,
+        orderStatus: order.status,
+        shipment: {
+          carrierName: shipment.carrierName,
+          trackingNumber: shipment.trackingNumber,
+          status: shipment.status,
+          eta,
+          events,
+        },
+      },
+      `Заказ ${order.number}, статус: ${shipment.status}.` +
+        (shipment.trackingNumber ? ` Трек-номер: ${shipment.trackingNumber}.` : "") +
+        (events.length > 0 ? ` Последнее событие: ${events[events.length - 1].description ?? events[events.length - 1].status}.` : "")
+    );
+  },
+};
+
+/**
+ * get_payment_status (spec §44, §26) — статус оплаты и распределения средств
+ * по модели BUYER → PAYMENT PROVIDER → SETTLEMENT → SELLER PAYOUT.
+ */
+export const getPaymentStatusTool: ToolDefinition = {
+  name: "get_payment_status",
+  description:
+    "Статус оплаты заказа: платёж, его sandbox-природу и состояние расчётов с продавцом.",
+  permission: "READ_ORDERS",
+  riskLevel: "READ",
+  needsConfirmation: false,
+  parameters: looseObjectSchema({
+    orderId: { type: "string", description: "идентификатор заказа" },
+  }),
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const orderId = typeof args.orderId === "string" ? args.orderId : undefined;
+    if (!orderId) return denied("укажите orderId заказа");
+
+    const order = await prisma.order.findFirst({
+      where: { id: orderId, buyerId: ctx.userId },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        totalKopecks: true,
+        payment: { select: { status: true, sandbox: true, provider: true, providerRef: true } },
+      },
+    });
+    if (!order) return denied("заказ не найден или принадлежит другому пользователю");
+
+    return ok(
+      {
+        orderNumber: order.number,
+        orderStatus: order.status,
+        totalRub: fromKopecks(order.totalKopecks),
+        payment: order.payment
+          ? {
+              status: order.payment.status,
+              sandbox: order.payment.sandbox,
+              provider: order.payment.provider,
+            }
+          : null,
+      },
+      order.payment
+        ? `Оплата заказа ${order.number}: ${order.payment.status} через ${order.payment.provider}.` +
+            (order.payment.sandbox ? " Внимание: это тестовая среда, реальное списание не проводилось." : "")
+        : `Заказ ${order.number} ещё не оплачен.`
+    );
+  },
+};
+
+/**
+ * check_inventory (spec §10, §24, §44) — фактическое наличие товара.
+ * Возвращает статус AVAILABLE / LIMITED / OUT_OF_STOCK / UNKNOWN и дату
+ * последнего подтверждения продавцом. UNKNOWN никогда не обещается покупателю.
+ */
+export const checkInventoryTool: ToolDefinition = {
+  name: "check_inventory",
+  description:
+    "Проверить наличие товара: статус, остаток и дату последнего подтверждения продавцом.",
+  permission: "READ_PRODUCTS",
+  riskLevel: "READ",
+  needsConfirmation: false,
+  parameters: looseObjectSchema({
+    productId: { type: "string", description: "идентификатор товара" },
+  }),
+  async execute(_ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const productId = typeof args.productId === "string" ? args.productId : undefined;
+    if (!productId) return denied("укажите productId товара");
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: {
+        id: true,
+        title: true,
+        sku: true,
+        status: true,
+        inventory: {
+          select: {
+            quantity: true,
+            confirmedBySeller: true,
+            confirmedAt: true,
+            saleUntil: true,
+            autoExtend: true,
+          },
+        },
+      },
+    });
+    if (!product) return denied("товар не найден");
+
+    const inv = product.inventory;
+    if (!inv) {
+      return ok(
+        { productId: product.id, title: product.title, availability: "UNKNOWN", quantity: null },
+        `Наличие товара «${product.title}» не подтверждено продавцом — не могу обещать его доступность.`
+      );
+    }
+
+    const availability = computeAvailability(
+      inv.quantity,
+      inv.confirmedBySeller,
+      inv.saleUntil ?? null
+    );
+    const confirmedAt = inv.confirmedAt ? inv.confirmedAt.toISOString() : null;
+
+    const labels: Record<string, string> = {
+      AVAILABLE: "в наличии",
+      LIMITED: "заканчивается",
+      OUT_OF_STOCK: "нет в наличии",
+      UNKNOWN: "наличие не подтверждено",
+    };
+
+    return ok(
+      {
+        productId: product.id,
+        title: product.title,
+        sku: product.sku,
+        availability,
+        quantity: inv.quantity,
+        confirmedAt,
+        saleUntil: inv.saleUntil ? inv.saleUntil.toISOString() : null,
+        autoExtend: inv.autoExtend,
+      },
+      `Товар «${product.title}»: ${labels[availability] ?? availability}.` +
+        (availability === "UNKNOWN"
+          ? " Продавец ещё не подтвердил наличие — не обещаю доставку."
+          : ` Остаток: ${inv.quantity} шт.`)
+    );
   },
 };
