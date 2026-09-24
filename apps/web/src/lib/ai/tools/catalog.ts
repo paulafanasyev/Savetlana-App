@@ -310,11 +310,18 @@ export const getReviewsTool: ToolDefinition = {
   needsConfirmation: false,
   parameters: looseObjectSchema({
     productId: { type: "string", description: "идентификатор товара" },
+    query: { type: "string", description: "поисковый запрос, если productId неизвестен" },
     limit: { type: "number", description: "сколько свежих отзывов показать" },
   }),
   async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
-    const productId = typeof args.productId === "string" ? args.productId : undefined;
-    if (!productId) return { ok: false, error: "укажите productId товара", verification: "NOT_PROVEN" };
+    let productId = typeof args.productId === "string" ? args.productId : undefined;
+    // Natural-language requests rarely carry an id: resolve the best-matching
+    // product through the catalog search, same approach as compare_products.
+    if (!productId && typeof args.query === "string" && args.query.trim()) {
+      const { results } = await searchProducts({ query: args.query, limit: 1 }, ctx.traceId);
+      productId = results[0]?.product.id;
+    }
+    if (!productId) return { ok: false, error: "не удалось определить товар — уточните название", verification: "NOT_PROVEN" };
 
     const summary = await summarizeReviews(productId);
     const fresh = await listReviews(productId, Math.min(asNumber(args.limit) ?? 5, 10));

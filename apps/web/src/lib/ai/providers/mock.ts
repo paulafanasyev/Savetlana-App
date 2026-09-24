@@ -42,6 +42,13 @@ function parseBudget(text: string): number | undefined {
 
 const INTENT_RULES: IntentRule[] = [
   {
+    id: "seller_search",
+    pattern: /(?:найд[и|ите]|покаж[и|ите]|ищу)\s+(?:продавца|продавцов|магазин|магазины)(.*)?/i,
+    tool: "search_sellers",
+    args: (m) => ({ query: (m[1] ?? "").trim() }),
+    reply: (m) => `Ищу продавцов: ${(m[1] ?? "").trim()}. Покажу верификацию, рейтинг и историю работы на платформе.`,
+  },
+  {
     id: "product_search",
     pattern: /(?:найд[и|ите]|покаж[и|ите]|ищу|хочу|подобрать|выбрать|посоветуй)\s+(.*)/i,
     tool: "search_products",
@@ -72,6 +79,13 @@ const INTENT_RULES: IntentRule[] = [
     tool: "get_order",
     args: () => ({ mine: true }),
     reply: () => "Проверяю статус ваших заказов и доставок по реальным данным.",
+  },
+  {
+    id: "review_analysis",
+    pattern: /(?:что говорят|отзывы|отзыв|какие плюсы|какие минусы|недостатки|стоит ли брать)\s*(.*)?/i,
+    tool: "get_reviews",
+    args: (m) => ({ query: (m[1] ?? "").trim() }),
+    reply: (m) => `Анализирую отзывы: ${(m[1] ?? "").trim() || "повторяющиеся преимущества, жалобы и тональность"}. Всё по реальным отзывам покупателей.`,
   },
   {
     id: "seller_sales_drop",

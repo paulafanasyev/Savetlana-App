@@ -59,7 +59,7 @@ const RULES: RouteRule[] = [
   { side: "buyer", agent: "payment", pattern: /оплат|возврат денег|чек|комисси|выплат[а|ы]/i },
   { side: "buyer", agent: "recommendation", pattern: /посоветуй|что мне (купить|подойдёт)|рекомендаци|персональн/i },
   { side: "buyer", agent: "memory", pattern: /запомни мои (предпочтени|размер|бюджет)|что ты обо мне знаешь/i },
-  { side: "buyer", agent: "review", pattern: /отзывы на|что говорят об этом товаре|стоит ли брать/i },
+  { side: "buyer", agent: "review", pattern: /отзывы|что говорят|стоит ли брать|какие плюсы|какие минусы|недостатки/i },
   { side: "buyer", agent: "vision", pattern: /по фот|фотографи|сделал фото|распознай товар/i },
   { side: "buyer", agent: "search", pattern: /найд[и|ите]|ищу|хочу купить|подбери|выбери|сравни|дешевле|аналог/i },
 ];
