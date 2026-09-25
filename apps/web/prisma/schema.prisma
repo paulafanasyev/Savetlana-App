@@ -77,6 +77,7 @@ model User {
   sessions          Session[]
   classifieds       Classified[]
   pendingActions    PendingAction[]
+  oauthStates       OAuthState[]
 }
 
 model Session {
@@ -1028,6 +1029,25 @@ model IntegrationLink {
 
   @@unique([provider, externalId])
   @@index([userId])
+}
+
+// A started OAuth flow (VK/ЕСИА), bound server-side to the user who began it
+// (P0 fix, spec §17/§18/§38). The callback redeems the handle to prove the
+// flow was not replayed or forced onto a different account.
+model OAuthState {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider    String    // vk | esia
+  handle      String    @unique
+  signature   String
+  redirectUri String
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  usedAt      DateTime?
+
+  @@index([userId])
+  @@index([provider])
 }
 
 // =============================================================================

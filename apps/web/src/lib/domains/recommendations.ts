@@ -16,6 +16,7 @@
 import { prisma } from "../prisma";
 import { fromKopecks } from "../utils";
 import { recordEvent } from "./events";
+import { hasConsent } from "./consents";
 
 export interface RecommendationItem {
   productId: string;
@@ -49,10 +50,9 @@ export async function recommendForUser(
   ]);
 
   // --- Consent gate: personalization must be opted in (spec §34, §16) -----
-  const personalization = await prisma.consent.findUnique({
-    where: { userId_type: { userId, type: "personalization" } },
-  });
-  const allowPersonalization = personalization?.granted ?? true; // default on, user can turn off
+  // Absence of a record is NOT granted — the user must affirmatively opt in.
+  // Uses the shared consent domain so the default can never drift back to on.
+  const allowPersonalization = await hasConsent(userId, "AI_PERSONALIZATION");
 
   // --- Build the user's taste profile -------------------------------------
   const categoryAffinity = new Map<string, number>();

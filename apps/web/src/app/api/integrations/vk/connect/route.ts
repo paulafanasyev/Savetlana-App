@@ -1,15 +1,17 @@
 import { apiRoute } from "@/lib/api-helpers";
 import { requireBuyer } from "@/lib/auth";
-import { linkVkAccount, getVkAdapter, isVkLive } from "@/lib/domains/vk";
+import { getVkAdapter, isVkLive } from "@/lib/domains/vk";
+import { createOAuthState } from "@/lib/domains/oauth-state";
 import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Begins the official VK OAuth flow. The user is redirected to VK; the
- * `state` binds the flow to the authenticated platform user. VK credentials
- * are never exposed to the browser — only the redirect URL is constructed
- * server-side (spec §17, §38).
+ * Begins the official VK OAuth flow. The user is redirected to VK with a
+ * `state` that is persisted server-side and bound to the authenticated
+ * platform user, so the callback can prove the flow was started by this user
+ * and not replayed (P0 CSRF fix, spec §17/§38). VK credentials are never
+ * exposed to the browser — only the redirect URL is constructed server-side.
  */
 export const GET = apiRoute(async (request) => {
   const user = await requireBuyer(request);
@@ -25,6 +27,14 @@ export const GET = apiRoute(async (request) => {
     );
   }
   const redirectUri = `${env.publicAppUrl}/api/integrations/vk/callback`;
-  const state = `${user.user.id}:${crypto.randomUUID()}`;
-  return Response.json({ authUrl: adapter.getAuthUrl(state, redirectUri) });
+  const created = await createOAuthState({
+    userId: user.user.id,
+    provider: "vk",
+    redirectUri,
+  });
+  // The OAuth state carries our handle; the signature travels in the session
+  // fragment so the callback can verify the handle was minted by this server.
+  const authUrl = new URL(adapter.getAuthUrl(created.state, redirectUri));
+  authUrl.hash = `sig=${created.signature}`;
+  return Response.json({ authUrl: authUrl.toString() });
 });

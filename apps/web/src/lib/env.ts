@@ -72,6 +72,8 @@ export const env = {
   jwtExpiresIn: required("JWT_EXPIRES_IN", "7d"),
   // At-rest protection for persisted pending AI actions (spec §38).
   pendingActionKey: optional("PENDING_ACTION_KEY"),
+  // Signing key for one-time OAuth states (spec §17/§18).
+  oauthStateKey: optional("OAUTH_STATE_KEY"),
 
   // --- AI Gateway (server-side only) -------------------------------------
   aiGatewayBaseUrl: optional("AI_GATEWAY_BASE_URL") ?? "http://localhost:11434/v1",
