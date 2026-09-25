@@ -1,5 +1,5 @@
 import { apiRoute, rateLimit, tooManyRequests } from "@/lib/api-helpers";
-import { requireSeller } from "@/lib/auth";
+import { requireSeller, requireVerifiedSeller } from "@/lib/auth";
 import {
   createConsolidatedPayout,
   sellerSettlementStatement,
@@ -19,10 +19,11 @@ export const GET = apiRoute(async (request) => {
  * Requests a consolidated payout of all completed settlements (spec §26).
  * The disbursement itself is executed by the payment partner — the platform
  * only records the result. Idempotent on the client's idempotency key.
+ * Payout is a financial action, so the verification machine is enforced (P0).
  */
 export const POST = apiRoute(async (request) => {
   if (!rateLimit("payouts:request", 5, 60_000)) return tooManyRequests();
-  const ctx = await requireSeller(request);
+  const ctx = await requireVerifiedSeller(request, "запрашивать выплату");
 
   const url = new URL(request.url);
   const contentType = request.headers.get("content-type") ?? "";

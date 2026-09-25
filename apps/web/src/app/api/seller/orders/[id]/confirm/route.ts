@@ -1,5 +1,5 @@
 import { apiRoute, tooManyRequests, rateLimit } from "@/lib/api-helpers";
-import { requireSeller } from "@/lib/auth";
+import { requireVerifiedSeller } from "@/lib/auth";
 import { transitionOrder } from "@/lib/domains/orders";
 import { notify } from "@/lib/domains/notifications";
 import { prisma } from "@/lib/prisma";
@@ -10,10 +10,10 @@ export const dynamic = "force-dynamic";
  * Seller confirms a paid order and starts fulfillment (spec §152).
  * Transition PAID -> CONFIRMED is a seller-only write; the buyer cannot
  * self-confirm. Requires explicit human action, so the AI never performs it
- * autonomously.
+ * autonomously. The seller must have cleared the verification machine (P0).
  */
 export const POST = apiRoute(async (request, { params }) => {
-  const { sellerId, user } = await requireSeller(request);
+  const { sellerId, user } = await requireVerifiedSeller(request, "принимать заказы");
   if (!rateLimit(`seller-confirm:${sellerId}`, 30, 60_000)) return tooManyRequests();
 
   const order = await prisma.order.findUniqueOrThrow({

@@ -1,5 +1,5 @@
 import { apiRoute, jsonBody, tooManyRequests, rateLimit } from "@/lib/api-helpers";
-import { requireSeller } from "@/lib/auth";
+import { requireVerifiedSeller } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createShipment } from "@/lib/domains/delivery";
 import { notify } from "@/lib/domains/notifications";
@@ -10,10 +10,10 @@ export const dynamic = "force-dynamic";
  * Seller hands an order to a carrier (spec §24, §33). The carrier is chosen
  * from the configured providers; if no real carrier adapter is available the
  * domain throws and the route reports an honest error instead of fabricating a
- * tracking number (spec §49).
+ * tracking number (spec §49). Requires a verified seller (P0).
  */
 export const POST = apiRoute(async (request, { params }) => {
-  const { sellerId, user } = await requireSeller(request);
+  const { sellerId, user } = await requireVerifiedSeller(request, "отправлять заказы");
   if (!rateLimit(`seller-ship:${sellerId}`, 20, 60_000)) return tooManyRequests();
 
   const body = await jsonBody<{

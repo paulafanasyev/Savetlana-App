@@ -14,6 +14,7 @@ import { scanExternalCompetitors, searchGlobally } from "../../domains/external-
 import { quoteDeliveryTier, type DeliveryTier } from "../../delivery-tiers";
 import type { ScanTier } from "../../marketplaces";
 import { requirementsForSeller } from "../../domains/documents";
+import { getSellerOnboardingGate } from "../../domains/seller-onboarding";
 import { prisma } from "../../prisma";
 import { fromKopecks, slugify, toKopecks } from "../../utils";
 import type { ToolDefinition, ToolResult, ToolContext } from "./registry";
@@ -262,6 +263,14 @@ export const publishProductTool: ToolDefinition = {
   async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
     const sellerId = requireSeller(ctx);
     if (typeof sellerId !== "string") return sellerId;
+    // Publishing is a trading action: an unverified seller must not reach buyers
+    // even though the cabinet stays fully readable (P0 fix, spec §19/§112).
+    const gate = await getSellerOnboardingGate(sellerId);
+    if (!gate.active) {
+      return denied(
+        `Нельзя публиковать товар: ${gate.blockers.join(", ")}. Следующий шаг — ${gate.nextStep ?? "завершите верификацию"}.`
+      );
+    }
     const productId = productIdArg(args);
     if (!productId) return denied("укажите productId");
     const owned = await ownProduct(ctx, productId);

@@ -9,6 +9,10 @@
 import bcrypt from "bcryptjs";
 import { env } from "./env";
 import { prisma } from "./prisma";
+import {
+  getSellerOnboardingGate,
+  type OnboardingGate,
+} from "./domains/seller-onboarding";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Session, User } from "@prisma/client";
@@ -217,6 +221,28 @@ export async function requireSeller(request: Request): Promise<AuthContext & { s
     throw new ApiError(403, "Требуется профиль продавца");
   }
   return { ...ctx, sellerId: seller.id };
+}
+
+/**
+ * Seller authorization for trading actions (publish, receive orders, payout).
+ * Enforces the verification machine instead of merely checking that a profile
+ * exists (P0 fix, spec §19/§21): an unverified seller keeps read access to the
+ * cabinet but cannot trade.
+ */
+export async function requireVerifiedSeller(
+  request: Request,
+  action: string
+): Promise<AuthContext & { sellerId: string; onboarding: OnboardingGate }> {
+  const ctx = await requireSeller(request);
+  const onboarding = await getSellerOnboardingGate(ctx.sellerId);
+  if (!onboarding.active) {
+    throw new ApiError(
+      403,
+      `Нельзя ${action}: ${onboarding.blockers.join(", ")}. Следующий шаг — ${onboarding.nextStep ?? "завершите верификацию"}.`,
+      "seller_not_verified"
+    );
+  }
+  return { ...ctx, sellerId: ctx.sellerId, onboarding };
 }
 
 export async function requireAdmin(request: Request): Promise<AuthContext> {
