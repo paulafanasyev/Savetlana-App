@@ -340,4 +340,85 @@ describe("order lifecycle (release gate)", () => {
     expect(s.platformFeeKopecks).toBeGreaterThan(0);
     expect(statement.totals.payoutKopecks).toBeGreaterThan(0);
   });
+
+  it("atomically reserves stock at checkout, so the last item cannot be oversold", async () => {
+    // Two buyers race for the single remaining unit. The pre-transaction read
+    // would let both through; the conditional decrement must not.
+    await prisma.inventory.update({
+      where: { productId: TEST_PRODUCT_ID },
+      data: { quantity: 1 },
+    });
+    await prisma.cartItem.deleteMany({});
+    await prisma.cart.deleteMany({});
+
+    const carts = await Promise.all([
+      prisma.cart.create({ data: { userId: TEST_USER_ID } }),
+      prisma.cart.create({ data: { userId: TEST_USER_ID } }),
+    ]);
+    await Promise.all(
+      carts.map((c) =>
+        prisma.cartItem.create({
+          data: { cartId: c.id, productId: TEST_PRODUCT_ID, quantity: 1, priceKopecks: 500000 },
+        })
+      )
+    );
+
+    const results = await Promise.allSettled([
+      createOrdersFromCart({
+        buyerId: TEST_USER_ID,
+        idempotencyKey: "race-a",
+        deliveryAddress: { city: "Москва" },
+      }),
+      createOrdersFromCart({
+        buyerId: TEST_USER_ID,
+        idempotencyKey: "race-b",
+        deliveryAddress: { city: "Москва" },
+      }),
+    ]);
+    const settled = results.filter((r) => r.status === "fulfilled");
+    // Exactly one buyer wins the unit; the other is rejected with an honest
+    // message rather than sold an item that does not exist.
+    expect(settled).toHaveLength(1);
+    const rejected = results.find((r) => r.status === "rejected");
+    expect(String((rejected as PromiseRejectedResult).reason)).toMatch(/закончилась/);
+
+    const after = await prisma.inventory.findUniqueOrThrow({ where: { productId: TEST_PRODUCT_ID } });
+    expect(after.quantity).toBe(0);
+  });
+
+  it("returns reserved stock to inventory exactly once when an order is cancelled", async () => {
+    await prisma.inventory.update({
+      where: { productId: TEST_PRODUCT_ID },
+      data: { quantity: 2 },
+    });
+    const order = await createFreshOrder("cancel-refund-1");
+    // Checkout claimed one unit.
+    expect(
+      (await prisma.inventory.findUniqueOrThrow({ where: { productId: TEST_PRODUCT_ID } })).quantity
+    ).toBe(1);
+
+    await transitionOrder({
+      orderId: order.id,
+      to: "CANCELLED",
+      actorId: TEST_USER_ID,
+      actorRole: "buyer",
+      actingUserId: TEST_USER_ID,
+    });
+    expect(
+      (await prisma.inventory.findUniqueOrThrow({ where: { productId: TEST_PRODUCT_ID } })).quantity
+    ).toBe(2);
+
+    // Re-cancelling is a no-op, never a second stock credit.
+    const again = await transitionOrder({
+      orderId: order.id,
+      to: "CANCELLED",
+      actorId: TEST_USER_ID,
+      actorRole: "buyer",
+      actingUserId: TEST_USER_ID,
+    });
+    expect(again.ok).toBe(true);
+    expect(
+      (await prisma.inventory.findUniqueOrThrow({ where: { productId: TEST_PRODUCT_ID } })).quantity
+    ).toBe(2);
+  });
 });

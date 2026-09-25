@@ -10,8 +10,11 @@ export interface ChatStep {
 }
 export interface PendingConfirmation {
   toolName: string;
-  args: Record<string, unknown>;
+  args?: Record<string, unknown>;
   reason?: string;
+  actionId: string;
+  nonce: string;
+  expiresAt?: string;
 }
 interface ChatMessage {
   role: "user" | "assistant";
@@ -130,8 +133,10 @@ export function SvetlanaChat({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             conversationId: conversationId ?? undefined,
-            toolName: pending.toolName,
-            args: pending.args,
+            // Only the opaque single-use handle is echoed back; the server
+            // re-derives the tool and arguments from its own persisted row.
+            actionId: pending.actionId,
+            nonce: pending.nonce,
           }),
         });
         const data = await res.json();

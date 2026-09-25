@@ -81,6 +81,10 @@ export const EvidenceVerification_VALUES = ["VERIFIED", "NOT_PROVEN", "PENDING"]
 export const LinkStatus_VALUES = ["UNVERIFIED", "ACTIVE", "REVOKED", "UNAVAILABLE"] as const;
 export type EvidenceVerification = (typeof EvidenceVerification_VALUES)[number];
 
+// --- Pending AI actions (confirmation gate, spec §39/§45/§147) ---------------
+export const PendingActionStatus_VALUES = ["PENDING", "CONSUMED", "EXPIRED"] as const;
+export type PendingActionStatus = (typeof PendingActionStatus_VALUES)[number];
+
 // --- Classifieds verticals (real estate / auto / services) -------------------
 export const ClassifiedVertical_VALUES = ["REAL_ESTATE", "AUTO", "SERVICE"] as const;
 export type ClassifiedVertical = (typeof ClassifiedVertical_VALUES)[number];
@@ -190,6 +194,7 @@ const ALL_ENUMS: EnumRecord = {
   DisputeReason: DisputeReason_VALUES,
   EvidenceVerification: EvidenceVerification_VALUES,
   LinkStatus: LinkStatus_VALUES,
+  PendingActionStatus: PendingActionStatus_VALUES,
   ClassifiedVertical: ClassifiedVertical_VALUES,
   ClassifiedDealType: ClassifiedDealType_VALUES,
   ClassifiedStatus: ClassifiedStatus_VALUES,

@@ -76,6 +76,7 @@ model User {
   reviewsFlagged    Review[]           @relation("reviewFlagger")
   sessions          Session[]
   classifieds       Classified[]
+  pendingActions    PendingAction[]
 }
 
 model Session {
@@ -429,6 +430,9 @@ model Order {
   cancelledAt        DateTime?
   confirmedAt        DateTime?
   completedAt        DateTime?
+  // True once reserved stock has been returned to inventory. Guards the
+  // cancellation/refund path against a double credit (P0 fix).
+  stockReleased      Boolean       @default(false)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
@@ -807,6 +811,33 @@ model GiftContribution {
 // =============================================================================
 // AI LAYER  (spec §3, §4, §29, §10, §44, §51)
 // =============================================================================
+
+// A confirmation-gated tool call is persisted server-side BEFORE the user is
+// asked to confirm (P0 security fix, spec §39/§45/§147). The client only ever
+// echoes back actionId + nonce — it can no longer forge a (toolName, args)
+// pair, because the server proves Svetlana surfaced this exact action to this
+// user in this conversation.
+model PendingAction {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String?
+  toolName       String
+  // SHA-256 of canonical args JSON — tamper evidence for the persisted payload.
+  argsHash       String
+  // Args needed to re-execute; integrity-checked against argsHash on consume.
+  args           String
+  nonce          String   @unique
+  status         String   @default("PENDING") // PENDING | CONSUMED | EXPIRED
+  riskLevel      String   @default("READ")
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+  consumedAt     DateTime?
+
+  @@index([userId])
+  @@index([conversationId])
+  @@index([status])
+}
 
 model AiConversation {
   id        String   @id @default(cuid())

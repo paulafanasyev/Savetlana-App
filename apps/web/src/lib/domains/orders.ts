@@ -8,7 +8,7 @@
  */
 import { prisma } from "../prisma";
 import { generateOrderNumber } from "../utils";
-import { getCartView } from "./cart";
+import { getCartView, type CartLine } from "./cart";
 import { computeSettlement } from "./payments";
 
 export const ORDER_STATES = [
@@ -131,6 +131,21 @@ export async function createOrdersFromCart(
   const addressJson = JSON.stringify(input.deliveryAddress);
 
   return prisma.$transaction(async (tx) => {
+    // --- Atomic stock reservation (P0 fix, spec §6/§124) --------------------
+    // The pre-transaction read-only check is not authoritative: two concurrent
+    // checkouts could both see stock>=qty and both succeed. Here every unit is
+    // claimed with a conditional decrement guarded on the *current* row value,
+    // so under concurrency at most one writer can win the last item. A failure
+    // aborts the whole transaction — no order is left without its stock.
+    const reserved = await reserveStock(tx, cart.lines);
+    if (reserved.length > 0) {
+      throw new Error(
+        `часть товаров закончилась: ${reserved
+          .map((r) => `${r.title} (осталось ${r.remaining})`)
+          .join(", ")}`
+      );
+    }
+
     const group = await tx.orderGroup.create({
       data: {
         id: input.idempotencyKey,
@@ -195,6 +210,55 @@ export async function createOrdersFromCart(
   });
 }
 
+type TransactionClient = Parameters<Parameters<typeof prisma["$transaction"]>[0]>[0];
+
+/**
+ * Claims stock atomically for every cart line. Each line is a conditional
+ * `UPDATE ... WHERE quantity >= needed`; under concurrency the database's own
+ * row locking makes this the single source of truth, so two simultaneous
+ * checkouts of the last item cannot both succeed (P0 overselling fix).
+ *
+ * Returns the lines that could not be fulfilled with the remaining quantity,
+ * so the caller can abort with an honest, specific message.
+ */
+async function reserveStock(
+  tx: TransactionClient,
+  lines: CartLine[]
+): Promise<{ title: string; remaining: number }[]> {
+  const failed: { title: string; remaining: number }[] = [];
+  for (const line of lines) {
+    const result = await tx.inventory.updateMany({
+      where: { productId: line.productId, quantity: { gte: line.quantity } },
+      data: { quantity: { decrement: line.quantity } },
+    });
+    if (result.count !== 1) {
+      const inventory = await tx.inventory.findUnique({
+        where: { productId: line.productId },
+        select: { quantity: true },
+      });
+      failed.push({ title: line.title, remaining: inventory?.quantity ?? 0 });
+    }
+  }
+  return failed;
+}
+
+/**
+ * Returns reserved stock to inventory when an order is cancelled or refunded
+ * (spec §10, §29). Idempotent: the restoration is recorded on the order so a
+ * repeated transition does not double-credit the seller.
+ */
+export async function releaseStockForOrder(
+  tx: TransactionClient,
+  order: { id: string; items: { productId: string; quantity: number }[] }
+): Promise<void> {
+  for (const item of order.items) {
+    await tx.inventory.updateMany({
+      where: { productId: item.productId },
+      data: { quantity: { increment: item.quantity } },
+    });
+  }
+}
+
 export interface TransitionInput {
   orderId: string;
   to: OrderState;
@@ -217,24 +281,35 @@ export async function transitionOrder(
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUniqueOrThrow({
       where: { id: input.orderId },
-      select: { id: true, number: true, status: true, buyerId: true, sellerId: true },
+      include: {
+        items: { select: { productId: true, quantity: true } },
+        _count: { select: { items: true } },
+      },
     });
-    if (input.actorRole === "buyer" && order.buyerId !== (input.actingUserId ?? input.actorId)) {
+    const orderMeta = {
+      id: order.id,
+      number: order.number,
+      status: order.status,
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      stockReleased: order.stockReleased,
+    };
+    if (input.actorRole === "buyer" && orderMeta.buyerId !== (input.actingUserId ?? input.actorId)) {
       throw new Error("нет прав на изменение этого заказа");
     }
     if (
       (input.actorRole === "seller" || input.actorRole === "admin") &&
       input.actingSellerId &&
-      order.sellerId !== input.actingSellerId
+      orderMeta.sellerId !== input.actingSellerId
     ) {
       throw new Error("заказ принадлежит другому продавцу");
     }
     const to = input.to;
-    if (order.status === to) {
-      return { ok: true, from: order.status, to, note: "already in state", order: { id: order.id, number: order.number, status: order.status } };
+    if (orderMeta.status === to) {
+      return { ok: true, from: orderMeta.status, to, note: "already in state", order: { id: orderMeta.id, number: orderMeta.number, status: orderMeta.status } };
     }
-    if (!canTransition(order.status, to)) {
-      throw new Error(`недопустимый переход статуса заказа: ${order.status} → ${to}`);
+    if (!canTransition(orderMeta.status, to)) {
+      throw new Error(`недопустимый переход статуса заказа: ${orderMeta.status} → ${to}`);
     }
     const updated = await tx.order.update({
       where: { id: input.orderId },
@@ -243,19 +318,25 @@ export async function transitionOrder(
         cancelledAt: to === "CANCELLED" ? new Date() : undefined,
         completedAt: to === "COMPLETED" ? new Date() : undefined,
         confirmedAt: to === "CONFIRMED" ? new Date() : undefined,
+        // Stock was reserved at checkout; give it back exactly once when the
+        // order terminates without fulfilment (P0 overselling fix).
+        stockReleased: to === "CANCELLED" || to === "REFUNDED" ? true : undefined,
       },
       select: { id: true, number: true, status: true },
     });
+    if ((to === "CANCELLED" || to === "REFUNDED") && !orderMeta.stockReleased) {
+      await releaseStockForOrder(tx, order);
+    }
     await tx.orderHistory.create({
       data: {
         orderId: input.orderId,
-        fromStatus: order.status,
+        fromStatus: orderMeta.status,
         toStatus: to,
         reason: input.note,
         actorId: input.actorId,
       },
     });
-    return { ok: true, from: order.status, to, note: input.note, order: updated };
+    return { ok: true, from: orderMeta.status, to, note: input.note, order: updated };
   });
 }
 

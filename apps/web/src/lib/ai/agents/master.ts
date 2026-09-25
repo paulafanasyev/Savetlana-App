@@ -17,6 +17,7 @@ import { registerAllTools } from "../tools";
 import { routeAgent, AGENT_TOOLS, type AgentKey } from "./router";
 import { decide, AGENT_LIMITS, PolicyAssertionError } from "./policy";
 import { prisma } from "../../prisma";
+import { createPendingAction, consumePendingAction } from "../../domains/pending-actions";
 import { integrationStatus } from "../../env";
 import type { AiMessage, AiToolDefinition } from "../types";
 import type { ToolContext, ToolResult } from "../tools/registry";
@@ -50,7 +51,15 @@ export interface MasterAgentResult {
   steps: AgentStep[];
   verification: "VERIFIED" | "MOCK_VERIFIED" | "NOT_PROVEN" | "PENDING_EXTERNAL_ACCESS";
   /** A sensitive action is waiting on the user's explicit confirmation. */
-  pendingConfirmation?: { toolName: string; args: Record<string, unknown>; reason: string };
+  pendingConfirmation?: {
+    toolName: string;
+    args: Record<string, unknown>;
+    reason: string;
+    /** Opaque single-use handle; the client echoes only this back (P0 fix). */
+    actionId: string;
+    nonce: string;
+    expiresAt: string;
+  };
   traceId: string;
 }
 
@@ -259,20 +268,28 @@ export class SvetlanaMasterAgent {
 
     // A confirmation-gated tool that the user has not confirmed becomes a
     // pending confirmation — NOT a silent denial, and NOT an endless retry
-    // (spec §45, §147).
+    // (spec §45, §147). The action is persisted server-side and the client
+    // only ever receives an opaque handle, so it cannot forge a different
+    // (toolName, args) pair on confirm.
     const alreadyConfirmed = ctx.confirm ? await ctx.confirm(name, args) : false;
     if (def.needsConfirmation && !alreadyConfirmed) {
-      const pending = {
+      const pending = await persistPending(ctx, conversationId, name, args, def.riskLevel);
+      if (pending) {
+        await this.logToolCall(conversationId, agentName, name, args, null, "requires_confirmation");
+        return {
+          kind: "awaiting_confirmation",
+          pending: pending.descriptor,
+          message: `${pending.descriptor.reason}. Подтвердите действие «${name}», и я его выполню.`,
+        };
+      }
+      const step: AgentStep = {
         toolName: name,
         args,
-        reason: "это чувствительное действие — требуется ваше подтверждение",
+        result: { ok: false, error: "не удалось зарегистрировать подтверждение", verification: "NOT_PROVEN" },
+        durationMs: Date.now() - started,
       };
-      await this.logToolCall(conversationId, agentName, name, args, null, "requires_confirmation");
-      return {
-        kind: "awaiting_confirmation",
-        pending,
-        message: `${pending.reason}. Подтвердите действие «${name}», и я его выполню.`,
-      };
+      await this.logToolCall(conversationId, agentName, name, args, step, "error");
+      return { kind: "done", step };
     }
 
     const authorization = await toolRegistry.authorize(name, ctx, args);
@@ -290,13 +307,23 @@ export class SvetlanaMasterAgent {
     const tool = authorization.tool;
     const policy = decide(tool.riskLevel, alreadyConfirmed);
     if (policy.decision === "needs_user_confirmation") {
-      const pending = { toolName: name, args, reason: policy.reason };
-      await this.logToolCall(conversationId, agentName, name, args, null, "requires_confirmation");
-      return {
-        kind: "awaiting_confirmation",
-        pending,
-        message: `${policy.reason}. Подтвердите выполнение действия «${name}», и я его выполню.`,
+      const pending = await persistPending(ctx, conversationId, name, args, tool.riskLevel);
+      if (pending) {
+        await this.logToolCall(conversationId, agentName, name, args, null, "requires_confirmation");
+        return {
+          kind: "awaiting_confirmation",
+          pending: pending.descriptor,
+          message: `${policy.reason}. Подтвердите выполнение действия «${name}», и я его выполню.`,
+        };
+      }
+      const step: AgentStep = {
+        toolName: name,
+        args,
+        result: { ok: false, error: "не удалось зарегистрировать подтверждение", verification: "NOT_PROVEN" },
+        durationMs: Date.now() - started,
       };
+      await this.logToolCall(conversationId, agentName, name, args, step, "error");
+      return { kind: "done", step };
     }
 
     let result: ToolResult;
@@ -358,21 +385,58 @@ export class SvetlanaMasterAgent {
 
   async executeConfirmed(
     input: Omit<MasterAgentInput, "message">,
-    pending: { toolName: string; args: Record<string, unknown> }
+    claim: { actionId: string; nonce: string }
   ): Promise<MasterAgentResult> {
     const traceId = newTraceId("sv");
     const conversationId = input.conversationId ?? (await this.createConversation(input));
+
+    // The claim is redeemed server-side: the user must be the owner, the
+    // nonce must match, the row must still be PENDING and unexpired. This is
+    // what makes "I confirmed this" provable instead of trust-on-client.
+    const claimResult = await consumePendingAction({
+      userId: input.userId,
+      actionId: claim.actionId,
+      nonce: claim.nonce,
+      conversationId: input.conversationId,
+    });
+    if (!claimResult.ok || !claimResult.action) {
+      const answer = claimResult.error ?? "Подтверждение недействительно";
+      const convId = conversationId;
+      await this.persistMessage(convId, "assistant", answer, {
+        traceId,
+        agent: "buyer",
+        provider: aiMode().provider,
+        verification: "NOT_PROVEN",
+        confirmedByUser: true,
+        confirmationRejected: true,
+      });
+      return {
+        answer,
+        conversationId: convId,
+        agent: "buyer",
+        liveModel: false,
+        steps: [],
+        verification: "NOT_PROVEN",
+        traceId,
+      };
+    }
+
+    const action = claimResult.action;
     const routing = routeAgent("подтверждение действия", input.role === "seller" ? "seller" : "buyer");
     const ctx: ToolContext = {
       userId: input.userId,
       role: input.role,
       sellerProfileId: input.sellerProfileId,
       traceId,
-      confirm: async () => true, // the user explicitly confirmed THIS call
+      // The stored action was already gated; the policy layer now sees a
+      // legitimately consumed confirmation bound to this exact call.
+      confirm: async (toolName, args) =>
+        toolName === action.toolName &&
+        confirmationKey(toolName, args) === confirmationKey(toolName, action.args),
     };
     const outcome = await this.executeTool(
-      pending.toolName,
-      pending.args,
+      action.toolName,
+      action.args,
       ctx,
       routing.agent,
       conversationId
@@ -415,6 +479,44 @@ export class SvetlanaMasterAgent {
 
 function confirmationKey(toolName: string, args: Record<string, unknown>): string {
   return `${toolName}:${JSON.stringify(args)}`;
+}
+
+const CONFIRM_REASON = "это чувствительное действие — требуется ваше подтверждение";
+
+/**
+ * Binds the gated action to (user, conversation) server-side and returns the
+ * opaque descriptor the UI may echo back. The args never round-trip through
+ * the client, so a forged confirm cannot substitute different arguments.
+ */
+async function persistPending(
+  ctx: ToolContext,
+  conversationId: string,
+  toolName: string,
+  args: Record<string, unknown>,
+  riskLevel: string
+): Promise<{ descriptor: NonNullable<MasterAgentResult["pendingConfirmation"]> } | null> {
+  try {
+    const stored = await createPendingAction({
+      userId: ctx.userId,
+      conversationId,
+      toolName,
+      args,
+      riskLevel,
+    });
+    return {
+      descriptor: {
+        toolName,
+        args,
+        reason: CONFIRM_REASON,
+        actionId: stored.actionId,
+        nonce: stored.nonce,
+        expiresAt: stored.expiresAt.toISOString(),
+      },
+    };
+  } catch {
+    // Persistence failing must not become a silent bypass.
+    return null;
+  }
 }
 
 function deriveVerification(

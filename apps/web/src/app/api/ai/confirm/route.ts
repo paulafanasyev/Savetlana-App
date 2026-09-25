@@ -6,19 +6,25 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 /**
- * Executes a tool call the user explicitly confirmed. The pending payload is
- * echoed back from the client and re-validated server-side — the agent never
- * trusts a confirmation for a tool it did not itself surface.
+ * Executes a tool call the user explicitly confirmed.
+ *
+ * Security model (P0 fix, spec §39/§45/§147): the client echoes back ONLY the
+ * opaque {actionId, nonce} handle Svetlana returned when she surfaced the
+ * action. The server redeems it against a persisted row bound to
+ * (userId, conversationId): nonce compared in constant time, row must be
+ * PENDING and unexpired, stored args re-hashed against the stored digest, and
+ * the row is consumed before execution. A forged confirm with attacker-chosen
+ * (toolName, args) is impossible; a replay of a used handle is rejected.
  */
 export const POST = apiRoute(async (request) => {
   const { user } = await requireUser(request);
   const body = await jsonBody<{
     conversationId?: string;
-    toolName?: string;
-    args?: Record<string, unknown>;
+    actionId?: string;
+    nonce?: string;
   }>(request);
 
-  if (!body.toolName || !body.args) {
+  if (!body.actionId || !body.nonce) {
     return Response.json({ error: "Нечего подтверждать", code: "empty" }, { status: 400 });
   }
   const sellerProfile = await prisma.sellerProfile.findUnique({
@@ -33,7 +39,7 @@ export const POST = apiRoute(async (request) => {
       sellerProfileId: sellerProfile?.id,
       conversationId: body.conversationId,
     },
-    { toolName: body.toolName, args: body.args }
+    { actionId: body.actionId, nonce: body.nonce }
   );
 
   return Response.json({

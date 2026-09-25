@@ -70,6 +70,8 @@ export const env = {
   databaseUrl: TEST_DATABASE_URL ?? resolveDatabaseUrl(required("DATABASE_URL", "file:./prisma/dev.db")),
   jwtSecret: required("JWT_SECRET", "dev-only-insecure-secret"),
   jwtExpiresIn: required("JWT_EXPIRES_IN", "7d"),
+  // At-rest protection for persisted pending AI actions (spec §38).
+  pendingActionKey: optional("PENDING_ACTION_KEY"),
 
   // --- AI Gateway (server-side only) -------------------------------------
   aiGatewayBaseUrl: optional("AI_GATEWAY_BASE_URL") ?? "http://localhost:11434/v1",
