@@ -66,6 +66,16 @@ export const POST = apiRoute(async (request) => {
       itemsCount: o.itemsCount,
       status: "PAYMENT_PENDING",
     })),
+    // Every line whose price moved since it was added is reported by name, so
+    // the UI can tell the buyer before payment rather than after (P0 fix).
+    priceChanges: view.lines
+      .filter((l) => l.priceChanged)
+      .map((l) => ({
+        title: l.title,
+        snapshotKopecks: l.priceSnapshotKopecks,
+        liveKopecks: l.priceLiveKopecks,
+        chargedKopecks: l.priceKopecks,
+      })),
     riskLevel: risk?.level ?? "LOW",
     riskExplanation: risk?.explanation ?? null,
   });

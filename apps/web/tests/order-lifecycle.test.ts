@@ -341,6 +341,77 @@ describe("order lifecycle (release gate)", () => {
     expect(statement.totals.payoutKopecks).toBeGreaterThan(0);
   });
 
+  it("charges the price-at-add snapshot, not a later seller price rise", async () => {
+    // A seller raising the price after the buyer added the item must never
+    // silently increase what the buyer pays (P0 fix, spec §9).
+    await prisma.inventory.update({
+      where: { productId: TEST_PRODUCT_ID },
+      data: { quantity: 5 },
+    });
+    await prisma.cartItem.deleteMany({});
+    await prisma.cart.deleteMany({ where: { userId: TEST_USER_ID } });
+    const cart = await prisma.cart.create({ data: { userId: TEST_USER_ID } });
+    await prisma.cartItem.create({
+      data: { cartId: cart.id, productId: TEST_PRODUCT_ID, quantity: 1, priceKopecks: 500000 },
+    });
+
+    // Seller doubles the price while the item sits in the cart.
+    await prisma.product.update({
+      where: { id: TEST_PRODUCT_ID },
+      data: { priceKopecks: 1_000_000 },
+    });
+
+    const view = await getCartView(TEST_USER_ID);
+    const line = view.lines[0];
+    expect(line.priceChanged).toBe(true);
+    // The buyer keeps the price they agreed to at add time.
+    expect(line.priceKopecks).toBe(500_000);
+    expect(line.lineTotalKopecks).toBe(500_000);
+
+    const created = await createOrdersFromCart({
+      buyerId: TEST_USER_ID,
+      idempotencyKey: "price-snapshot-1",
+      deliveryAddress: { city: "Москва" },
+    });
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { id: created.orders[0].id },
+      include: { items: true },
+    });
+    expect(order.totalKopecks).toBe(500_000);
+    expect(order.items[0].priceKopecks).toBe(500_000);
+
+    // Restore the fixture price for later tests.
+    await prisma.product.update({
+      where: { id: TEST_PRODUCT_ID },
+      data: { priceKopecks: 500000 },
+    });
+  });
+
+  it("gives the buyer a lower price when the seller drops it", async () => {
+    await prisma.inventory.update({
+      where: { productId: TEST_PRODUCT_ID },
+      data: { quantity: 5 },
+    });
+    await prisma.cartItem.deleteMany({});
+    await prisma.cart.deleteMany({ where: { userId: TEST_USER_ID } });
+    const cart = await prisma.cart.create({ data: { userId: TEST_USER_ID } });
+    await prisma.cartItem.create({
+      data: { cartId: cart.id, productId: TEST_PRODUCT_ID, quantity: 1, priceKopecks: 500000 },
+    });
+    await prisma.product.update({
+      where: { id: TEST_PRODUCT_ID },
+      data: { priceKopecks: 300_000 },
+    });
+
+    const view = await getCartView(TEST_USER_ID);
+    expect(view.lines[0].priceKopecks).toBe(300_000);
+
+    await prisma.product.update({
+      where: { id: TEST_PRODUCT_ID },
+      data: { priceKopecks: 500000 },
+    });
+  });
+
   it("atomically reserves stock at checkout, so the last item cannot be oversold", async () => {
     // Two buyers race for the single remaining unit. The pre-transaction read
     // would let both through; the conditional decrement must not.

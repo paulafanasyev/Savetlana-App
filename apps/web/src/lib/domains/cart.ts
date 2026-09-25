@@ -19,6 +19,10 @@ export interface CartLine {
   sellerName: string;
   available: boolean;
   lineTotalKopecks: number;
+  /** True when the live price differs from the price-at-add snapshot. */
+  priceChanged: boolean;
+  priceSnapshotKopecks: number;
+  priceLiveKopecks: number;
 }
 
 export interface CartView {
@@ -59,12 +63,21 @@ export async function getCartView(userId: string): Promise<CartView> {
 
   const lines: CartLine[] = cart.items.map((item) => {
     const stock = item.product.inventory?.quantity ?? 0;
+    // Price snapshot policy (P0 fix, spec §9): the buyer is charged the price
+    // they saw when the item was added — CartItem.priceKopecks — not whatever
+    // the seller happens to charge at checkout. A seller mid-flow price rise
+    // must never silently increase what the buyer pays. When the live price is
+    // *lower*, the buyer gets the lower price; either way the change is
+    // surfaced so checkout can warn instead of surprising the user.
+    const livePrice = item.product.priceKopecks;
+    const snapshotPrice = item.priceKopecks;
+    const priceKopecks = Math.min(snapshotPrice, livePrice);
     return {
       id: item.id,
       productId: item.productId,
       title: item.product.title,
       image: item.product.images[0]?.url ?? null,
-      priceKopecks: item.product.priceKopecks,
+      priceKopecks,
       quantity: item.quantity,
       sellerId: item.product.sellerId,
       sellerName: item.product.sellerProfile.displayName,
@@ -72,7 +85,11 @@ export async function getCartView(userId: string): Promise<CartView> {
         item.product.status === "ACTIVE" &&
         stock >= item.quantity &&
         (item.product.inventory?.availability ?? "UNKNOWN") !== "OUT_OF_STOCK",
-      lineTotalKopecks: item.product.priceKopecks * item.quantity,
+      lineTotalKopecks: priceKopecks * item.quantity,
+      // Honest signal for the UI: the offer moved after the item was added.
+      priceChanged: livePrice !== snapshotPrice,
+      priceSnapshotKopecks: snapshotPrice,
+      priceLiveKopecks: livePrice,
     };
   });
 
