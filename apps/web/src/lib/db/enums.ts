@@ -81,6 +81,82 @@ export const EvidenceVerification_VALUES = ["VERIFIED", "NOT_PROVEN", "PENDING"]
 export const LinkStatus_VALUES = ["UNVERIFIED", "ACTIVE", "REVOKED", "UNAVAILABLE"] as const;
 export type EvidenceVerification = (typeof EvidenceVerification_VALUES)[number];
 
+// --- Classifieds verticals (real estate / auto / services) -------------------
+export const ClassifiedVertical_VALUES = ["REAL_ESTATE", "AUTO", "SERVICE"] as const;
+export type ClassifiedVertical = (typeof ClassifiedVertical_VALUES)[number];
+
+export const ClassifiedDealType_VALUES = [
+  "SELL",
+  "RENT",
+  "LONG_RENT",
+  "DAILY_RENT",
+  "BUY_REQUEST",
+  "SERVICE_OFFER",
+  "SERVICE_REQUEST",
+] as const;
+export type ClassifiedDealType = (typeof ClassifiedDealType_VALUES)[number];
+
+export const ClassifiedStatus_VALUES = [
+  "DRAFT",
+  "MODERATION",
+  "ACTIVE",
+  "HIDDEN",
+  "REJECTED",
+  "SOLD",
+  "CLOSED",
+  "ARCHIVED",
+] as const;
+export type ClassifiedStatus = (typeof ClassifiedStatus_VALUES)[number];
+
+export const PropertyType_VALUES = [
+  "APARTMENT",
+  "ROOM",
+  "STUDIO",
+  "HOUSE",
+  "TOWNHOUSE",
+  "DUPLEX",
+  "LAND",
+  "COMMERCIAL_OFFICE",
+  "COMMERCIAL_RETAIL",
+  "COMMERCIAL_WAREHOUSE",
+  "GARAGE",
+] as const;
+export type PropertyType = (typeof PropertyType_VALUES)[number];
+
+export const AutoBodyType_VALUES = [
+  "SEDAN",
+  "HATCHBACK",
+  "WAGON",
+  "SUV",
+  "CROSSOVER",
+  "COUPE",
+  "CABRIOLET",
+  "MINIVAN",
+  "PICKUP",
+  "VAN",
+  "BUS",
+  "TRUCK",
+  "MOTORCYCLE",
+] as const;
+export type AutoBodyType = (typeof AutoBodyType_VALUES)[number];
+
+export const AutoFuelType_VALUES = ["PETROL", "DIESEL", "HYBRID", "ELECTRIC", "GAS", "PETROL_GAS"] as const;
+export type AutoFuelType = (typeof AutoFuelType_VALUES)[number];
+
+export const AutoDriveType_VALUES = ["FWD", "RWD", "AWD", "AWD_LOCKABLE"] as const;
+export type AutoDriveType = (typeof AutoDriveType_VALUES)[number];
+
+export const VinCheckSource_VALUES = ["GIBDD", "AVTOTeka", "AUTOCODE", "OWN"] as const;
+export type VinCheckSource = (typeof VinCheckSource_VALUES)[number];
+
+export const VinCheckStatus_VALUES = ["PENDING", "CLEAN", "WARNINGS", "PROBLEMS", "UNAVAILABLE"] as const;
+export type VinCheckStatus = (typeof VinCheckStatus_VALUES)[number];
+
+// --- Geo ---------------------------------------------------------------------
+export const GeoLevel_VALUES = ["FEDERAL_DISTRICT", "REGION", "DISTRICT", "CITY", "METRO_LINE", "METRO_STATION"] as const;
+export type GeoLevel = (typeof GeoLevel_VALUES)[number];
+
+
 // ---------------------------------------------------------------------------
 // Validators
 // ---------------------------------------------------------------------------
@@ -114,6 +190,16 @@ const ALL_ENUMS: EnumRecord = {
   DisputeReason: DisputeReason_VALUES,
   EvidenceVerification: EvidenceVerification_VALUES,
   LinkStatus: LinkStatus_VALUES,
+  ClassifiedVertical: ClassifiedVertical_VALUES,
+  ClassifiedDealType: ClassifiedDealType_VALUES,
+  ClassifiedStatus: ClassifiedStatus_VALUES,
+  PropertyType: PropertyType_VALUES,
+  AutoBodyType: AutoBodyType_VALUES,
+  AutoFuelType: AutoFuelType_VALUES,
+  AutoDriveType: AutoDriveType_VALUES,
+  VinCheckSource: VinCheckSource_VALUES,
+  VinCheckStatus: VinCheckStatus_VALUES,
+  GeoLevel: GeoLevel_VALUES,
 };
 
 /** Returns true when the value is a legal member of the named enum. */

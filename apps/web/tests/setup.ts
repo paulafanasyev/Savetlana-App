@@ -45,4 +45,10 @@ try {
   );
 }
 
+// Absolute path: `lib/env.ts` resolves relative SQLite paths against the app
+// root, and `config({ override: true })` there reloads .env at import time and
+// would otherwise overwrite DATABASE_URL back to the development database.
+// SVETLANA_TEST_DB is not present in .env, so it survives that reload and the
+// Prisma client is constructed against the isolated per-worker file.
 process.env.DATABASE_URL = `file:${DB_PATH}`;
+process.env.SVETLANA_TEST_DB = `file:${DB_PATH}`;

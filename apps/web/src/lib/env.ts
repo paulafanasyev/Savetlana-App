@@ -37,10 +37,24 @@ function booleanFlag(name: string, def = true): boolean {
 }
 
 /**
+ * Test isolation escape hatch (spec §47). `tests/setup.ts` points the suite at
+ * an isolated per-worker SQLite file by setting SVETLANA_TEST_DB to an absolute
+ * path. It must win over .env's DATABASE_URL: `config({ override: true })`
+ * below reloads .env at import time and would otherwise re-target the suite at
+ * the development database — silently polluting dev data AND making test
+ * results depend on leftovers of previous runs (the payout idempotency,
+ * audit-log and traceId assertions all become non-reproducible).
+ *
+ * The marker is set only by the test bootstrap; in production (Vercel) it is
+ * absent and DATABASE_URL (Postgres) is used as-is.
+ */
+const TEST_DATABASE_URL = optional("SVETLANA_TEST_DB");
+
+/**
  * SQLite relative paths are resolved against the app root (apps/web) so the
  * process works regardless of ambient CWD or an inherited `DATABASE_URL` from
- * the container environment. Absolute URLs (Postgres in production) pass
- * through untouched.
+ * the container environment. Absolute URLs (Postgres in production, or the
+ * per-worker test file) pass through untouched.
  */
 function resolveDatabaseUrl(raw: string): string {
   if (raw.startsWith("file:") && !raw.slice("file:".length).startsWith("/")) {
@@ -53,7 +67,7 @@ function resolveDatabaseUrl(raw: string): string {
 }
 
 export const env = {
-  databaseUrl: resolveDatabaseUrl(required("DATABASE_URL", "file:./prisma/dev.db")),
+  databaseUrl: TEST_DATABASE_URL ?? resolveDatabaseUrl(required("DATABASE_URL", "file:./prisma/dev.db")),
   jwtSecret: required("JWT_SECRET", "dev-only-insecure-secret"),
   jwtExpiresIn: required("JWT_EXPIRES_IN", "7d"),
 

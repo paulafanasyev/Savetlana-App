@@ -75,6 +75,7 @@ model User {
   disputesOpened    Dispute[]          @relation("disputeBuyer")
   reviewsFlagged    Review[]           @relation("reviewFlagger")
   sessions          Session[]
+  classifieds       Classified[]
 }
 
 model Session {
@@ -1075,4 +1076,171 @@ model ProductEmbedding {
   contentHash String // recompute only when the indexed text changed
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// =============================================================================
+// GEO LAYER
+// =============================================================================
+// Russian geography for classifieds and delivery zones. Federal districts ->
+// federal subjects (regions) -> districts -> cities -> metro. Seeded once;
+// users pick from the tree so every ad carries a real, filterable location.
+
+model FederalDistrict {
+  id      String   @id @default(cuid())
+  name    String   @unique
+  regions Region[]
+}
+
+model Region {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  type            String // республика | край | область | город федерального значения | АО | автономная область
+  districtId      String
+  district        FederalDistrict @relation(fields: [districtId], references: [id])
+  cities          City[]
+  classifieds     Classified[]
+  createdAt       DateTime @default(now())
+
+  @@index([districtId])
+}
+
+model City {
+  id          String   @id @default(cuid())
+  name        String
+  regionId    String
+  region      Region   @relation(fields: [regionId], references: [id])
+  // Moscow / Saint Petersburg carry a metro tree used by real-estate search.
+  hasMetro    Boolean  @default(false)
+  population  Int?
+  classifieds Classified[]
+  metroLines  MetroLine[]
+  createdAt   DateTime @default(now())
+
+  @@unique([name, regionId])
+  @@index([regionId])
+}
+
+model MetroLine {
+  id        String         @id @default(cuid())
+  cityId    String
+  city      City           @relation(fields: [cityId], references: [id])
+  name      String
+  color     String?
+  stations  MetroStation[]
+  createdAt DateTime       @default(now())
+
+  @@unique([name, cityId])
+}
+
+model MetroStation {
+  id          String       @id @default(cuid())
+  lineId      String
+  line        MetroLine    @relation(fields: [lineId], references: [id])
+  name        String
+  // Walking minutes from the station, declared by the advertiser (real estate).
+  classifieds Classified[] @relation("ClassifiedMetro")
+  createdAt   DateTime     @default(now())
+
+  @@unique([name, lineId])
+  @@index([lineId])
+}
+
+// =============================================================================
+// CLASSIFIEDS: real estate / auto / services
+// =============================================================================
+// One unified model across verticals so search, moderation, favourites and AI
+// tooling stay consistent. Vertical-specific structured data lives in `attrs`
+// (JSON string; SQLite has no Json type) and is validated by the domain layer.
+// Products (marketplace goods) remain a separate model with stock/checkout.
+
+model Classified {
+  id           String   @id @default(cuid())
+  vertical     String   // ClassifiedVertical
+  dealType     String   // ClassifiedDealType
+  authorId     String   // user who posted (private person or business)
+  author       User     @relation(fields: [authorId], references: [id])
+  sellerId     String?  // optional business profile for verified sellers
+  title        String
+  description  String?
+  category     String   // human-readable vertical category
+  attrs        String   @default("{}") // structured vertical attributes (JSON)
+  priceKopecks Int      @default(0)
+  oldPriceKopecks Int?
+  currency     String   @default("RUB")
+  // Geo: required for every classified, so buyers can filter by city/region.
+  regionId     String
+  region       Region   @relation(fields: [regionId], references: [id])
+  cityId       String
+  city         City     @relation(fields: [cityId], references: [id])
+  districtName String?  // район / населённый пункт внутри города
+  addressLine  String?
+  metroId      String?  // nearest metro station (real estate)
+  metro        MetroStation? @relation("ClassifiedMetro", fields: [metroId], references: [id])
+  metroWalkMin Int?
+  lat          Float?
+  lon          Float?
+  status       String   @default("DRAFT") // ClassifiedStatus
+  moderationNote String?
+  views        Int      @default(0)
+  contactsShown Int     @default(0)
+  expiresAt    DateTime?
+  aiDraft      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  images       ClassifiedImage[]
+  vinChecks    VinCheck[]
+
+  @@index([vertical, dealType, status])
+  @@index([regionId, cityId])
+  @@index([status, createdAt])
+  @@index([authorId])
+}
+
+model ClassifiedImage {
+  id           String     @id @default(cuid())
+  classifiedId String
+  classified   Classified @relation(fields: [classifiedId], references: [id], onDelete: Cascade)
+  url          String
+  width        Int?
+  height       Int?
+  isCover      Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+
+  @@index([classifiedId])
+}
+
+// =============================================================================
+// AUTO HISTORY / VIN CHECKS
+// =============================================================================
+// A VIN check is a fact about a vehicle, not an opinion. The adapter calls an
+// official/aggregator source; until real credentials exist every result is
+// labelled with its source and `verification: NOT_PROVEN` is surfaced to the
+// buyer. The platform never fabricates a "clean" report.
+
+model VinCheck {
+  id            String   @id @default(cuid())
+  classifiedId  String
+  classified    Classified @relation(fields: [classifiedId], references: [id], onDelete: Cascade)
+  vin           String   @unique // full VIN is unique per vehicle
+  vinHash       String   @unique // indexed lookup that does not expose the raw VIN
+  make          String?
+  model         String?
+  year          Int?
+  status        String   @default("PENDING") // VinCheckStatus
+  source        String   // VinCheckSource
+  // Structured findings: accidents, mileage records, ownership count, wanted,
+  // registration restrictions, taxi/lease history. JSON string, never faked.
+  findings      String   @default("[]")
+  restrictions  String   @default("[]")
+  mileageKm     Int?
+  ownersCount   Int?
+  isWanted      Boolean  @default(false)
+  hasRestrictions Boolean @default(false)
+  checkedAt     DateTime?
+  expiresAt     DateTime? // reports go stale; re-check before relying on them
+  createdAt     DateTime @default(now())
+
+  @@index([classifiedId])
+  @@index([vinHash])
 }
