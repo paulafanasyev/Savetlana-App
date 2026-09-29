@@ -65,6 +65,14 @@ function LoginInner() {
             {busy ? "Входим…" : "Войти"}
           </button>
         </form>
+        <div className="mt-3 text-right text-sm">
+          <Link
+            href="/password-reset"
+            className="font-medium text-svetlana-700 hover:underline"
+          >
+            Забыли пароль?
+          </Link>
+        </div>
         <div className="mt-4 text-center text-sm text-ink-soft">
           Нет аккаунта?{" "}
           <Link href="/register" className="font-medium text-svetlana-700 hover:underline">

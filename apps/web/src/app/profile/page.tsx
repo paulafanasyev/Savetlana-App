@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { timeAgo } from "@/lib/format";
 import { isVkLive } from "@/lib/domains/vk";
 import { isEsiaLive } from "@/lib/domains/esia";
+import { VerifyEmailButton } from "./verify-email-button";
+import { LogoutAllButton } from "./logout-all-button";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +15,13 @@ export default async function ProfilePage() {
     where: { id: ctx.user.id },
     select: {
       email: true,
+      emailVerifiedAt: true,
       name: true,
       role: true,
       avatarUrl: true,
       locale: true,
       createdAt: true,
+      id: true,
       profile: { select: { displayName: true, phone: true, personalizationOn: true, analyticsOn: true, memoryOn: true } },
       integrationLinks: { select: { provider: true, status: true, linkedAt: true }, where: { status: "ACTIVE" } },
       _count: { select: { orders: true, favorites: true, reviews: true, wishlists: true } },
@@ -32,11 +36,15 @@ export default async function ProfilePage() {
     );
   }
 
+  const openDisputes = await prisma.dispute.count({
+    where: { buyerId: user.id, status: { notIn: ["CLOSED", "RESOLVED_BUYER", "RESOLVED_SELLER"] } },
+  });
   const stats = [
     { label: "Заказов", value: user._count.orders, href: "/orders" },
     { label: "Избранное", value: user._count.favorites, href: "/favorites" },
     { label: "Отзывов", value: user._count.reviews, href: "/orders" },
     { label: "Списки желаний", value: user._count.wishlists, href: "/favorites" },
+    { label: "Открытых споров", value: openDisputes, href: "/disputes" },
   ];
 
   return (
@@ -79,7 +87,16 @@ export default async function ProfilePage() {
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-ink-soft">Email</dt>
-            <dd className="font-medium text-ink">{user.email}</dd>
+            <dd className="flex items-center gap-2 font-medium text-ink">
+              {user.email}
+              {user.emailVerifiedAt ? (
+                <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                  Подтверждён
+                </span>
+              ) : (
+                <VerifyEmailButton />
+              )}
+            </dd>
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-ink-soft">Телефон</dt>
@@ -94,6 +111,8 @@ export default async function ProfilePage() {
           Редактирование имени и телефона доступно в разделе «Конфиденциальность».
         </p>
       </section>
+
+      <SecuritySection />
 
       <section className="card mb-6 p-6">
         <h2 className="mb-2 text-lg font-semibold text-ink">Подключённые сервисы</h2>
@@ -158,6 +177,29 @@ function Toggle({ on }: { on: boolean }) {
         }`}
       />
     </span>
+  );
+}
+
+function SecuritySection() {
+  return (
+    <section className="card mb-6 p-6">
+      <h2 className="mb-2 text-lg font-semibold text-ink">Безопасность аккаунта</h2>
+      <p className="mb-4 text-xs text-ink-soft">
+        Управление сеансами и восстановление доступа.
+      </p>
+      <ul className="space-y-3 text-sm">
+        <li className="flex items-center justify-between gap-4 rounded-lg bg-surface-muted px-4 py-3">
+          <span className="font-medium text-ink">Сбросить пароль</span>
+          <a href="/password-reset" className="text-xs font-medium text-svetlana-700 hover:underline">
+            Восстановить
+          </a>
+        </li>
+        <li className="flex items-center justify-between gap-4 rounded-lg bg-surface-muted px-4 py-3">
+          <span className="font-medium text-ink">Выйти на всех устройствах</span>
+          <LogoutAllButton />
+        </li>
+      </ul>
+    </section>
   );
 }
 

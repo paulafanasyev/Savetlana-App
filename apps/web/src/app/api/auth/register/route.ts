@@ -3,6 +3,7 @@ import { hashPassword, createToken, setSessionCookie } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { audit } from "@/lib/domains/audit";
+import { requestEmailVerification } from "@/lib/domains/account-recovery";
 import { consumeRateLimit, clientIp, AUTH_LIMITS, tooMany } from "@/lib/domains/rate-limits";
 
 export const dynamic = "force-dynamic";
@@ -86,8 +87,21 @@ export const POST = apiRoute(async (request) => {
     after: { role },
   });
 
+  // Mint the email-verification ticket right away so the fresh account can
+  // confirm ownership. Failure here must not block registration — the user
+  // can request a new link from the profile page.
+  let verificationSecret: string | undefined;
+  try {
+    verificationSecret = (await requestEmailVerification(user.id)).secret;
+  } catch {
+    verificationSecret = undefined;
+  }
+
   const response = Response.json({
     user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    // Only surfaced in non-production so local/dev flows can confirm the email
+    // without a mailer. In production this travels via the notification layer.
+    verificationSecret: env.nodeEnv !== "production" ? verificationSecret : undefined,
   });
   response.headers.append("Set-Cookie", setSessionCookie(token, env.isProduction));
   return response;

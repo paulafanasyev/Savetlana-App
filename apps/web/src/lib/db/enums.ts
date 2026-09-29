@@ -160,6 +160,9 @@ export type VinCheckStatus = (typeof VinCheckStatus_VALUES)[number];
 export const GeoLevel_VALUES = ["FEDERAL_DISTRICT", "REGION", "DISTRICT", "CITY", "METRO_LINE", "METRO_STATION"] as const;
 export type GeoLevel = (typeof GeoLevel_VALUES)[number];
 
+export const AuthTicketPurpose_VALUES = ["VERIFY_EMAIL", "RESET_PASSWORD"] as const;
+export type AuthTicketPurpose = (typeof AuthTicketPurpose_VALUES)[number];
+
 
 // ---------------------------------------------------------------------------
 // Validators
@@ -205,6 +208,7 @@ const ALL_ENUMS: EnumRecord = {
   VinCheckSource: VinCheckSource_VALUES,
   VinCheckStatus: VinCheckStatus_VALUES,
   GeoLevel: GeoLevel_VALUES,
+  AuthTicketPurpose: AuthTicketPurpose_VALUES,
 };
 
 /** Returns true when the value is a legal member of the named enum. */

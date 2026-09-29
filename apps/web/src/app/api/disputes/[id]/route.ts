@@ -1,11 +1,22 @@
 import { apiRoute, rateLimit, tooManyRequests, jsonBody } from "@/lib/api-helpers";
 import { requireUser, ApiError } from "@/lib/auth";
-import { collectEvidence, transitionDispute } from "@/lib/domains/disputes";
+import { collectEvidence, transitionDispute, getDisputeCase } from "@/lib/domains/disputes";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 const RESOLVE_STATUSES = ["RESOLVED_BUYER", "RESOLVED_SELLER", "ESCALATED_HUMAN", "CLOSED"];
+
+/**
+ * Returns the full case file: dispute, messages (internal notes filtered by
+ * role), evidence and the immutable timeline.
+ */
+export const GET = apiRoute(async (request, ctx) => {
+  const auth = await requireUser(request);
+  const dispute = await getDisputeCase(ctx.params.id, auth.user.id, auth.user.role);
+  if (!dispute) throw new ApiError(404, "Спор не найден");
+  return Response.json({ dispute });
+});
 
 /**
  * Advances a dispute. Only a party to the dispute may act; a resolution that
