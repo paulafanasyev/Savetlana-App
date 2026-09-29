@@ -27,10 +27,19 @@ beforeAll(async () => {
   });
   userId = user.id;
 
+  // A seller must complete onboarding before they can trade (P0 fix, spec §19).
+  // Drafting stays available to unverified sellers (spec §112); publishing does not.
   const seller = await prisma.sellerProfile.upsert({
     where: { slug: "draft-seller" },
-    create: { userId, slug: "draft-seller", displayName: "Продавец черновиков", isActivated: true },
-    update: { isActivated: true },
+    create: {
+      userId,
+      slug: "draft-seller",
+      displayName: "Продавец черновиков",
+      identityStatus: "VERIFIED",
+      businessStatus: "VERIFIED",
+      isActivated: true,
+    },
+    update: { identityStatus: "VERIFIED", businessStatus: "VERIFIED", isActivated: true },
   });
   sellerId = seller.id;
 
@@ -172,8 +181,15 @@ describe("AI draft publication (spec §12, §147)", () => {
     });
     const otherSeller = await prisma.sellerProfile.upsert({
       where: { slug: "draft-other" },
-      create: { userId: other.id, slug: "draft-other", displayName: "Другой продавец", isActivated: true },
-      update: {},
+      create: {
+        userId: other.id,
+        slug: "draft-other",
+        displayName: "Другой продавец",
+        identityStatus: "VERIFIED",
+        businessStatus: "VERIFIED",
+        isActivated: true,
+      },
+      update: { identityStatus: "VERIFIED", businessStatus: "VERIFIED", isActivated: true },
     });
 
     const mine = await prisma.product.create({
@@ -199,5 +215,50 @@ describe("AI draft publication (spec §12, §147)", () => {
     );
     expect(result.ok).toBe(false);
     expect(result.error).toContain("другому продавцу");
+  });
+
+  it("refuses to publish when the seller has not completed verification (P0-4)", async () => {
+    const unverified = await prisma.user.upsert({
+      where: { email: `draft-unverified@${process.env.VITEST_WORKER_ID ?? "0"}.test` },
+      create: {
+        email: `draft-unverified@${process.env.VITEST_WORKER_ID ?? "0"}.test`,
+        name: "Неверифицированный продавец",
+        role: "SELLER",
+        passwordHash: await hashPassword("password123"),
+      },
+      update: {},
+    });
+    const unverifiedSeller = await prisma.sellerProfile.upsert({
+      where: { slug: "draft-unverified" },
+      create: { userId: unverified.id, slug: "draft-unverified", displayName: "Неверифицированный" },
+      update: { identityStatus: "UNVERIFIED", businessStatus: "UNVERIFIED", isActivated: false },
+    });
+    const mine = await prisma.product.create({
+      data: {
+        sellerId: unverifiedSeller.id,
+        sku: "DRAFT-UNVERIFIED-1",
+        title: "Товар без проверки",
+        priceKopecks: 1000,
+        status: "DRAFT",
+      },
+    });
+
+    const tool = toolRegistry.get("publish_product");
+    const result = await tool!.execute(
+      {
+        userId: unverified.id,
+        role: "seller",
+        sellerProfileId: unverifiedSeller.id,
+        traceId: "test-draft-unverified",
+        confirm: async () => true,
+      },
+      { productId: mine.id }
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("Нельзя публиковать товар");
+
+    // The draft is still invisible to buyers.
+    const product = await prisma.product.findUnique({ where: { id: mine.id } });
+    expect(product!.status).toBe("DRAFT");
   });
 });

@@ -90,7 +90,18 @@ export const env = {
   paymentProviderBaseUrl: optional("PAYMENT_PROVIDER_BASE_URL"),
   paymentProviderApiKey: optional("PAYMENT_PROVIDER_API_KEY"),
   paymentMerchantId: optional("PAYMENT_MERCHANT_ID"),
+  // Signing secret for incoming payment webhooks (P0-7). Without it the
+  // platform refuses to accept provider events at all.
+  paymentWebhookSecret: optional("PAYMENT_WEBHOOK_SECRET"),
   deliveryProviderApiKey: optional("DELIVERY_PROVIDER_API_KEY"),
+
+  // --- Media / document storage (P0-11) -----------------------------------
+  // Provider selection: "local" (dev only — writes to a gitignored folder) or
+  // "vercel-blob" (production). Without credentials the Vercel Blob adapter
+  // reports unavailable and uploads are refused rather than silently lost.
+  storageProvider: optional("STORAGE_PROVIDER") ?? "local",
+  storageLocalDir: optional("STORAGE_LOCAL_DIR") ?? "uploads",
+  blobReadWriteToken: optional("BLOB_READ_WRITE_TOKEN"),
 
   // --- Identity adapters (absent => PENDING_EXTERNAL_ACCESS) --------------
   vkAppId: optional("VK_APP_ID"),
@@ -113,6 +124,9 @@ export const env = {
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"),
   nodeEnv: optional("NODE_ENV") ?? "development",
   isProduction: process.env.NODE_ENV === "production",
+  // Shared secret for the background-job scheduler (P0-18). Only the
+  // deployment platform knows it; without it /api/cron/jobs refuses to run.
+  cronSecret: optional("CRON_SECRET"),
 
   // --- Feature flags ------------------------------------------------------
   features: {
@@ -157,6 +171,12 @@ export const integrationStatus = {
     env.internationalBridgeBaseUrl &&
     env.internationalBridgeApiKey &&
     env.internationalBridgeMerchantId
+      ? "READY"
+      : "PENDING_EXTERNAL_ACCESS",
+  storage:
+    env.storageProvider === "local"
+      ? "READY"
+      : env.blobReadWriteToken
       ? "READY"
       : "PENDING_EXTERNAL_ACCESS",
 } as const;

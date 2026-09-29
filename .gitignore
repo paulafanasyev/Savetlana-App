@@ -36,6 +36,9 @@ apps/web/prisma/**/*.db
 apps/web/prisma/**/*.db-journal
 apps/web/prisma/migrations/dev.db*
 
+# Storage — local dev uploads are never committed (may hold private documents)
+apps/web/uploads/
+
 # Tests
 coverage/
 test-results/

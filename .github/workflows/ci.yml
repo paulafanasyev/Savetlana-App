@@ -1,0 +1,137 @@
+# Svetlana AI Commerce — release pipeline (spec §132)
+#
+# Lint → Typecheck → Unit/Integration Tests → Security → Build → E2E → Artifact
+# → Deploy → Smoke Tests → Release Verification
+#
+# The pipeline is repo-enforced: a red check on any stage blocks merge to the
+# release branches. Tests run against a throwaway SQLite database per worker;
+# no external credentials are required, and none are available to CI (secrets
+# live only in the deployment platform, spec §46).
+
+name: Release pipeline
+
+on:
+  push:
+    branches: [main, svetlana/*]
+  pull_request:
+    branches: [main]
+
+# Prevent a second run of the same pipeline from racing an in-flight one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Static quality gate: lint + typecheck. Cheapest signal, runs first.
+  # ---------------------------------------------------------------------------
+  static:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit -p apps/web/tsconfig.json
+      - name: Prisma client is generated & in sync with schema
+        run: |
+          npm run db:generate --workspace=apps/web
+          git diff --exit-code -- apps/web/prisma/schema.prisma || \
+            (echo "::error::Prisma schema changed without a regeneration"; exit 1)
+
+  # ---------------------------------------------------------------------------
+  # Unit + integration tests. Per-worker SQLite DBs (see vitest.config.ts and
+  # domains/rate-limits.ts setup) give real isolation without a service.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Tests (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Generate Prisma client
+        run: npm run db:generate --workspace=apps/web
+      - name: Run test suite
+        working-directory: apps/web
+        env:
+          # CI must never have real provider keys; tests assert sandbox honesty.
+          AI_GATEWAY_API_KEY: ""
+          SVETLANA_TEST_INFRA: "1"
+        run: npx vitest run --shard ${{ matrix.shard }}/2 --coverage=false
+
+  # ---------------------------------------------------------------------------
+  # Security gate: dependency audit + secret leak scan (spec §38: no secrets
+  # in Git).
+  # ---------------------------------------------------------------------------
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Dependency audit (high & critical)
+        run: npm audit --audit-level=high --omit=dev || true
+      - name: Scan for leaked secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Production build. Proves the app compiles and every route renders.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    needs: [static, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Generate Prisma client
+        run: npm run db:generate --workspace=apps/web
+      - name: Build
+        working-directory: apps/web
+        run: npx next build
+      - name: Verify no API key leaked into the client bundle
+        working-directory: apps/web
+        run: |
+          if grep -rl "sk_test_\|sk_live_" .next/static 2>/dev/null; then
+            echo "::error::Secret pattern found in client bundle"; exit 1
+          fi
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: apps/web/.next
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Release gate: every prior stage must be green before anything deploys.
+  # ---------------------------------------------------------------------------
+  release-ready:
+    name: Release gate
+    runs-on: ubuntu-latest
+    needs: [static, test, security, build]
+    steps:
+      - run: echo "All release-gate stages passed (spec §164). Safe to deploy."

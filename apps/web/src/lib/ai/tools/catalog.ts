@@ -2,7 +2,14 @@
  * Catalog tools: read-only search, comparison and product inspection.
  * These carry no state-change risk, so they never require confirmation.
  */
-import { searchProducts, getPublicProduct, type SearchFilters } from "../../domains/catalog";
+import { z } from "zod";
+import {
+  searchProducts,
+  getPublicProduct,
+  type SearchFilters,
+} from "../../domains/catalog";
+import { searchClassifieds, searchCities } from "../../domains/classifieds";
+import { runVinCheck } from "../../domains/vin-checks";
 import { summarizeReviews, listReviews } from "../../domains/reviews";
 import { getPublicSellerProfile } from "../../domains/sellers";
 import { fromKopecks } from "../../utils";
@@ -400,6 +407,90 @@ export const searchSellersTool: ToolDefinition = {
       items.length > 0
         ? `Найдено продавцов: ${items.length}. «${items[0].displayName}» — рейтинг ${items[0].rating}, завершённых заказов: ${items[0].completedOrders}.`
         : `Продавцы «${query}» не найдены.`
+    );
+  },
+};
+
+// --- Classifieds (real estate / auto / services) ----------------------------
+
+export const searchClassifiedsTool: ToolDefinition = {
+  name: "search_classifieds",
+  description:
+    "Поиск объявлений по вертикалям: недвижимость (квартиры, дома, аренда), автомобили и услуги. " +
+    "Поддерживает фильтры по городу/региону, диапазону цен и типу сделки. Используй для аренды/покупки " +
+    "жилья, покупки машины или поиска услуг — но не для товаров маркетплейса.",
+  permission: "READ_PRODUCTS",
+  riskLevel: "READ",
+  needsConfirmation: false,
+  parameters: looseObjectSchema({
+    query: { type: "string", description: "текст поиска по заголовку и описанию" },
+    vertical: {
+      type: "string",
+      description: "REAL_ESTATE = недвижимость, AUTO = автомобили, SERVICE = услуги",
+    },
+    dealType: {
+      type: "string",
+      description: "SELL, RENT, LONG_RENT, DAILY_RENT, BUY_REQUEST, SERVICE_OFFER, SERVICE_REQUEST",
+    },
+    cityName: { type: "string", description: "название города, например Москва" },
+    priceMaxRub: { type: "number", description: "максимальная цена в рублях" },
+  }),
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const parsed = args as {
+      query?: string;
+      vertical?: string;
+      dealType?: string;
+      cityName?: string;
+      priceMaxRub?: number;
+    };
+    let cityId: string | undefined;
+    if (parsed.cityName) {
+      const found = await searchCities(parsed.cityName, 1);
+      if (found.length > 0) cityId = found[0].id;
+    }
+    const result = await searchClassifieds({
+      query: parsed.query,
+      vertical: parsed.vertical,
+      dealType: parsed.dealType,
+      cityId,
+      priceMax: parsed.priceMaxRub ? Math.round(parsed.priceMaxRub * 100) : undefined,
+      limit: 8,
+    });
+    if (result.items.length === 0) {
+      return ok({ items: [] }, "Подходящие объявления не найдены.");
+    }
+    return ok(
+      { items: result.items },
+      `Найдено объявлений: ${result.items.length}. Например: ${result.items
+        .slice(0, 3)
+        .map((a) => `«${a.title}» за ${fromKopecks(a.priceKopecks)} в ${a.cityName}`)
+        .join("; ")}.`
+    );
+  },
+};
+
+export const vinCheckTool: ToolDefinition = {
+  name: "check_vin",
+  description:
+    "Проверить VIN автомобиля из объявления: аварии, пробег, владельцы, розыск, ограничения " +
+    "регистрации. Возвращает NOT_PROVEN, пока не настроен официальный источник данных.",
+  permission: "READ_PRODUCTS",
+  riskLevel: "READ",
+  needsConfirmation: false,
+  parameters: looseObjectSchema({
+    classifiedId: { type: "string", description: "идентификатор объявления об автомобиле" },
+    vin: { type: "string", description: "VIN автомобиля (10–17 символов)" },
+  }),
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const { classifiedId, vin } = args as { classifiedId: string; vin: string };
+    const report = await runVinCheck(classifiedId, vin, ctx.userId, {
+      actorRole: ctx.role,
+    });
+    return ok(
+      { report },
+      report.verification === "VERIFIED"
+        ? `VIN проверен: статус ${report.status}, пробег ${report.mileageKm ?? "неизвестен"}, владельцев ${report.ownersCount ?? "неизвестно"}.`
+        : `Проверка выполнена в режиме sandbox — статус ${report.status}, но результат требует подтверждения официальным источником.`
     );
   },
 };

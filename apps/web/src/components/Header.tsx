@@ -31,6 +31,9 @@ export function Header() {
           <Link className="rounded-lg px-3 py-2 text-sm font-medium text-ink-soft hover:bg-surface-muted hover:text-ink" href="/catalog">
             Каталог
           </Link>
+          <Link className="rounded-lg px-3 py-2 text-sm font-medium text-ink-soft hover:bg-surface-muted hover:text-ink" href="/classifieds">
+            Объявления
+          </Link>
           <Link className="rounded-lg px-3 py-2 text-sm font-medium text-ink-soft hover:bg-surface-muted hover:text-ink" href="/svetlana">
             Светлана
           </Link>

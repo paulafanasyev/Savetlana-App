@@ -162,6 +162,8 @@ model SellerProfile {
   integrationLinks    IntegrationLink[]
   workflowRules       WorkflowRule[]
   disputesResponded   Dispute[]            @relation("disputeSeller")
+  classifieds         Classified[]         @relation("ClassifiedSeller")
+
 }
 
 model Company {
@@ -202,6 +204,9 @@ model SellerDocument {
   kind            String // company_doc | certificate | declaration | license | product_doc
   title           String
   fileUrl         String
+  // Object-store key (P0-11). Used to issue short-lived signed reads — fileUrl
+  // alone may be public and must never be the only reference to private data.
+  storageKey      String?
   fileHash        String
   mimeType        String
   sizeBytes       Int
@@ -347,6 +352,7 @@ model Listing {
   isLive      Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
 }
 
 model ListingHistory {
@@ -439,6 +445,7 @@ model Order {
 
   items       OrderItem[]
   payment     Payment?
+
   shipment    DeliveryShipment?
   settlements Settlement[]
   reviews     Review[]
@@ -501,6 +508,7 @@ model Payment {
   updatedAt     DateTime  @updatedAt
 
   refunds Refund[]
+
 }
 
 model Refund {
@@ -514,6 +522,7 @@ model Refund {
   providerRef   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
 }
 
 model Settlement {
@@ -554,6 +563,7 @@ model Payout {
   settlements   Settlement[]  @relation("settlementPayout")
   createdAt     DateTime      @default(now())
   processedAt   DateTime?
+
 }
 
 // =============================================================================
@@ -1024,11 +1034,31 @@ model IntegrationLink {
   externalScope  String         @default("[]") // permissions actually granted
   status         String         @default("UNVERIFIED")
   accessTokenRef String? // reference to a secret store, never the token
+  // AES-256-GCM ciphertext of the OAuth token (P0 fix, spec §38). The
+  // reference above is only a lookup key; the plaintext never enters the DB.
+  secretBlob     String?
   linkedAt       DateTime       @default(now())
   unlinkedAt     DateTime?
 
   @@unique([provider, externalId])
   @@index([userId])
+}
+
+// =============================================================================
+// RATE LIMITING (P0-15)
+// =============================================================================
+// Auth attempts are tracked in the database, not in process memory, so the
+// counter is correct across serverless instances (spec §142): instance A and
+// instance B see the same accumulated count.
+
+model AuthAttempt {
+  id        String   @id @default(cuid())
+  bucket    String   // composite key: `${scope}:${identity}` e.g. `login:ip:1.2.3.4`
+  success   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([bucket])
+  @@index([createdAt])
 }
 
 // A started OAuth flow (VK/ЕСИА), bound server-side to the user who began it
@@ -1108,6 +1138,41 @@ model AiModelCall {
   @@index([taskClass])
   @@index([provider])
   @@index([status])
+}
+
+// =============================================================================
+// TRANSACTIONAL OUTBOX (spec §8, §50, §125)
+// =============================================================================
+// External side-effects (payout requests, carrier calls, notifications) are
+// NEVER executed inside a DB transaction. The transaction only commits an
+// outbox row; a background worker then performs the call with retries,
+// exponential backoff and provider idempotency. This removes the
+// "partner accepted, but the transaction rolled back" failure mode that would
+// otherwise cause double-disbursement (P0-8).
+
+model OutboxMessage {
+  id            String    @id @default(cuid())
+  // Logical owner of the side effect, e.g. "payout", "shipment", "notification".
+  aggregate     String
+  // Id of the owner row, e.g. the payout id.
+  aggregateId   String
+  // Discriminator within the aggregate, e.g. "PAYOUT_REQUEST".
+  type          String
+  // JSON payload for the worker. Never secrets — credentials are resolved
+  // server-side at execution time from the environment.
+  payload       String
+  // PENDING | IN_FLIGHT | PROCESSED | DEAD
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  maxAttempts   Int       @default(5)
+  lastError     String?
+  // When the worker may try again (exponential backoff).
+  nextAttemptAt DateTime? @default(now())
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@unique([aggregate, aggregateId, type])
+  @@index([status, nextAttemptAt])
 }
 
 // =============================================================================
@@ -1211,6 +1276,7 @@ model Classified {
   authorId     String   // user who posted (private person or business)
   author       User     @relation(fields: [authorId], references: [id])
   sellerId     String?  // optional business profile for verified sellers
+  seller       SellerProfile? @relation("ClassifiedSeller", fields: [sellerId], references: [id])
   title        String
   description  String?
   category     String   // human-readable vertical category
@@ -1290,6 +1356,9 @@ model VinCheck {
   hasRestrictions Boolean @default(false)
   checkedAt     DateTime?
   expiresAt     DateTime? // reports go stale; re-check before relying on them
+  // Persisted, not reconstructed: a sandbox report must never be re-derived
+  // as VERIFIED later just because a source answered.
+  verification  String   @default("NOT_PROVEN") // EvidenceVerification
   createdAt     DateTime @default(now())
 
   @@index([classifiedId])

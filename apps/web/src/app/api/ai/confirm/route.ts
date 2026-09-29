@@ -2,6 +2,7 @@ import { apiRoute, jsonBody } from "@/lib/api-helpers";
 import { requireUser } from "@/lib/auth";
 import { masterAgent } from "@/lib/ai/agents/master";
 import { prisma } from "@/lib/prisma";
+import { consumeRateLimit, AUTH_LIMITS, tooMany } from "@/lib/domains/rate-limits";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,16 @@ export const dynamic = "force-dynamic";
  */
 export const POST = apiRoute(async (request) => {
   const { user } = await requireUser(request);
+
+  // Rate limit (P0-15): confirmed actions move money and publish listings, so
+  // a compromised or abusive session must not be able to hammer this endpoint.
+  const decision = await consumeRateLimit(
+    `ai-confirm:user:${user.id}`,
+    AUTH_LIMITS.aiConfirm.limit,
+    AUTH_LIMITS.aiConfirm.windowMs,
+  );
+  if (!decision.allowed) return tooMany(decision);
+
   const body = await jsonBody<{
     conversationId?: string;
     actionId?: string;

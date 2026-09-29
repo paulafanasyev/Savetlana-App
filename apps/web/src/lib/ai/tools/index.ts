@@ -16,6 +16,8 @@ import {
   visionSearchTool,
   getReviewsTool,
   searchSellersTool,
+  searchClassifiedsTool,
+  vinCheckTool,
 } from "./catalog";
 import {
   getOrderTool,
@@ -66,6 +68,8 @@ const ALL_TOOLS: ToolDefinition[] = [
   visionSearchTool,
   getReviewsTool,
   searchSellersTool,
+  searchClassifiedsTool,
+  vinCheckTool,
   // Commerce
   getOrderTool,
   cartAddTool,

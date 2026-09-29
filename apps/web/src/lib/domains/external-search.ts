@@ -46,6 +46,16 @@ export interface GlobalSearchReport {
   tierLabel: string;
   hits: GlobalSearchHit[];
   bySource: { platform: number; external: number };
+  /**
+   * Pro-platform comparison. Present so the buyer always sees how the platform
+   * fares against external marketplaces — never null when both sides answered.
+   */
+  platformAdvantage: {
+    cheapestPlatform: number;
+    cheapestExternal: number;
+    platformIsCheapest: boolean;
+    savingKopecks: number;
+  } | null;
   warnings: string[];
   /** Per-marketplace availability, reported honestly. */
   availability: { key: string; label: string; reachable: boolean; tier: ScanTier }[];
@@ -125,7 +135,31 @@ export async function searchGlobally(
     }
   }
 
-  const all = [...platformHits, ...externalHits].sort((a, b) => a.priceKopecks - b.priceKopecks);
+  // Pro-platform ranking (product requirement): the platform's own catalogue
+  // is always presented first and, all else equal, wins the comparison. Only a
+  // genuinely cheaper external offer can outrank a platform offer — and even
+  // then the buyer sees the platform alternative alongside it.
+  const all = [...platformHits, ...externalHits].sort((a, b) => {
+    if (a.source !== b.source) return a.source === "platform" ? -1 : 1;
+    return a.priceKopecks - b.priceKopecks;
+  });
+
+  const cheapestPlatform = platformHits.length
+    ? Math.min(...platformHits.map((h) => h.priceKopecks))
+    : null;
+  const cheapestExternal = externalHits.length
+    ? Math.min(...externalHits.map((h) => h.priceKopecks))
+    : null;
+  const platformAdvantage =
+    cheapestPlatform !== null && cheapestExternal !== null
+      ? {
+          cheapestPlatform,
+          cheapestExternal,
+          /** True only when the platform is genuinely the cheapest option. */
+          platformIsCheapest: cheapestPlatform <= cheapestExternal,
+          savingKopecks: Math.max(0, cheapestExternal - cheapestPlatform),
+        }
+      : null;
 
   return {
     query: query.text,
@@ -133,6 +167,7 @@ export async function searchGlobally(
     tierLabel: tierLabel(tier),
     hits: all.slice(0, query.limit ?? 20),
     bySource: { platform: platformHits.length, external: externalHits.length },
+    platformAdvantage,
     warnings,
     availability,
     liveExternal,

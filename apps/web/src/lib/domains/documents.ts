@@ -90,6 +90,7 @@ export interface UploadDocumentInput {
   kind: DocumentKind;
   title: string;
   fileUrl: string;
+  storageKey?: string;
   fileHash: string;
   mimeType: string;
   sizeBytes: number;
@@ -122,6 +123,7 @@ export async function uploadDocument(input: UploadDocumentInput) {
       kind: input.kind,
       title: input.title.slice(0, 200),
       fileUrl: input.fileUrl,
+      storageKey: input.storageKey,
       fileHash: input.fileHash,
       mimeType: input.mimeType,
       sizeBytes: input.sizeBytes,

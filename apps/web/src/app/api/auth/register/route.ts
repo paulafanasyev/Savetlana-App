@@ -3,10 +3,21 @@ import { hashPassword, createToken, setSessionCookie } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { audit } from "@/lib/domains/audit";
+import { consumeRateLimit, clientIp, AUTH_LIMITS, tooMany } from "@/lib/domains/rate-limits";
 
 export const dynamic = "force-dynamic";
 
 export const POST = apiRoute(async (request) => {
+  const ip = clientIp(request);
+  // Account-creation abuse defence (P0-15): a bot farm must not create
+  // unlimited accounts from one IP.
+  const decision = await consumeRateLimit(
+    `register:ip:${ip}`,
+    AUTH_LIMITS.register.limit,
+    AUTH_LIMITS.register.windowMs,
+  );
+  if (!decision.allowed) return tooMany(decision);
+
   const body = await jsonBody<{
     name?: string;
     email?: string;

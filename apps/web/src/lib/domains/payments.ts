@@ -20,6 +20,7 @@ import { env } from "../env";
 import { canTransition } from "./orders";
 import { toKopecks } from "../utils";
 import type { PayoutStatus } from "../db/enums";
+import { audit } from "./audit";
 
 export const PLATFORM_FEE_PERCENT = env.platformFeePercent;
 
@@ -74,6 +75,19 @@ export interface PaymentProvider {
     idempotencyKey: string;
   }): Promise<{ providerRef: string; status: string }>;
   getStatus(providerRef: string): Promise<{ status: string }>;
+  /**
+   * Refunds a captured charge (P0-7, spec §29 return states).
+   *
+   * `amountKopecks` may be less than the captured amount for a partial refund.
+   * The provider's own idempotency key deduplicates network replays: a retry
+   * after a timeout must not refund twice.
+   */
+  refund(params: {
+    paymentProviderRef: string;
+    amountKopecks: number;
+    reason: string;
+    idempotencyKey: string;
+  }): Promise<{ providerRef: string; status: string }>;
 }
 
 export class SandboxPaymentProvider implements PaymentProvider {
@@ -95,6 +109,21 @@ export class SandboxPaymentProvider implements PaymentProvider {
 
   async getStatus(providerRef: string): Promise<{ status: string }> {
     return { status: providerRef.startsWith("sb_") ? "SUCCEEDED" : "UNKNOWN" };
+  }
+
+  async refund(params: {
+    paymentProviderRef: string;
+    amountKopecks: number;
+    reason: string;
+    idempotencyKey: string;
+  }): Promise<{ providerRef: string; status: string }> {
+    // Deterministic fake reference. Real money never moves back either — but
+    // the contract is identical to a production provider, so swapping in a
+    // real partner changes nothing here (spec §25).
+    return {
+      providerRef: `sb_refund_${params.idempotencyKey.slice(0, 16)}_${params.paymentProviderRef.slice(-6)}`,
+      status: "SUCCEEDED",
+    };
   }
 }
 
@@ -141,6 +170,35 @@ export class PartnerPaymentProvider implements PaymentProvider {
     if (!response.ok) throw new Error(`payment partner HTTP ${response.status}`);
     const json = (await response.json()) as { status: string };
     return { status: json.status };
+  }
+
+  async refund(params: {
+    paymentProviderRef: string;
+    amountKopecks: number;
+    reason: string;
+    idempotencyKey: string;
+  }): Promise<{ providerRef: string; status: string }> {
+    if (!this.available) throw new Error("payment partner not configured");
+    const response = await fetch(
+      `${env.paymentProviderBaseUrl}/charges/${params.paymentProviderRef}/refund`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${env.paymentProviderApiKey}`,
+        },
+        body: JSON.stringify({
+          amount: params.amountKopecks,
+          reason: params.reason,
+          idempotency_key: params.idempotencyKey,
+        }),
+      }
+    );
+    if (!response.ok) {
+      throw new Error(`payment partner refund HTTP ${response.status}`);
+    }
+    const json = (await response.json()) as { id: string; status: string };
+    return { providerRef: json.id, status: json.status };
   }
 }
 
@@ -330,7 +388,13 @@ export function getPayoutProvider(): PayoutProvider {
  * into a single disbursement request executed by the payment partner.
  *
  * The platform never moves money itself — it records what the partner did.
- * Idempotent on `idempotencyKey`: a retried request returns the existing payout.
+ *
+ * ARCHITECTURE (P0-8): the partner HTTP call is NOT executed inside the DB
+ * transaction. The transaction only reserves the payout and commits an outbox
+ * message; `processPayoutOutbox` then performs the call with retries and
+ * provider idempotency. This removes the "partner accepted the payout, but the
+ * request timed out and the transaction rolled back" failure mode that would
+ * otherwise cause a double-disbursement on retry.
  */
 export async function createConsolidatedPayout(input: {
   sellerId: string;
@@ -344,37 +408,48 @@ export async function createConsolidatedPayout(input: {
   sandbox: boolean;
   settledCount: number;
 }> {
+  const reserved = await reservePayout(input);
+  if (!reserved) {
+    return {
+      payoutId: null,
+      amountKopecks: 0,
+      status: "NOTHING_TO_PAYOUT",
+      provider: "none",
+      sandbox: false,
+      settledCount: 0,
+    };
+  }
+  // Best-effort immediate dispatch: if it fails, the outbox row stays PENDING
+  // and the background worker reconciles it. Either way the money is only ever
+  // moved once, because the partner call is idempotent on idempotencyKey.
+  await processPayoutOutbox({ payoutId: reserved.payoutId });
+  return readPayoutStatus(reserved);
+}
+
+/**
+ * Step 1 (transactional): reserve the payout + earmark settlements + commit the
+ * outbox row. No external I/O happens here, so a failure is a clean rollback.
+ */
+async function reservePayout(input: {
+  sellerId: string;
+  actorId: string;
+  idempotencyKey: string;
+}): Promise<{ payoutId: string; amountKopecks: number } | null> {
   return prisma.$transaction(async (tx) => {
-    // Idempotency: the key is stored before the partner call, so a retried
+    // Idempotency: the key is stored before any partner call, so a retried
     // request finds the row and never double-disburses (spec §125).
     const existing = await tx.payout.findUnique({
       where: { idempotencyKey: input.idempotencyKey },
     });
     if (existing) {
-      return {
-        payoutId: existing.id,
-        amountKopecks: existing.amountKopecks,
-        status: existing.status,
-        provider: existing.provider,
-        sandbox: existing.provider === "sandbox-payout",
-        settledCount: 0,
-      };
+      return { payoutId: existing.id, amountKopecks: existing.amountKopecks };
     }
 
     const pending = await tx.settlement.findMany({
       where: { sellerId: input.sellerId, status: "PENDING", payoutId: null },
       orderBy: { createdAt: "asc" },
     });
-    if (pending.length === 0) {
-      return {
-        payoutId: null,
-        amountKopecks: 0,
-        status: "NOTHING_TO_PAYOUT",
-        provider: "none",
-        sandbox: false,
-        settledCount: 0,
-      };
-    }
+    if (pending.length === 0) return null;
 
     const total = pending.reduce((sum, s) => sum + s.payoutKopecks, 0);
     const provider = getPayoutProvider();
@@ -396,32 +471,22 @@ export async function createConsolidatedPayout(input: {
       data: { status: "AVAILABLE", payoutId: payout.id },
     });
 
-    const result = await provider.createPayout({
-      sellerId: input.sellerId,
-      amountKopecks: total,
-      settlementIds: pending.map((s) => s.id),
-      idempotencyKey: input.idempotencyKey,
-    });
-
-    // Map the partner's status onto the canonical PayoutStatus enum
-    // (spec §124: persisted values must stay within the defined vocabulary).
-    const status: PayoutStatus = result.status === "SUCCEEDED" ? "SUCCEEDED" : "IN_PROGRESS";
-    await tx.payout.update({
-      where: { id: payout.id },
+    // Commit the intent to disburse. The worker performs the actual call.
+    await tx.outboxMessage.create({
       data: {
-        providerRef: result.providerRef,
-        status,
-        processedAt: status === "SUCCEEDED" ? new Date() : null,
+        aggregate: "payout",
+        aggregateId: payout.id,
+        type: "PAYOUT_REQUEST",
+        payload: JSON.stringify({
+          sellerId: input.sellerId,
+          amountKopecks: total,
+          settlementIds: pending.map((s) => s.id),
+          idempotencyKey: input.idempotencyKey,
+          providerKey: provider.key,
+          sandbox: provider.sandbox,
+        }),
       },
     });
-    // On success the settlement is fully paid out. (While the partner holds the
-    // request it stays AVAILABLE, which was set when the row was reserved above.)
-    if (status === "SUCCEEDED") {
-      await tx.settlement.updateMany({
-        where: { id: { in: pending.map((s) => s.id) } },
-        data: { status: "PAID" },
-      });
-    }
 
     await tx.auditLog.create({
       data: {
@@ -435,15 +500,137 @@ export async function createConsolidatedPayout(input: {
       },
     });
 
-    return {
-      payoutId: payout.id,
-      amountKopecks: total,
-      status,
-      provider: provider.key,
-      sandbox: provider.sandbox,
-      settledCount: pending.length,
-    };
+    return { payoutId: payout.id, amountKopecks: total };
   });
+}
+
+/** Reads the persisted outcome of a payout (the source of truth, never guessed). */
+async function readPayoutStatus(reserved: {
+  payoutId: string;
+  amountKopecks: number;
+}): Promise<{
+  payoutId: string;
+  amountKopecks: number;
+  status: string;
+  provider: string;
+  sandbox: boolean;
+  settledCount: number;
+}> {
+  const payout = await prisma.payout.findUniqueOrThrow({
+    where: { id: reserved.payoutId },
+    include: { _count: { select: { settlements: true } } },
+  });
+  return {
+    payoutId: payout.id,
+    amountKopecks: payout.amountKopecks,
+    status: payout.status,
+    provider: payout.provider,
+    sandbox: payout.provider === "sandbox-payout",
+    settledCount: payout._count.settlements,
+  };
+}
+
+/**
+ * Step 2 (worker): drains PENDING payout outbox rows and performs the partner
+ * call outside any DB transaction. Safe to run concurrently and repeatedly —
+ * each row is claimed atomically and the partner call is idempotent.
+ */
+export async function processPayoutOutbox(options?: {
+  payoutId?: string;
+  /** Upper bound on partner calls per run, to keep cron slices bounded. */
+  limit?: number;
+}): Promise<{ processed: number; succeeded: number; failed: number }> {
+  const limit = options?.limit ?? 25;
+  const rows = await prisma.outboxMessage.findMany({
+    where: {
+      aggregate: "payout",
+      type: "PAYOUT_REQUEST",
+      status: { in: ["PENDING", "IN_FLIGHT"] },
+      ...(options?.payoutId ? { aggregateId: options.payoutId } : {}),
+      nextAttemptAt: { lte: new Date() },
+    },
+    orderBy: { createdAt: "asc" },
+    take: limit,
+  });
+
+  let succeeded = 0;
+  let failed = 0;
+  for (const row of rows) {
+    const outcome = await attemptPayoutRow(row);
+    if (outcome === "succeeded") succeeded += 1;
+    else if (outcome === "failed") failed += 1;
+  }
+  return { processed: rows.length, succeeded, failed };
+}
+
+async function attemptPayoutRow(row: {
+  id: string;
+  aggregateId: string;
+  payload: string;
+  attempts: number;
+  maxAttempts: number;
+}): Promise<"succeeded" | "failed" | "skipped"> {
+  // Atomic claim so parallel workers never double-execute the same row.
+  const claimed = await prisma.outboxMessage.updateMany({
+    where: { id: row.id, status: { in: ["PENDING", "IN_FLIGHT"] } },
+    data: { status: "IN_FLIGHT" },
+  });
+  if (claimed.count === 0) return "skipped";
+
+  const params = JSON.parse(row.payload) as {
+    sellerId: string;
+    amountKopecks: number;
+    settlementIds: string[];
+    idempotencyKey: string;
+    providerKey: string;
+  };
+
+  try {
+    const provider = getPayoutProvider();
+    const result = await provider.createPayout({
+      sellerId: params.sellerId,
+      amountKopecks: params.amountKopecks,
+      settlementIds: params.settlementIds,
+      idempotencyKey: params.idempotencyKey,
+    });
+
+    // Map the partner's status onto the canonical PayoutStatus enum
+    // (spec §124: persisted values must stay within the defined vocabulary).
+    const status: PayoutStatus = result.status === "SUCCEEDED" ? "SUCCEEDED" : "IN_PROGRESS";
+    await prisma.payout.update({
+      where: { id: row.aggregateId },
+      data: {
+        providerRef: result.providerRef,
+        status,
+        processedAt: status === "SUCCEEDED" ? new Date() : null,
+      },
+    });
+    if (status === "SUCCEEDED") {
+      await prisma.settlement.updateMany({
+        where: { id: { in: params.settlementIds } },
+        data: { status: "PAID" },
+      });
+    }
+    await prisma.outboxMessage.update({
+      where: { id: row.id },
+      data: { status: "PROCESSED", processedAt: new Date(), lastError: null },
+    });
+    return "succeeded";
+  } catch (error) {
+    const attempts = row.attempts + 1;
+    const exhausted = attempts >= row.maxAttempts;
+    const backoffMs = Math.min(60_000, 2_000 * 2 ** attempts);
+    await prisma.outboxMessage.update({
+      where: { id: row.id },
+      data: {
+        attempts,
+        status: exhausted ? "DEAD" : "PENDING",
+        lastError: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500),
+        nextAttemptAt: new Date(Date.now() + backoffMs),
+      },
+    });
+    return "failed";
+  }
 }
 
 /** Seller settlement statement (spec §26): gross → fees → payout. */
@@ -522,3 +709,107 @@ export async function sellerSettlementStatement(sellerId: string): Promise<{
 }
 
 export { toKopecks };
+
+// =============================================================================
+// REFUNDS (P0-7, spec §29 return states)
+// =============================================================================
+// Previously a return request could set the order to RETURNING but no code
+// ever returned money: the Refund row was only ever written as a record. Here
+// the refund actually moves through the payment provider, and the seller's
+// settlement is compensated so the platform never keeps commission on money
+// that went back to the buyer (spec §26 settlement math).
+
+export async function processRefund(params: {
+  refundId: string;
+  actorId: string;
+  actorRole: string;
+}): Promise<{ status: string; providerRef: string | null; sandbox: boolean }> {
+  const refund = await prisma.refund.findUnique({
+    where: { id: params.refundId },
+    include: { payment: true },
+  });
+  if (!refund) throw new Error("refund not found");
+  if (refund.status === "SUCCEEDED") {
+    // Idempotent: an already-completed refund must not be refunded again.
+    return { status: "SUCCEEDED", providerRef: refund.providerRef, sandbox: false };
+  }
+
+  const provider = getPaymentProvider();
+
+  // Persist intent BEFORE the partner call, then execute outside any DB
+  // transaction. A timeout must not leave the platform unsure whether the
+  // refund happened — the row is re-checked and the provider's idempotency key
+  // makes a retry a no-op.
+  await prisma.refund.update({
+    where: { id: refund.id },
+    data: { status: "PROCESSING" },
+  });
+
+  if (!refund.payment.providerRef) {
+    await prisma.refund.update({
+      where: { id: refund.id },
+      data: { status: "FAILED" },
+    });
+    throw new Error("payment has no provider reference to refund");
+  }
+  const providerRefSource = refund.payment.providerRef;
+
+  const result = await provider.refund({
+    paymentProviderRef: providerRefSource,
+    amountKopecks: refund.amountKopecks,
+    reason: refund.reason,
+    idempotencyKey: `refund-${refund.id}`,
+  });
+
+  if (result.status !== "SUCCEEDED") {
+    await prisma.refund.update({
+      where: { id: refund.id },
+      data: { status: "FAILED", providerRef: result.providerRef },
+    });
+    return { status: "FAILED", providerRef: result.providerRef, sandbox: provider.sandbox };
+  }
+
+  // Compensate the seller's settlement: reduce the payout by the refunded
+  // amount and recompute platform fee proportionally. Only the seller's own
+  // settlement for this order is touched, never other sellers'.
+  const settlement = await prisma.settlement.findFirst({
+    where: { orderId: refund.orderId },
+  });
+  if (settlement) {
+    const compensated = Math.min(refund.amountKopecks, settlement.payoutKopecks);
+    await prisma.settlement.update({
+      where: { id: settlement.id },
+      data: {
+        adjustmentsKopecks: settlement.adjustmentsKopecks + compensated,
+        payoutKopecks: Math.max(0, settlement.payoutKopecks - compensated),
+        status: "ADJUSTED" as string,
+      },
+    });
+  }
+
+  await prisma.refund.update({
+    where: { id: refund.id },
+    data: { status: "SUCCEEDED", providerRef: result.providerRef },
+  });
+
+  await audit({
+    actorId: params.actorId,
+    actorRole: params.actorRole,
+    action: "payment.refund.processed",
+    targetType: "Refund",
+    targetId: refund.id,
+    before: { status: refund.status },
+    after: {
+      status: "SUCCEEDED",
+      amountKopecks: refund.amountKopecks,
+      providerRef: result.providerRef,
+      sandbox: provider.sandbox,
+    },
+  });
+
+  return {
+    status: "SUCCEEDED",
+    providerRef: result.providerRef,
+    sandbox: provider.sandbox,
+  };
+}

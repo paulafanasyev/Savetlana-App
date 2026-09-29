@@ -23,6 +23,7 @@ import { env } from "../env";
 import { audit } from "./audit";
 import { isValidEnum } from "../db/enums";
 import { LinkStatus_VALUES } from "../db/enums";
+import { storeSecret, loadSecret } from "./secret-store";
 
 export const VK_SCOPES = ["email", "friends"] as const;
 export type VkScope = (typeof VK_SCOPES)[number];
@@ -244,6 +245,13 @@ export async function linkVkAccount(params: {
   if (!vkUser) return { status: "UNVERIFIED", externalId: null };
 
   const secretRef = `vk:${token.externalId}:${params.userId}`;
+  // P0 fix (spec §38): persist the real token in the encrypted secret store and
+  // keep only the reference in the DB. Previously the reference was passed to
+  // adapters as the token, so no usable credential survived the request.
+  const secretBlob = storeSecret({
+    value: token.accessToken,
+    expiresAt: token.expiresAt ? new Date(token.expiresAt) : null,
+  });
   const link = await prisma.integrationLink.upsert({
     where: {
       provider_externalId: { provider: "vk", externalId: token.externalId },
@@ -255,12 +263,14 @@ export async function linkVkAccount(params: {
       externalScope: JSON.stringify(token.grantedScopes),
       status: "ACTIVE",
       accessTokenRef: secretRef,
+      secretBlob,
     },
     update: {
       userId: params.userId,
       externalScope: JSON.stringify(token.grantedScopes),
       status: "ACTIVE",
       accessTokenRef: secretRef,
+      secretBlob,
       unlinkedAt: null,
     },
   });
@@ -286,7 +296,7 @@ export async function unlinkVkAccount(params: {
   if (!link) return;
   await prisma.integrationLink.update({
     where: { id: link.id },
-    data: { status: "REVOKED", unlinkedAt: new Date(), accessTokenRef: null },
+    data: { status: "REVOKED", unlinkedAt: new Date(), accessTokenRef: null, secretBlob: null },
   });
   await audit({
     action: "vk.account.unlinked",
@@ -313,7 +323,20 @@ export async function suggestVkRelationships(params: {
   });
   if (!link?.accessTokenRef) return { created: 0, suggestions: [] };
 
-  const friends = await adapter.getFriends(link.accessTokenRef);
+  // P0 fix (spec §38): resolve the reference to the real credential through
+  // the encrypted secret store. A stale/expired token must surface as zero
+  // suggestions, not as a fabricated social graph (spec §49).
+  const stored = loadSecret(link.secretBlob);
+  if (!stored) return { created: 0, suggestions: [] };
+  if (stored.expiresAt && stored.expiresAt.getTime() < Date.now()) {
+    await prisma.integrationLink.update({
+      where: { id: link.id },
+      data: { status: "EXPIRED" },
+    });
+    return { created: 0, suggestions: [] };
+  }
+
+  const friends = await adapter.getFriends(stored.value);
   const candidates = friends.filter((f) => f.hasPlatformAccount && f.platformUserId);
   if (candidates.length === 0) return { created: 0, suggestions: [] };
 

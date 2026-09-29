@@ -5,6 +5,11 @@
 
 export const KOPECKS_PER_UNIT = 100;
 
+/** SHA-256 of raw bytes, hex-encoded. Used for file integrity (spec §81). */
+export function sha256Hex(bytes: Buffer): string {
+  return require("node:crypto").createHash("sha256").update(bytes).digest("hex");
+}
+
 export function toKopecks(amount: number): number {
   return Math.round(amount * KOPECKS_PER_UNIT);
 }

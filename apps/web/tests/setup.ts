@@ -52,3 +52,14 @@ try {
 // Prisma client is constructed against the isolated per-worker file.
 process.env.DATABASE_URL = `file:${DB_PATH}`;
 process.env.SVETLANA_TEST_DB = `file:${DB_PATH}`;
+
+// Classifieds verticals require the seeded Russian geo tree (districts ->
+// regions -> cities -> metro) so every ad carries a real, filterable
+// location. Seeded synchronously: suites read the geo tree in beforeAll.
+try {
+  const { seedGeo } = await import("../prisma/geo-seed");
+  await seedGeo();
+  process.env.GEO_SEED_RAN = "1";
+} catch (e) {
+  console.error("geo seed failed:", (e as Error).message);
+}

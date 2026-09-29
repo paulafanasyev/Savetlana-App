@@ -22,6 +22,7 @@ export default async function SellerDashboard() {
           <Link href="/seller/orders" className="btn btn-ghost">Заказы</Link>
           <Link href="/seller/analytics" className="btn btn-ghost">Аналитика</Link>
           <Link href="/seller/pricing" className="btn btn-ghost">Цены и конкуренты</Link>
+          <Link href="/seller/competitors" className="btn btn-ghost">Глобальный анализ</Link>
           <Link href="/seller/payouts" className="btn btn-ghost">Выплаты</Link>
           <Link href="/seller/disputes" className="btn btn-ghost">Споры</Link>
           <Link href="/seller/documents" className="btn btn-ghost">Документы</Link>

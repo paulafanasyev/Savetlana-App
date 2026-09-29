@@ -107,7 +107,7 @@ export function routeAgent(text: string, side: "buyer" | "seller"): RouteResult 
 export const AGENT_TOOLS: Record<AgentKey, string[]> = {
   buyer: ["search_products", "compare_products", "get_product", "search_sellers", "get_reviews", "check_inventory", "cart_add", "create_order", "get_order", "cancel_order", "get_tracking", "get_payment_status", "request_return", "create_dispute", "wishlist_add", "recall_memory", "remember_preference"],
   seller: ["analyze_seller_sales", "product_health", "advise_price", "change_price", "confirm_inventory", "extend_listing", "create_product_draft", "publish_product", "find_competitors", "scan_global_competitors", "delivery_quotes", "document_requirements", "create_workflow_rule"],
-  search: ["search_products", "search_cheaper", "compare_products", "get_product", "search_sellers", "global_search"],
+  search: ["search_products", "search_cheaper", "compare_products", "get_product", "search_sellers", "global_search", "search_classifieds", "check_vin"],
   vision: ["vision_search", "search_products", "search_cheaper", "compare_products"],
   recommendation: ["search_products", "recall_memory"],
   gift: ["plan_gift", "upcoming_events", "gift_context"],

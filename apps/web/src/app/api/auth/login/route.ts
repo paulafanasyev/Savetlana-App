@@ -3,12 +3,28 @@ import { verifyPassword, createToken, setSessionCookie } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { audit } from "@/lib/domains/audit";
+import {
+  consumeRateLimit,
+  clientIp,
+  loginBuckets,
+  recordAuthOutcome,
+  AUTH_LIMITS,
+  tooMany,
+} from "@/lib/domains/rate-limits";
 
 export const dynamic = "force-dynamic";
 
 export const POST = apiRoute(async (request) => {
   const body = await jsonBody<{ email?: string; password?: string }>(request);
   const email = (body.email ?? "").trim().toLowerCase();
+  const ip = clientIp(request);
+
+  // Brute-force defence (P0-15, spec §142): count both per-IP and per-account,
+  // in the database so every instance sees the same window.
+  for (const bucket of loginBuckets(ip, email)) {
+    const decision = await consumeRateLimit(bucket, AUTH_LIMITS.login.limit, AUTH_LIMITS.login.windowMs);
+    if (!decision.allowed) return tooMany(decision);
+  }
 
   const user = await prisma.user.findUnique({ where: { email } });
   // Identical response for unknown user / wrong password (no user enumeration).
@@ -16,13 +32,22 @@ export const POST = apiRoute(async (request) => {
     { error: "Неверный email или пароль", code: "invalid_credentials" },
     { status: 401 }
   );
-  if (!user) return invalid;
+  if (!user) {
+    await recordAuthOutcome(`login:ip:${ip}`, false);
+    return invalid;
+  }
   if (user.isBlocked) {
     return Response.json({ error: "Аккаунт заблокирован", code: "blocked" }, { status: 403 });
   }
 
   const ok = await verifyPassword(body.password ?? "", user.passwordHash);
-  if (!ok) return invalid;
+  if (!ok) {
+    await recordAuthOutcome(`login:account:${email}`, false);
+    await recordAuthOutcome(`login:ip:${ip}`, false);
+    return invalid;
+  }
+  await recordAuthOutcome(`login:account:${email}`, true);
+  await recordAuthOutcome(`login:ip:${ip}`, true);
 
   const token = await createToken({ sub: user.id, role: user.role });
   await prisma.session.create({
