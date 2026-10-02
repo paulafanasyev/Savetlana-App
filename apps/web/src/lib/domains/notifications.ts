@@ -6,6 +6,7 @@
  */
 import { prisma } from "../prisma";
 import { audit } from "./audit";
+import { deliverNotification } from "../notification-delivery";
 
 export type NotificationKind =
   | "order_status"
@@ -30,7 +31,7 @@ export interface NotificationInput {
 }
 
 export async function notify(input: NotificationInput): Promise<void> {
-  await prisma.notification.create({
+  const notification = await prisma.notification.create({
     data: {
       userId: input.userId,
       kind: input.kind,
@@ -38,6 +39,11 @@ export async function notify(input: NotificationInput): Promise<void> {
       body: input.body.slice(0, 1000),
       url: input.url,
     },
+  });
+  // Out-of-band delivery (email/push). Failures here must never break the
+  // in-app notification — the delivery layer records its own honest status.
+  void deliverNotification(notification).catch(() => {
+    /* delivery failure is recorded in NotificationDelivery, not raised */
   });
 }
 

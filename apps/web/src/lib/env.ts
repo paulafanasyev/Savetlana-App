@@ -94,6 +94,14 @@ export const env = {
   // platform refuses to accept provider events at all.
   paymentWebhookSecret: optional("PAYMENT_WEBHOOK_SECRET"),
   deliveryProviderApiKey: optional("DELIVERY_PROVIDER_API_KEY"),
+  // --- Real carrier adapters (audit §10) ----------------------------------
+  // CDEK works with either a personal OAuth token OR an account/secure-key
+  // pair. Absent credentials => adapter reports unavailable and the platform
+  // refuses the shipment instead of fabricating a tracking number (spec §49).
+  cdekAccount: optional("CDEK_ACCOUNT"),
+  cdekSecureKey: optional("CDEK_SECURE_KEY"),
+  cdekToken: optional("CDEK_TOKEN"),
+  carrierTimeoutMs: Number(optional("CARRIER_TIMEOUT_MS") ?? "15000"),
 
   // --- Media / document storage (P0-11) -----------------------------------
   // Provider selection: "local" (dev only — writes to a gitignored folder) or
@@ -127,6 +135,15 @@ export const env = {
   // Shared secret for the background-job scheduler (P0-18). Only the
   // deployment platform knows it; without it /api/cron/jobs refuses to run.
   cronSecret: optional("CRON_SECRET"),
+
+  // --- Notification delivery (audit §29) -----------------------------------
+  // Email submission (SMTP URI like smtps://user:pass@mail.example.com:465).
+  smtpUrl: optional("SMTP_URL"),
+  smtpFrom: optional("SMTP_FROM") ?? "Светлана <no-reply@svetlana.example>",
+  // Web Push (RFC 8291). VAPID keys are application-level, not user secrets.
+  vapidPublicKey: optional("VAPID_PUBLIC_KEY"),
+  vapidPrivateKey: optional("VAPID_PRIVATE_KEY"),
+  vapidSubject: optional("VAPID_SUBJECT") ?? "mailto:no-reply@svetlana.example",
 
   // --- Feature flags ------------------------------------------------------
   features: {

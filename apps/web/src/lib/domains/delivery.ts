@@ -13,6 +13,7 @@
  */
 import { prisma } from "../prisma";
 import { env } from "../env";
+import { CdekCarrierAdapter } from "./carriers/cdek";
 
 export interface ShipmentParams {
   orderId: string;
@@ -144,6 +145,12 @@ export class SellerOwnDeliveryAdapter implements DeliveryProviderAdapter {
 export function getDeliveryProvider(key: string): DeliveryProviderAdapter | null {
   if (key === "SELLER_OWN_DELIVERY") return new SellerOwnDeliveryAdapter();
   if (key === "sandbox-carrier") return new SandboxCarrierAdapter();
+  // Real carriers (audit §10). Resolved regardless of credentials so that the
+  // platform can report *which* credential is missing instead of pretending
+  // the carrier does not exist. `available === false` makes createShipment
+  // fail loudly with PENDING_EXTERNAL_ACCESS rather than fabricate a number.
+  const cdek = new CdekCarrierAdapter();
+  if (key === "cdek" || key === "CDEK") return cdek;
   return null;
 }
 
@@ -180,16 +187,24 @@ export function canTransitionShipment(from: string, to: string): boolean {
  * loudly instead of fabricating a tracking number.
  */
 export async function createShipment(params: ShipmentParams) {
-  const adapter = getDeliveryProvider(params.carrier);
+  const resolved = getDeliveryProvider(params.carrier);
 
   // A seller who already has a carrier tracking number is the source of truth
   // (spec §123): record it verbatim and never fabricate a replacement.
   // Marked SELLER_DECLARED — live carrier sync is unavailable for it, so the
   // tracking screen shows the seller's data as-is instead of inventing events.
-  const sellerDeclared = !adapter && params.trackingNumber;
+  //
+  // This covers two cases: an unknown carrier, and a *known* carrier whose
+  // credentials the platform lacks. In the second case the seller is still
+  // handing over a real CDEK number, so we must not refuse their shipment —
+  // we simply cannot poll CDEK for updates.
+  const adapter = resolved && resolved.available ? resolved : null;
+  const sellerDeclared = !adapter && Boolean(params.trackingNumber);
   if (!adapter && !sellerDeclared) {
     throw new Error(
-      `carrier "${params.carrier}" has no adapter configured (PENDING_EXTERNAL_ACCESS)`,
+      resolved
+        ? `carrier "${params.carrier}" is not configured: ${(resolved as DeliveryProviderAdapter & { requiredCredential?: string }).requiredCredential ?? "missing credentials"} (PENDING_EXTERNAL_ACCESS)`
+        : `carrier "${params.carrier}" has no adapter configured (PENDING_EXTERNAL_ACCESS)`,
     );
   }
 

@@ -163,6 +163,12 @@ export type GeoLevel = (typeof GeoLevel_VALUES)[number];
 export const AuthTicketPurpose_VALUES = ["VERIFY_EMAIL", "RESET_PASSWORD"] as const;
 export type AuthTicketPurpose = (typeof AuthTicketPurpose_VALUES)[number];
 
+export const DeliveryChannel_VALUES = ["email", "push"] as const;
+export type DeliveryChannel = (typeof DeliveryChannel_VALUES)[number];
+
+export const DeliveryState_VALUES = ["PENDING", "SENT", "FAILED", "SUPPRESSED"] as const;
+export type DeliveryState = (typeof DeliveryState_VALUES)[number];
+
 
 // ---------------------------------------------------------------------------
 // Validators
@@ -209,6 +215,8 @@ const ALL_ENUMS: EnumRecord = {
   VinCheckStatus: VinCheckStatus_VALUES,
   GeoLevel: GeoLevel_VALUES,
   AuthTicketPurpose: AuthTicketPurpose_VALUES,
+  DeliveryChannel: DeliveryChannel_VALUES,
+  DeliveryState: DeliveryState_VALUES,
 };
 
 /** Returns true when the value is a legal member of the named enum. */

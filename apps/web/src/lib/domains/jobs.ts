@@ -26,6 +26,7 @@ import { sweepStaleAvailability } from "./inventory";
 import { sweepExpiredDocuments } from "./documents";
 import { syncTracking } from "./delivery";
 import { checkSlaBreaches } from "./disputes";
+import { retryFailedDeliveries } from "../notification-delivery";
 import { ShipmentStatus_VALUES } from "../db/enums";
 
 export interface JobRunResult {
@@ -66,6 +67,7 @@ export async function runJobs(): Promise<JobRunResult> {
       `${r.synced} synced, ${r.failed} failed`),
     timed("outbox_deadletter", () => sweepDeadLetters(), (n) => `${n} dead-lettered`),
     timed("dispute_sla", () => checkSlaBreaches(), (n) => `${n} breached`),
+    timed("delivery_retry", () => retryFailedDeliveries(), (n) => `${n} retried`),
   ]);
 
   return {

@@ -384,7 +384,7 @@ export async function fileAppeal(disputeId: string, buyerId: string, reason: str
     throw new Error("срок обжалования истёк");
   }
 
-  await prisma.$transaction([
+  const [updated] = await prisma.$transaction([
     prisma.dispute.update({
       where: { id: disputeId },
       data: {
@@ -412,7 +412,7 @@ export async function fileAppeal(disputeId: string, buyerId: string, reason: str
     targetId: disputeId,
     after: { reason: reason.slice(0, 500) },
   });
-  return { appealed: true };
+  return updated;
 }
 
 export interface ResolveDisputeInput {

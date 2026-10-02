@@ -27,6 +27,7 @@
  *    than inventing a number.
  */
 import { prisma } from "./prisma";
+import { CdekCarrierAdapter } from "./domains/carriers/cdek";
 
 export type DeliveryTier = 1 | 2 | 3;
 
@@ -119,9 +120,14 @@ export class PlatformDeliveryCarrier implements CarrierAdapter {
 }
 
 /**
- * A carrier reached over a public HTTP tariff endpoint. When no credential is
- * configured the carrier is honestly PENDING_EXTERNAL_ACCESS and returns no
- * price instead of a mock.
+ * A carrier reached over a real HTTP tariff endpoint.
+ *
+ * HONESTY CONTRACT (spec §49, §58): this adapter NEVER calls a made-up path.
+ * Each carrier either supplies a `priceResolver` backed by its documented API
+ * (currently only CDEK, via `/selection`), or is reported as
+ * `PENDING_EXTERNAL_ACCESS — API перевозчика не интегрирован` instead of
+ * probing an endpoint that does not exist and presenting the failure as a
+ * working integration.
  */
 export class HttpCarrierAdapter implements CarrierAdapter {
   readonly key: string;
@@ -129,10 +135,21 @@ export class HttpCarrierAdapter implements CarrierAdapter {
   readonly tier: DeliveryTier;
   readonly region: CarrierRegion;
   readonly credentialVar?: string;
-  readonly configured: boolean;
   private baseUrl: string;
   private pricePerKg: number;
   private baseDays: number;
+  /** Real tariff call for this carrier, when its documented API is implemented. */
+  private priceResolver?: (
+    params: EstimateParams,
+  ) => Promise<{ kopecks: number; days: number } | null>;
+
+  /**
+   * Live check rather than a constructor snapshot: the registry is built once
+   * at module load, but credentials may be rotated in a long-running process.
+   */
+  get configured(): boolean {
+    return this.credentialVar ? Boolean(process.env[this.credentialVar]) : true;
+  }
 
   constructor(opts: {
     key: string;
@@ -143,16 +160,19 @@ export class HttpCarrierAdapter implements CarrierAdapter {
     baseUrl: string;
     pricePerKg: number;
     baseDays: number;
+    priceResolver?: (
+      params: EstimateParams,
+    ) => Promise<{ kopecks: number; days: number } | null>;
   }) {
     this.key = opts.key;
     this.name = opts.name;
     this.tier = opts.tier;
     this.region = opts.region;
     this.credentialVar = opts.credentialVar;
-    this.configured = opts.credentialVar ? Boolean(process.env[opts.credentialVar]) : true;
     this.baseUrl = opts.baseUrl;
     this.pricePerKg = opts.pricePerKg;
     this.baseDays = opts.baseDays;
+    this.priceResolver = opts.priceResolver;
   }
 
   async probe(): Promise<boolean> {
@@ -180,33 +200,25 @@ export class HttpCarrierAdapter implements CarrierAdapter {
         note: `требуется ${this.credentialVar} (PENDING_EXTERNAL_ACCESS)`,
       };
     }
-    // Live tariff call. A non-2xx answer means the carrier could not price the
-    // leg — reported honestly, never replaced with a guess.
+
+    // No documented API integration for this carrier yet. Say so plainly
+    // rather than calling a path we invented (spec §49).
+    if (!this.priceResolver) {
+      return {
+        kopecks: null,
+        days: null,
+        note: `API перевозчика не интегрирован (PENDING_EXTERNAL_ACCESS); ключ ${this.credentialVar} есть, но тарифный вызов не реализован`,
+      };
+    }
+
+    // Live tariff call against the carrier's own documented endpoint. A
+    // non-answer is reported honestly, never replaced with a guess.
     try {
-      const url = new URL("/v1/tariff", this.baseUrl);
-      const res = await fetch(url, {
-        method: "POST",
-        signal: AbortSignal.timeout(10000),
-        headers: {
-          "Content-Type": "application/json",
-          ...(this.credentialVar
-            ? { Authorization: `Bearer ${process.env[this.credentialVar]}` }
-            : {}),
-        },
-        body: JSON.stringify({
-          weightGrams: params.weightGrams ?? 1000,
-          city: params.city,
-          countryCode: params.countryCode,
-          declaredValueKopecks: params.priceKopecks ?? 0,
-        }),
-      });
-      if (res.ok) {
-        const body = (await res.json()) as { priceKopecks?: number; days?: number };
-        if (typeof body.priceKopecks === "number" && body.priceKopecks > 0) {
-          return { kopecks: Math.round(body.priceKopecks), days: body.days ?? this.baseDays };
-        }
+      const quote = await this.priceResolver(params);
+      if (quote && quote.kopecks > 0) {
+        return { kopecks: Math.round(quote.kopecks), days: quote.days ?? this.baseDays };
       }
-      return { kopecks: null, days: null, note: `перевозчик не смог рассчитать тариф (HTTP ${res.status})` };
+      return { kopecks: null, days: null, note: "перевозчик не смог рассчитать тариф" };
     } catch {
       return { kopecks: null, days: null, note: "перевозчик недоступен" };
     }
@@ -239,15 +251,29 @@ const CARRIERS: CarrierAdapter[] = [
   new SellerOwnCarrier(),
 
   // TIER 2 — every Russian carrier the platform integrates with.
+  //
+  // CDEK is the only one with a fully implemented, documented tariff call
+  // (POST /selection, returning a real price in roubles). The rest are listed
+  // so the seller can see the landscape, and report their true status:
+  // PENDING_EXTERNAL_ACCESS until their API is implemented (spec §49).
   new HttpCarrierAdapter({
     key: "cdek",
     name: "СДЭК",
     tier: 2,
     region: "RU",
-    credentialVar: "CDEK_API_KEY",
+    credentialVar: "CDEK_TOKEN",
     baseUrl: "https://api.cdek.ru/v2",
     pricePerKg: 35000,
     baseDays: 3,
+    priceResolver: async (params) => {
+      const adapter = new CdekCarrierAdapter();
+      if (!adapter.available) return null;
+      const kopecks = await adapter.calculatePrice({
+        weightGrams: params.weightGrams,
+        city: params.city,
+      });
+      return kopecks > 0 ? { kopecks, days: 3 } : null;
+    },
   }),
   new HttpCarrierAdapter({
     key: "boxberry",

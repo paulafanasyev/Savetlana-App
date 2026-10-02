@@ -67,6 +67,8 @@ model User {
   feedbacks         AiFeedback[]
   conversations     AiConversation[]
   notifications     Notification[]
+  notificationDeliveries NotificationDelivery[]
+  pushSubscriptions PushSubscription[]
   priceAlerts       PriceAlert[]
   consents          Consent[]
   auditLogs         AuditLog[]
@@ -1194,6 +1196,50 @@ model Notification {
   readAt    DateTime?
   createdAt DateTime  @default(now())
 
+  deliveries NotificationDelivery[]
+
+  @@index([userId])
+}
+
+// Out-of-band delivery attempts for a Notification (audit §29). Every email /
+// push send is recorded here so delivery is observable and retryable, and so a
+// user can see in the Privacy Center exactly what was sent to them.
+model NotificationDelivery {
+  id               String   @id @default(cuid())
+  notificationId   String
+  notification     Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel          String   // email | push
+  address          String   // redacted recipient (e.g. a***@example.com)
+  status           String   // PENDING | SENT | FAILED | SUPPRESSED
+  providerMessageId String?
+  error            String?
+  attempts         Int      @default(0)
+  lastAttemptAt    DateTime?
+  sentAt           DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+  @@index([notificationId])
+  @@index([status])
+}
+
+// RFC 8030 / 8291 web-push subscription. The auth/ p256dh keys are per-browser
+// endpoint secrets, stored so the platform can deliver push notifications.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String
+  // Per-subscription keys (RFC 8291). Public parts; safe to store.
+  p256dhKey String
+  authKey   String
+  userAgent String?
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  @@unique([userId, endpoint])
   @@index([userId])
 }
 

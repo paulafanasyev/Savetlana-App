@@ -2,6 +2,7 @@ import { requireUserServer } from "@/lib/auth";
 import { getMemory } from "@/lib/domains/memory";
 import { integrationStatus, env } from "@/lib/env";
 import { aiMode } from "@/lib/ai/gateway";
+import { deliveryHistory, deliveryStatusLabel, NOTIFICATION_CHANNELS } from "@/lib/notification-delivery";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ export default async function PrivacyPage() {
   // The Privacy Center works even for anonymous visitors for the policy part.
   const session = await requireUserServer().catch(() => null);
   const memory = session ? await getMemory(session.user.id) : [];
+  const deliveries = session ? await deliveryHistory(session.user.id, 20) : [];
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -62,6 +64,45 @@ export default async function PrivacyPage() {
           Войдите в аккаунт, чтобы увидеть и управлять тем, что Светлана о вас помнит.
         </section>
       )}
+
+      <section className="mt-8 card p-5">
+        <h2 className="text-base font-bold text-ink">Каналы уведомлений</h2>
+        <ul className="mt-3 divide-y divide-surface-line text-sm">
+          {NOTIFICATION_CHANNELS.map((channel) => (
+            <li key={channel.channel} className="flex justify-between py-2.5">
+              <span className="text-ink">
+                {channel.channel === "email" ? "Email" : "Push-уведомления"}
+              </span>
+              <span
+                className={channel.configured() ? "font-medium text-ok" : "font-medium text-amber-700"}
+              >
+                {channel.configured() ? "подключено" : channel.unavailableReason()}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {session ? (
+          deliveries.length > 0 ? (
+            <>
+              <h3 className="mt-5 text-sm font-bold text-ink">Что было отправлено</h3>
+              <ul className="mt-2 divide-y divide-surface-line text-xs text-ink-soft">
+                {deliveries.map((d) => (
+                  <li key={d.id} className="flex justify-between gap-3 py-2">
+                    <span>
+                      {d.notification.title} → {d.channel} ({d.address})
+                    </span>
+                    <span className="shrink-0">{deliveryStatusLabel(d.status)}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="mt-3 text-xs text-ink-soft">
+              Пока ни одно уведомление не отправлялось за пределы сайта.
+            </p>
+          )
+        ) : null}
+      </section>
 
       <section className="mt-8 card p-5">
         <h2 className="text-base font-bold text-ink">Готовность интеграций</h2>
