@@ -3,6 +3,7 @@ import { adviseOnPrice, priceHistory, pricePosition } from "@/lib/domains/pricin
 import { findCompetitors } from "@/lib/domains/competitors";
 import { rub } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
+import { resolveSearchParams } from "@/lib/page-params";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -17,10 +18,10 @@ export const dynamic = "force-dynamic";
 export default async function SellerPricingPage({
   searchParams,
 }: {
-  searchParams: { productId?: string };
+  searchParams: Promise<{ productId?: string }>;
 }) {
   const { sellerId } = await requireSellerServer();
-  const productId = searchParams.productId;
+  const productId = (await resolveSearchParams(searchParams)).productId;
 
   const products = await prisma.product.findMany({
     where: { sellerId },

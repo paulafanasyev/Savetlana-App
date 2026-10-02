@@ -4,13 +4,15 @@ import type { NextPageContext } from "next";
  * Legacy error page.
  *
  * The application is App Router first; error.tsx / global-error.tsx handle
- * in-app errors. This file exists only so that Next.js does not synthesise an
- * internal _error page that cannot be prerendered (Next 14.2.35 renders a
- * synthesised _error through _document, which trips the "Html should not be
- * imported outside of pages/_document" guard).
+ * in-app errors. This file exists purely to stop Next from synthesising an
+ * internal `_error` page that cannot be prerendered: rendering the synthesised
+ * `/500` routes through `_document`, which trips the runtime guard
+ * "Html should not be imported outside of pages/_document" and aborts the
+ * build.
  *
- * getInitialProps makes Next render this page standalone, without the _document
- * wrapper, so prerendering succeeds.
+ * Verified still required on Next 15.5.27 — the upgrade did not fix it.
+ * `getInitialProps` makes Next render this page standalone, without the
+ * `_document` wrapper, so prerendering succeeds.
  */
 Error.getInitialProps = async (ctx: NextPageContext) => {
   return { statusCode: ctx.err?.statusCode ?? 500 };

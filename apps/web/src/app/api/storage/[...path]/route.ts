@@ -26,7 +26,7 @@ function decodeKey(path: string): string {
   }
 }
 
-export const GET = apiRoute(async (request, { params }) => {
+export const GET = apiRoute<{ path: string[] }>(async (request, { params }) => {
   const ctx = await requireUser(request);
   const key = decodeKey(Array.isArray(params.path) ? params.path.join("/") : params.path);
 

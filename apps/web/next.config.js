@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Server-side only: API route handlers must never be bundled for the client.
+  // Uploads (seller photos, KYC documents, dispute evidence) can reach 5 MB.
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",

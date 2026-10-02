@@ -3,15 +3,17 @@ import { notFound } from "next/navigation";
 import { getPublicSellerProfile, listSellerProducts } from "@/lib/domains/sellers";
 import { rub, availabilityLabel } from "@/lib/format";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
+import { resolveParams } from "@/lib/page-params";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function SellerPage({ params }: PageProps) {
-  const profile = await getPublicSellerProfile(params.id);
+  const { id } = await resolveParams(params);
+  const profile = await getPublicSellerProfile(id);
   if (!profile) notFound();
   const products = await listSellerProducts(profile.id);
 

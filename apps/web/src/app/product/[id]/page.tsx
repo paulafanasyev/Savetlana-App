@@ -6,16 +6,18 @@ import { AddToCartButton } from "@/components/AddToCartButton";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 import { summarizeReviews, listReviews } from "@/lib/domains/reviews";
+import { readParam, resolveParams } from "@/lib/page-params";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function ProductPage({ params }: PageProps) {
+  const { id } = await resolveParams(params);
   const product = await prisma.product.findFirst({
-    where: { id: params.id, status: "ACTIVE" },
+    where: { id, status: "ACTIVE" },
     include: {
       images: { orderBy: { position: "asc" } },
       variants: true,

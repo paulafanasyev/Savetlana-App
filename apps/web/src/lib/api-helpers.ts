@@ -8,7 +8,29 @@
  */
 import { ApiError, apiErrorResponse } from "./auth";
 
-export type RouteHandler = (request: Request, ctx: { params: Record<string, string> }) => Promise<Response> | Response;
+/** Route params as Next delivers them: scalar segments are strings, and a
+ *  catch-all (`[...path]`) segment is an array. */
+export type RouteParamsShape = Record<string, string | string[]>;
+
+/** `P` defaults to the common all-scalar shape so ordinary routes keep writing
+ *  `params.id` as a plain `string`; catch-all routes infer `{ path: string[] }`. */
+export type RouteHandler<P extends RouteParamsShape = Record<string, string>> = (
+  request: Request,
+  ctx: { params: P }
+) => Promise<Response> | Response;
+
+/**
+ * Next 15 made `params` a Promise in route handlers. Handlers still receive a
+ * plain object — the unwrapping happens once, here, so no individual route has
+ * to know. The declared type matches what Next requires; the runtime resolver
+ * additionally tolerates a plain object so handlers stay callable from tests.
+ */
+async function resolveParams<P extends RouteParamsShape>(params: unknown): Promise<P> {
+  if (params && typeof (params as PromiseLike<P>).then === "function") {
+    return ((await (params as PromiseLike<P>)) ?? {}) as P;
+  }
+  return (params as P) ?? ({} as P);
+}
 
 function safeHeaders(response: Response): Response {
   response.headers.set("X-Content-Type-Options", "nosniff");
@@ -16,10 +38,12 @@ function safeHeaders(response: Response): Response {
   return response;
 }
 
-export function apiRoute(handler: RouteHandler): (request: Request, ctx: { params: Record<string, string> }) => Promise<Response> {
+export function apiRoute<P extends RouteParamsShape = Record<string, string>>(
+  handler: RouteHandler<P>
+): (request: Request, ctx: { params: Promise<P> }) => Promise<Response> {
   return async (request, ctx) => {
     try {
-      const response = await handler(request, { params: ctx.params ?? {} });
+      const response = await handler(request, { params: await resolveParams<P>(ctx?.params) });
       return safeHeaders(response);
     } catch (error) {
       // next/navigation's redirect() throws a sentinel error that the App

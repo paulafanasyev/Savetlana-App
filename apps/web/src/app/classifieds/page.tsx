@@ -1,35 +1,22 @@
 import Link from "next/link";
 import { searchClassifieds, getGeoTree } from "@/lib/domains/classifieds";
+import { DEAL_TYPE_LABELS, VERTICAL_LABELS, dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
 import { rub } from "@/lib/format";
+import { resolveSearchParams } from "@/lib/page-params";
 
 export const dynamic = "force-dynamic";
-
-const VERTICALS: Record<string, string> = {
-  REAL_ESTATE: "Недвижимость",
-  AUTO: "Авто",
-  SERVICE: "Услуги",
-};
-
-const DEAL_TYPES: Record<string, string> = {
-  SELL: "Продажа",
-  LONG_RENT: "Аренда (длительно)",
-  DAILY_RENT: "Посуточно",
-  RENT_DAILY: "Подённо",
-  BUY: "Куплю",
-  SERVICE_OFFER: "Предлагаю услугу",
-  SERVICE_REQUEST: "Нужна услуга",
-};
 
 export default async function ClassifiedsPage({
   searchParams,
 }: {
-  searchParams: { vertical?: string; dealType?: string; cityId?: string; q?: string };
+  searchParams: Promise<{ vertical?: string; dealType?: string; cityId?: string; q?: string }>;
 }) {
+  const query = await resolveSearchParams(searchParams);
   const result = await searchClassifieds({
-    vertical: searchParams.vertical,
-    dealType: searchParams.dealType,
-    cityId: searchParams.cityId,
-    query: searchParams.q,
+    vertical: query.vertical,
+    dealType: query.dealType,
+    cityId: query.cityId,
+    query: query.q,
     limit: 30,
   });
   const tree = await getGeoTree();
@@ -48,22 +35,22 @@ export default async function ClassifiedsPage({
       <form className="mb-6 grid gap-3 rounded-xl border border-zinc-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
         <input
           name="q"
-          defaultValue={searchParams.q ?? ""}
+          defaultValue={query.q ?? ""}
           placeholder="Поиск..."
           className="rounded-lg border border-zinc-300 px-3 py-2 text-sm"
         />
         <select name="vertical" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm">
           <option value="">Все вертикали</option>
-          {Object.entries(VERTICALS).map(([k, v]) => (
-            <option key={k} value={k} selected={searchParams.vertical === k}>
+          {Object.entries(VERTICAL_LABELS).map(([k, v]) => (
+            <option key={k} value={k} selected={query.vertical === k}>
               {v}
             </option>
           ))}
         </select>
         <select name="dealType" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm">
           <option value="">Любая сделка</option>
-          {Object.entries(DEAL_TYPES).map(([k, v]) => (
-            <option key={k} value={k} selected={searchParams.dealType === k}>
+          {Object.entries(DEAL_TYPE_LABELS).map(([k, v]) => (
+            <option key={k} value={k} selected={query.dealType === k}>
               {v}
             </option>
           ))}
@@ -71,7 +58,7 @@ export default async function ClassifiedsPage({
         <select name="cityId" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm">
           <option value="">Весь регион</option>
           {cities.map((c) => (
-            <option key={c.id} value={c.id} selected={searchParams.cityId === c.id}>
+            <option key={c.id} value={c.id} selected={query.cityId === c.id}>
               {c.name}
             </option>
           ))}
@@ -115,16 +102,16 @@ export default async function ClassifiedsPage({
                   />
                 ) : (
                   <div className="flex h-40 w-full items-center justify-center bg-zinc-100 text-3xl">
-                    {VERTICALS[ad.vertical] === "Авто" ? "🚗" : VERTICALS[ad.vertical] === "Услуги" ? "🛠" : "🏠"}
+                    {verticalEmoji(ad.vertical)}
                   </div>
                 )}
               </Link>
               <div className="p-4">
                 <div className="mb-1 flex items-center gap-2 text-xs text-zinc-500">
                   <span className="rounded bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700">
-                    {VERTICALS[ad.vertical] ?? ad.vertical}
+                    {verticalLabel(ad.vertical)}
                   </span>
-                  <span>{DEAL_TYPES[ad.dealType] ?? ad.dealType}</span>
+                  <span>{dealTypeLabel(ad.dealType)}</span>
                 </div>
                 <Link href={`/classifieds/${ad.id}`}>
                   <h3 className="line-clamp-2 font-semibold hover:underline">{ad.title}</h3>

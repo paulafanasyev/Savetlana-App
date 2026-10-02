@@ -291,7 +291,8 @@ export function apiErrorResponse(error: unknown): Response {
 // App-router server components have no `Request` object, so session cookies
 // are read from next/headers instead. The same verification path is used.
 export async function serverRequest(): Promise<Request> {
-  const headerList = headers();
+  // Next 15 made headers() asynchronous.
+  const headerList = await headers();
   const url = new URL(headerList.get("x-forwarded-path") ?? headerList.get("path") ?? "/", "http://localhost");
   const request = new Request(url, {
     headers: headerList,

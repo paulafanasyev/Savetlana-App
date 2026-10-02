@@ -19,7 +19,7 @@
     "android:build": "cd apps/android && ./gradlew assembleDebug"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "dotenv": "^18.0.1"

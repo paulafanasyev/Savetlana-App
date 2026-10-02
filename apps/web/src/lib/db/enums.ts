@@ -226,6 +226,19 @@ export function isValidEnum(enumName: string, value: string | null | undefined):
   return Boolean(allowed) && (allowed as readonly string[]).includes(value);
 }
 
+/**
+ * Narrows a stored string to the canonical union of the named enum.
+ *
+ * Status columns are plain strings in the database, so code that renders a
+ * label has to accept an arbitrary `string` before it may index a typed map.
+ * `isValidEnum` answers only yes/no; this returns the value narrowed to the
+ * enum union, or `undefined` when the row holds something unexpected.
+ */
+export function asEnum<T extends string>(enumName: string, value: string | null | undefined): T | undefined {
+  if (!isValidEnum(enumName, value)) return undefined;
+  return value as T;
+}
+
 /** Parses a stored value, returning the fallback when the DB contains junk. */
 export function parseEnum<T extends string>(
   enumName: string,

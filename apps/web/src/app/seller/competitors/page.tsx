@@ -6,6 +6,7 @@ import { scanExternalCompetitors } from "@/lib/domains/external-search";
 import { rub } from "@/lib/format";
 import { fromKopecks } from "@/lib/utils";
 import { getMarketplaceAvailability, tierLabel } from "@/lib/marketplaces";
+import { resolveSearchParams } from "@/lib/page-params";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,11 @@ const TIER_LABEL: Record<number, string> = {
 export default async function GlobalCompetitorsPage({
   searchParams,
 }: {
-  searchParams: { productId?: string; tier?: string };
+  searchParams: Promise<{ productId?: string; tier?: string }>;
 }) {
   const ctx = await requireSellerServer();
 
+  const query = await resolveSearchParams(searchParams);
   const products = await prisma.product.findMany({
     where: { sellerId: ctx.sellerId },
     select: { id: true, title: true, sku: true, priceKopecks: true, status: true },
@@ -28,8 +30,8 @@ export default async function GlobalCompetitorsPage({
     take: 50,
   });
 
-  const tier = searchParams.tier === "2" ? 2 : 1;
-  const productId = searchParams.productId ?? products[0]?.id;
+  const tier = query.tier === "2" ? 2 : 1;
+  const productId = query.productId ?? products[0]?.id;
   const availability = await getMarketplaceAvailability();
 
   let scan = null;

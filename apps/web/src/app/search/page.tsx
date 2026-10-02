@@ -4,6 +4,7 @@ import { searchGlobally } from "@/lib/domains/external-search";
 import { getMarketplaceAvailability, tierLabel } from "@/lib/marketplaces";
 import { rub } from "@/lib/format";
 import { fromKopecks } from "@/lib/utils";
+import { resolveSearchParams } from "@/lib/page-params";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +13,13 @@ const TIER_SELECT: Record<number, string> = { 1: "🇷🇺 Россия", 2: "�
 export default async function GlobalSearchPage({
   searchParams,
 }: {
-  searchParams: { q?: string; tier?: string };
+  searchParams: Promise<{ q?: string; tier?: string }>;
 }) {
   const user = await requireUserServer();
 
-  const q = searchParams.q?.trim() ?? "";
-  const tier = searchParams.tier === "2" ? 2 : 1;
+  const query = await resolveSearchParams(searchParams);
+  const q = query.q?.trim() ?? "";
+  const tier = query.tier === "2" ? 2 : 1;
   const availability = await getMarketplaceAvailability();
 
   const report =

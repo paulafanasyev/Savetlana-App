@@ -2,33 +2,20 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getClassifiedPublic, incrementViews } from "@/lib/domains/classifieds";
 import { rub, timeAgo } from "@/lib/format";
+import { dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
+import { resolveParams } from "@/lib/page-params";
 
 export const dynamic = "force-dynamic";
-
-const VERTICALS: Record<string, string> = {
-  REAL_ESTATE: "Недвижимость",
-  AUTO: "Авто",
-  SERVICE: "Услуги",
-};
-
-const DEAL_TYPES: Record<string, string> = {
-  SELL: "Продажа",
-  RENT_LONG: "Аренда (длительно)",
-  RENT_SHORT: "Посуточно",
-  RENT_DAILY: "Подённо",
-  BUY: "Куплю",
-  SERVICE_OFFER: "Предлагаю услугу",
-  SERVICE_REQUEST: "Нужна услуга",
-};
 
 export default async function ClassifiedDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await resolveParams(params);
   // Count the view before rendering so popularity reflects real visits.
-  await incrementViews(params.id).catch(() => {});
-  const ad = await getClassifiedPublic(params.id);
+  await incrementViews(id).catch(() => {});
+  const ad = await getClassifiedPublic(id);
   if (!ad) notFound();
 
   const attrs = Object.entries(ad.attrs);
@@ -65,7 +52,7 @@ export default async function ClassifiedDetailPage({
             </div>
           ) : (
             <div className="flex aspect-square w-full items-center justify-center rounded-xl bg-zinc-100 text-6xl">
-              {VERTICALS[ad.vertical] === "Авто" ? "🚗" : VERTICALS[ad.vertical] === "Услуги" ? "🛠" : "🏠"}
+              {verticalEmoji(ad.vertical)}
             </div>
           )}
         </div>
@@ -73,9 +60,9 @@ export default async function ClassifiedDetailPage({
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs text-zinc-500">
             <span className="rounded bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700">
-              {VERTICALS[ad.vertical] ?? ad.vertical}
+              {verticalLabel(ad.vertical)}
             </span>
-            <span>{DEAL_TYPES[ad.dealType] ?? ad.dealType}</span>
+            <span>{dealTypeLabel(ad.dealType)}</span>
           </div>
           <h1 className="text-xl font-bold">{ad.title}</h1>
           {ad.priceKopecks > 0 ? (
