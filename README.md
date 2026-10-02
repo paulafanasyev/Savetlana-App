@@ -11,7 +11,7 @@ AI-нативная маркетплейс-платформа, где центр
 | Frontend / API | Next.js 14.2 (App Router), React 18, TypeScript |
 | База данных | SQLite (разработка) / PostgreSQL (production) через Prisma |
 | AI Gateway | Собственная абстракция: Provider Router + адаптеры |
-| Тесты | Vitest (121 тест, 15 файлов) |
+| Тесты | Vitest (285 тестов, 32 файла) |
 | Деплой | Vercel-готово (server-side AI calls) |
 
 ## Быстрый старт
@@ -29,7 +29,7 @@ npm run dev                   # http://localhost:3000
 
 ```bash
 npm run build                 # production-сборка (23 страницы, 58 API-роутов)
-npm run test                  # 121 тест
+npm run test                  # 285 тестов
 ```
 
 ## Структура монорепо
