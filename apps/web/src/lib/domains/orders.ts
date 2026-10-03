@@ -134,7 +134,8 @@ export async function createOrdersFromCart(
   // enough to wait for a competing writer rather than turning normal
   // contention into a false checkout failure. PostgreSQL is expected to stay
   // well below this bound under normal operation.
-  return prisma.$transaction(async (tx) => {
+  return withCheckoutTransaction(() =>
+    prisma.$transaction(async (tx) => {
     // --- Atomic stock reservation (P0 fix, spec §6/§124) --------------------
     // The pre-transaction read-only check is not authoritative: two concurrent
     // checkouts could both see stock>=qty and both succeed. Here every unit is
@@ -211,10 +212,35 @@ export async function createOrdersFromCart(
     await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
 
     return { groupId: group.id, orders: created };
-  }, { maxWait: 15000, timeout: 15000 });
+      },
+    ),
+  }, { maxWait: 15000, timeout: 15000 }),
 }
 
 type TransactionClient = Parameters<Parameters<typeof prisma["$transaction"]>[0]>[0];
+
+let sqliteCheckoutTail = Promise.resolve();
+
+async function withCheckoutTransaction<T>(work: () => Promise<T>): Promise<T> {
+  // SQLite permits only one writer, and Prisma's SQLite query engine can
+  // deadlock contending interactive transactions inside its worker pool.
+  // Serialize only SQLite checkouts; PostgreSQL keeps its normal concurrency.
+  if (!env.databaseUrl.startsWith("file:")) {
+    return work();
+  }
+
+  const previous = sqliteCheckoutTail;
+  let release!: () => void;
+  sqliteCheckoutTail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    return await work();
+  } finally {
+    release();
+  }
+}
 
 /**
  * Claims stock atomically for every cart line. Each line is a conditional
