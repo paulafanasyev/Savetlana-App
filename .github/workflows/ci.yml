@@ -38,6 +38,8 @@ jobs:
       - name: Generate Prisma client
         run: npm run db:generate --workspace=apps/web
       - name: Prisma schema validation
+        env:
+          DATABASE_URL: file:./prisma/ci-validation.db
         run: npx prisma validate --schema=apps/web/prisma/schema.prisma
       - name: Typecheck
         run: npx tsc --noEmit -p apps/web/tsconfig.json
