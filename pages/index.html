@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Светлана — AI-маркетплейс</title>
+<meta name="description" content="Временный статический preview Светланы.">
+<style>
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#173126;background:#f5faf7}
+*{box-sizing:border-box}body{margin:0}a{text-decoration:none;color:inherit}
+.wrap{max-width:1120px;margin:auto;padding:24px}
+nav{display:flex;justify-content:space-between;align-items:center;padding:8px 0 28px}
+.logo{font-weight:800;font-size:22px}.nav{display:flex;gap:20px;color:#527064;font-size:14px}
+.hero{display:grid;grid-template-columns:1.15fr .85fr;gap:24px;align-items:stretch}
+.card{background:#fff;border:1px solid #dcebe3;border-radius:24px;box-shadow:0 10px 35px #1731260d}
+.copy{padding:48px}.chip{display:inline-block;padding:7px 11px;border-radius:999px;background:#e5f5ec;color:#24704c;font-size:13px;font-weight:700}
+h1{font-size:clamp(38px,5vw,64px);line-height:1.03;margin:18px 0}p{color:#60776d;font-size:18px;line-height:1.6;max-width:650px}
+.buttons{display:flex;gap:12px;margin-top:26px;flex-wrap:wrap}.btn{padding:13px 18px;border-radius:12px;font-weight:700;font-size:14px}
+.primary{background:#267b50;color:#fff}.ghost{border:1px solid #cfe0d7;background:#fff}
+.chat{padding:28px;display:flex;flex-direction:column;justify-content:space-between;min-height:430px}
+.avatar{width:74px;height:74px;border-radius:50%;display:grid;place-items:center;background:#dff3e8;font-size:36px}
+.msg{background:#f0f7f3;border-radius:16px;padding:15px;line-height:1.5;margin-top:20px}
+.input{border:1px solid #d7e5de;border-radius:13px;padding:13px;color:#8aa097;margin-top:20px}
+.features{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:28px}
+.feature{padding:22px}.feature b{display:block;margin-bottom:8px}.feature span{color:#71867d;font-size:14px;line-height:1.5}
+footer{text-align:center;color:#7b9087;font-size:13px;padding:40px 0 20px}
+@media(max-width:760px){.hero{grid-template-columns:1fr}.copy{padding:30px}.features{grid-template-columns:1fr 1fr}.nav{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav><div class="logo">Светлана</div><div class="nav"><a href="#features">Возможности</a><a href="#chat">Светлана</a></div></nav>
+<section class="hero">
+<div class="card copy">
+<span class="chip">AI-нативный маркетплейс</span>
+<h1>Не ищите товар — <span style="color:#267b50">объясните задачу.</span></h1>
+<p>Светлана помогает сформулировать потребность, сравнить варианты и пройти путь покупки в одном интерфейсе.</p>
+<div class="buttons"><a class="btn primary" href="#chat">Поговорить со Светланой</a><a class="btn ghost" href="#features">Возможности</a></div>
+</div>
+<div class="card chat" id="chat">
+<div><div class="avatar">С</div><div class="msg"><b>Здравствуйте.</b><br>Опишите, что вы хотите найти, для кого это и какой у вас бюджет.</div></div>
+<div class="input">Например: «Нужен подарок до 2 000 000 ₫»</div>
+</div>
+</section>
+<section class="features" id="features">
+<div class="card feature"><b>Естественный поиск</b><span>Опишите задачу обычными словами.</span></div>
+<div class="card feature"><b>Сравнение</b><span>Сопоставляйте товары и условия продавцов.</span></div>
+<div class="card feature"><b>Покупки</b><span>Единый интерфейс для выбора и заказа.</span></div>
+<div class="card feature"><b>Продавцам</b><span>Инструменты для управления товарами и продажами.</span></div>
+</section>
+<footer>Временный статический preview · backend-функции доступны только в полном deployment</footer>
+</div>
+</body>
+</html>
