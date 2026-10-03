@@ -130,6 +130,10 @@ export async function createOrdersFromCart(
 
   const addressJson = JSON.stringify(input.deliveryAddress);
 
+  // SQLite serialises contending writers. Keep the checkout transaction long
+  // enough to wait for a competing writer rather than turning normal
+  // contention into a false checkout failure. PostgreSQL is expected to stay
+  // well below this bound under normal operation.
   return prisma.$transaction(async (tx) => {
     // --- Atomic stock reservation (P0 fix, spec §6/§124) --------------------
     // The pre-transaction read-only check is not authoritative: two concurrent
