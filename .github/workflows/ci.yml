@@ -35,13 +35,12 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - name: Generate Prisma client
+        run: npm run db:generate --workspace=apps/web
+      - name: Prisma schema validation
+        run: npx prisma validate --schema=apps/web/prisma/schema.prisma
       - name: Typecheck
         run: npx tsc --noEmit -p apps/web/tsconfig.json
-      - name: Prisma client is generated & in sync with schema
-        run: |
-          npm run db:generate --workspace=apps/web
-          git diff --exit-code -- apps/web/prisma/schema.prisma || \
-            (echo "::error::Prisma schema changed without a regeneration"; exit 1)
 
   # ---------------------------------------------------------------------------
   # Unit + integration tests. Per-worker SQLite DBs (see vitest.config.ts and
