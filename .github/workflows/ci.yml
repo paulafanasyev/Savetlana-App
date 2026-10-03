@@ -96,12 +96,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # Production build. Proves the app compiles and every route renders.
+  # PostgreSQL production schema. The app uses SQLite for test isolation, but
+  # production must generate a PostgreSQL Prisma client and a deployable
+  # migration baseline from the dedicated production schema.
   # ---------------------------------------------------------------------------
-  build:
-    name: Production build
+  postgres-schema:
+    name: PostgreSQL schema
     runs-on: ubuntu-latest
-    needs: [static, test]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -109,8 +110,40 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Generate Prisma client
-        run: npm run db:generate --workspace=apps/web
+      - name: Generate PostgreSQL Prisma client
+        run: npm run db:generate:production
+      - name: Validate PostgreSQL schema
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/svetlana_ci
+        run: npx prisma validate --schema=apps/web/prisma/schema.postgres.prisma
+      - name: Generate PostgreSQL baseline migration
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/svetlana_ci
+        run: |
+          mkdir -p apps/web/prisma-postgres/migrations/00000000000000_baseline
+          npx prisma migrate diff             --from-empty             --to-schema-datamodel=apps/web/prisma/schema.postgres.prisma             --script > apps/web/prisma-postgres/migrations/00000000000000_baseline/migration.sql
+          test -s apps/web/prisma-postgres/migrations/00000000000000_baseline/migration.sql
+      - name: Upload PostgreSQL migration artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-migration-baseline
+          path: apps/web/prisma-postgres/migrations/00000000000000_baseline/migration.sql
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Production build. Proves the app compiles and every route renders.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    needs: [static, test, postgres-schema]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
       - name: Build
         working-directory: apps/web
         run: npx next build
@@ -133,6 +166,6 @@ jobs:
   release-ready:
     name: Release gate
     runs-on: ubuntu-latest
-    needs: [static, test, security, build]
+    needs: [static, test, security, postgres-schema, build]
     steps:
       - run: echo "All release-gate stages passed (spec §164). Safe to deploy."
