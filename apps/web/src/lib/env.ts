@@ -37,6 +37,14 @@ function requiredInProduction(name: string, developmentFallback?: string): strin
   return required(name, IS_PRODUCTION ? undefined : developmentFallback);
 }
 
+function optionalInProduction(name: string): string | undefined {
+  const value = optional(name);
+  if (IS_PRODUCTION && !value) {
+    throw new Error(`Missing required production env var: ${name}`);
+  }
+  return value;
+}
+
 function booleanFlag(name: string, def = true): boolean {
   const raw = process.env[name];
   if (raw === undefined || raw === "") return def;
@@ -80,9 +88,9 @@ export const env = {
   jwtSecret: requiredInProduction("JWT_SECRET", "dev-only-insecure-secret"),
   jwtExpiresIn: required("JWT_EXPIRES_IN", "7d"),
   // At-rest protection for persisted pending AI actions (spec §38).
-  pendingActionKey: requiredInProduction("PENDING_ACTION_KEY"),
+  pendingActionKey: optionalInProduction("PENDING_ACTION_KEY"),
   // Signing key for one-time OAuth states (spec §17/§18).
-  oauthStateKey: requiredInProduction("OAUTH_STATE_KEY"),
+  oauthStateKey: optionalInProduction("OAUTH_STATE_KEY"),
 
   // --- AI Gateway (server-side only) -------------------------------------
   aiGatewayBaseUrl: optional("AI_GATEWAY_BASE_URL") ?? "http://localhost:11434/v1",
@@ -146,7 +154,7 @@ export const env = {
   isProduction: IS_PRODUCTION,
   // Shared secret for the background-job scheduler (P0-18). Only the
   // deployment platform knows it; without it /api/cron/jobs refuses to run.
-  cronSecret: requiredInProduction("CRON_SECRET"),
+  cronSecret: optionalInProduction("CRON_SECRET"),
 
   // --- Notification delivery (audit §29) -----------------------------------
   // Email submission (SMTP URI like smtps://user:pass@mail.example.com:465).
