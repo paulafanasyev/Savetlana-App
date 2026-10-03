@@ -32,14 +32,19 @@ function optional(name: string): string | undefined {
 
 const NODE_ENV = optional("NODE_ENV") ?? "development";
 const IS_PRODUCTION = NODE_ENV === "production";
+// Next.js sets NEXT_PHASE=phase-production-build while compiling. Runtime
+// production requests do not have that marker, so secrets are enforced only
+// after the build artifact exists.
+const IS_NEXT_BUILD = process.env.NEXT_PHASE === "phase-production-build";
+const ENFORCE_PRODUCTION_SECRETS = IS_PRODUCTION && !IS_NEXT_BUILD;
 
 function requiredInProduction(name: string, developmentFallback?: string): string {
-  return required(name, IS_PRODUCTION ? undefined : developmentFallback);
+  return required(name, ENFORCE_PRODUCTION_SECRETS ? undefined : developmentFallback);
 }
 
 function optionalInProduction(name: string): string | undefined {
   const value = optional(name);
-  if (IS_PRODUCTION && !value) {
+  if (ENFORCE_PRODUCTION_SECRETS && !value) {
     throw new Error(`Missing required production env var: ${name}`);
   }
   return value;
@@ -150,7 +155,7 @@ export const env = {
     "PUBLIC_APP_URL",
     process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
-      : IS_PRODUCTION
+      : ENFORCE_PRODUCTION_SECRETS
       ? undefined
       : "http://localhost:3000",
   ),
