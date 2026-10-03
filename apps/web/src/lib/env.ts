@@ -30,6 +30,13 @@ function optional(name: string): string | undefined {
   return value && value.length > 0 ? value : undefined;
 }
 
+const NODE_ENV = optional("NODE_ENV") ?? "development";
+const IS_PRODUCTION = NODE_ENV === "production";
+
+function requiredInProduction(name: string, developmentFallback?: string): string {
+  return required(name, IS_PRODUCTION ? undefined : developmentFallback);
+}
+
 function booleanFlag(name: string, def = true): boolean {
   const raw = process.env[name];
   if (raw === undefined || raw === "") return def;
@@ -67,13 +74,15 @@ function resolveDatabaseUrl(raw: string): string {
 }
 
 export const env = {
-  databaseUrl: TEST_DATABASE_URL ?? resolveDatabaseUrl(required("DATABASE_URL", "file:./prisma/dev.db")),
-  jwtSecret: required("JWT_SECRET", "dev-only-insecure-secret"),
+  databaseUrl: TEST_DATABASE_URL ?? resolveDatabaseUrl(
+    requiredInProduction("DATABASE_URL", "file:./prisma/dev.db"),
+  ),
+  jwtSecret: requiredInProduction("JWT_SECRET", "dev-only-insecure-secret"),
   jwtExpiresIn: required("JWT_EXPIRES_IN", "7d"),
   // At-rest protection for persisted pending AI actions (spec §38).
-  pendingActionKey: optional("PENDING_ACTION_KEY"),
+  pendingActionKey: requiredInProduction("PENDING_ACTION_KEY"),
   // Signing key for one-time OAuth states (spec §17/§18).
-  oauthStateKey: optional("OAUTH_STATE_KEY"),
+  oauthStateKey: requiredInProduction("OAUTH_STATE_KEY"),
 
   // --- AI Gateway (server-side only) -------------------------------------
   aiGatewayBaseUrl: optional("AI_GATEWAY_BASE_URL") ?? "http://localhost:11434/v1",
@@ -107,7 +116,9 @@ export const env = {
   // Provider selection: "local" (dev only — writes to a gitignored folder) or
   // "vercel-blob" (production). Without credentials the Vercel Blob adapter
   // reports unavailable and uploads are refused rather than silently lost.
-  storageProvider: optional("STORAGE_PROVIDER") ?? "local",
+  storageProvider: IS_PRODUCTION
+    ? optional("STORAGE_PROVIDER") ?? "vercel-blob"
+    : optional("STORAGE_PROVIDER") ?? "local",
   storageLocalDir: optional("STORAGE_LOCAL_DIR") ?? "uploads",
   blobReadWriteToken: optional("BLOB_READ_WRITE_TOKEN"),
 
@@ -127,14 +138,15 @@ export const env = {
   // --- Platform config ----------------------------------------------------
   platformFeePercent: Number(optional("PLATFORM_FEE_PERCENT") ?? "1.5"),
   defaultCurrency: optional("DEFAULT_CURRENCY") ?? "RUB",
-  publicAppUrl:
-    optional("PUBLIC_APP_URL") ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"),
-  nodeEnv: optional("NODE_ENV") ?? "development",
-  isProduction: process.env.NODE_ENV === "production",
+  publicAppUrl: requiredInProduction(
+    "PUBLIC_APP_URL",
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000",
+  ),
+  nodeEnv: NODE_ENV,
+  isProduction: IS_PRODUCTION,
   // Shared secret for the background-job scheduler (P0-18). Only the
   // deployment platform knows it; without it /api/cron/jobs refuses to run.
-  cronSecret: optional("CRON_SECRET"),
+  cronSecret: requiredInProduction("CRON_SECRET"),
 
   // --- Notification delivery (audit §29) -----------------------------------
   // Email submission (SMTP URI like smtps://user:pass@mail.example.com:465).
