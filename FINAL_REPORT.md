@@ -236,6 +236,10 @@ register → login → search → cart → checkout → payment
 
 ---
 
+## Production database path
+
+Production Prisma uses `apps/web/prisma-postgres/schema.prisma` with PostgreSQL. SQLite remains isolated to `apps/web/prisma/schema.prisma` for development and CI tests. The release pipeline validates the PostgreSQL schema and generates a baseline migration artifact before the production build.
+
 ## Deployment configuration
 
 - **Platform:** Vercel (Next.js 15.5.27 App Router, Node ≥ 22 LTS)
