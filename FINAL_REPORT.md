@@ -236,6 +236,8 @@ register → login → search → cart → checkout → payment
 
 ---
 
+Production runtime secrets are enforced only at runtime; `next build` remains reproducible without production credentials by recognizing Next.js `phase-production-build`.
+
 ## Production database path
 
 Production Prisma uses `apps/web/prisma-postgres/schema.prisma` with PostgreSQL. SQLite remains isolated to `apps/web/prisma/schema.prisma` for development and CI tests. The release pipeline validates the PostgreSQL schema and generates a baseline migration artifact before the production build.
