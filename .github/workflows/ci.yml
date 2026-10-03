@@ -103,6 +103,20 @@ jobs:
   postgres-schema:
     name: PostgreSQL schema
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: svetlana_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d svetlana_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -121,8 +135,32 @@ jobs:
           DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/svetlana_ci
         run: |
           mkdir -p apps/web/prisma-postgres/migrations/00000000000000_baseline
-          npx prisma migrate diff             --from-empty             --to-schema-datamodel=apps/web/prisma-postgres/schema.prisma             --script > apps/web/prisma-postgres/migrations/00000000000000_baseline/migration.sql
+          npx prisma migrate diff --from-empty --to-schema-datamodel=apps/web/prisma-postgres/schema.prisma --script > apps/web/prisma-postgres/migrations/00000000000000_baseline/migration.sql
           test -s apps/web/prisma-postgres/migrations/00000000000000_baseline/migration.sql
+      - name: Apply PostgreSQL baseline migration
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/svetlana_ci
+        run: npx prisma migrate deploy --schema=apps/web/prisma-postgres/schema.prisma
+      - name: Execute Prisma query against PostgreSQL
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/svetlana_ci
+        run: |
+          node --input-type=module <<'NODE'
+          import { PrismaClient } from "@prisma/client";
+          const prisma = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
+          try {
+            const result = await prisma.$queryRawUnsafe("SELECT 1 AS ok");
+            if (Number(result[0]?.ok) !== 1) throw new Error("PostgreSQL SELECT 1 failed");
+            const user = await prisma.user.create({
+              data: { email: "ci-postgres@example.com", passwordHash: "ci", name: "CI PostgreSQL", role: "BUYER" }
+            });
+            const found = await prisma.user.findUnique({ where: { id: user.id } });
+            if (!found) throw new Error("Prisma PostgreSQL read-after-write failed");
+            await prisma.user.delete({ where: { id: user.id } });
+          } finally {
+            await prisma.$disconnect();
+          }
+          NODE
       - name: Upload PostgreSQL migration artifact
         uses: actions/upload-artifact@v4
         with:
