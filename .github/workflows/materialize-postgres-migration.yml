@@ -1,0 +1,45 @@
+name: Materialize PostgreSQL baseline
+
+on:
+  workflow_run:
+    workflows: ["Release pipeline"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  materialize:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      (github.event.workflow_run.head_branch == 'svetlana/initial-implementation' ||
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 0
+      - name: Download generated migration
+        uses: actions/download-artifact@v4
+        with:
+          name: postgres-migration-baseline
+          path: /tmp/postgres-migration
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - name: Materialize migration into repository
+        run: |
+          mkdir -p apps/web/prisma-postgres/migrations/00000000000000_baseline
+          cp /tmp/postgres-migration/migration.sql apps/web/prisma-postgres/migrations/00000000000000_baseline/migration.sql
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/prisma-postgres/migrations/00000000000000_baseline/migration.sql
+          if git diff --cached --quiet; then
+            echo "PostgreSQL baseline migration is already materialized."
+            exit 0
+          fi
+          git commit -m "chore(db): materialize PostgreSQL baseline migration [skip ci]"
+          git push origin "HEAD:${{ github.event.workflow_run.head_branch }}"
