@@ -23,5 +23,10 @@
   },
   "dependencies": {
     "dotenv": "^18.0.1"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "^8.5.23"
+    }
   }
 }
