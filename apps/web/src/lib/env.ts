@@ -146,9 +146,13 @@ export const env = {
   // --- Platform config ----------------------------------------------------
   platformFeePercent: Number(optional("PLATFORM_FEE_PERCENT") ?? "1.5"),
   defaultCurrency: optional("DEFAULT_CURRENCY") ?? "RUB",
-  publicAppUrl: requiredInProduction(
+  publicAppUrl: required(
     "PUBLIC_APP_URL",
-    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000",
+    process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : IS_PRODUCTION
+      ? undefined
+      : "http://localhost:3000",
   ),
   nodeEnv: NODE_ENV,
   isProduction: IS_PRODUCTION,
@@ -184,7 +188,9 @@ export const env = {
  * routes to the deterministic MOCK provider and every answer it produces is
  * labelled MOCK VERIFIED, never VERIFIED.
  */
-export const hasExternalAiCredentials = Boolean(env.aiGatewayApiKey);
+export const hasExternalAiCredentials = Boolean(
+  env.aiGatewayApiKey && env.aiGatewayBaseUrl && !env.aiGatewayBaseUrl.includes("localhost"),
+);
 
 /**
  * Integration readiness registry. An entry is only "ready" when the
@@ -193,7 +199,10 @@ export const hasExternalAiCredentials = Boolean(env.aiGatewayApiKey);
  */
 export const integrationStatus = {
   externalAi: hasExternalAiCredentials ? "READY" : "PENDING_EXTERNAL_ACCESS",
-  payment: env.paymentProviderApiKey ? "READY" : "PENDING_EXTERNAL_ACCESS",
+  payment:
+    env.paymentProviderApiKey && env.paymentProviderBaseUrl
+      ? "READY"
+      : "PENDING_EXTERNAL_ACCESS",
   delivery: env.deliveryProviderApiKey ? "READY" : "PENDING_EXTERNAL_ACCESS",
   vk: env.vkAppId && env.vkClientSecret ? "READY" : "PENDING_EXTERNAL_ACCESS",
   esia:
