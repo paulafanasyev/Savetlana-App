@@ -115,13 +115,13 @@ jobs:
       - name: Validate PostgreSQL schema
         env:
           DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/svetlana_ci
-        run: npx prisma validate --schema=apps/web/prisma/schema.postgres.prisma
+        run: npx prisma validate --schema=apps/web/prisma-postgres/schema.prisma
       - name: Generate PostgreSQL baseline migration
         env:
           DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/svetlana_ci
         run: |
           mkdir -p apps/web/prisma-postgres/migrations/00000000000000_baseline
-          npx prisma migrate diff             --from-empty             --to-schema-datamodel=apps/web/prisma/schema.postgres.prisma             --script > apps/web/prisma-postgres/migrations/00000000000000_baseline/migration.sql
+          npx prisma migrate diff             --from-empty             --to-schema-datamodel=apps/web/prisma-postgres/schema.prisma             --script > apps/web/prisma-postgres/migrations/00000000000000_baseline/migration.sql
           test -s apps/web/prisma-postgres/migrations/00000000000000_baseline/migration.sql
       - name: Upload PostgreSQL migration artifact
         uses: actions/upload-artifact@v4
@@ -144,6 +144,8 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - name: Generate production Prisma client
+        run: npm run db:generate:production --workspace=apps/web
       - name: Build
         working-directory: apps/web
         run: npx next build
