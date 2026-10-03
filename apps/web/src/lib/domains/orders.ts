@@ -7,6 +7,7 @@
  * - the AI can create orders but NEVER marks them paid on its own authority
  */
 import { prisma } from "../prisma";
+import { env } from "../env";
 import { generateOrderNumber } from "../utils";
 import { getCartView, type CartLine } from "./cart";
 import { computeSettlement } from "./payments";
