@@ -88,7 +88,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Dependency audit (high & critical)
-        run: npm audit --audit-level=high --omit=dev || true
+        run: npm audit --audit-level=high --omit=dev
       - name: Scan for leaked secrets
         uses: gitleaks/gitleaks-action@v2
         env:
