@@ -58,6 +58,10 @@ async function mintTicket(
 
   // Invalidate any prior pending ticket for the same purpose, then mint a new
   // one. Done in a transaction so the rotation is atomic.
+  // Auth-ticket rotation can briefly contend with other writes in the same
+  // test worker (and with SQLite's single-writer lock in development). A
+  // bounded 15s wait prevents a transient lock from becoming a false auth
+  // failure while still failing fast on a genuinely stuck database.
   const ticket = await prisma.$transaction(async (tx) => {
     await tx.authTicket.updateMany({
       where: { userId, purpose, consumedAt: null },
@@ -72,7 +76,7 @@ async function mintTicket(
       },
       select: { id: true },
     });
-  });
+  }, { maxWait: 15000, timeout: 15000 });
 
   return { secret, ticketId: ticket.id, expiresAt };
 }
