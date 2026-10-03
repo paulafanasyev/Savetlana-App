@@ -211,7 +211,7 @@ export async function createOrdersFromCart(
     await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
 
     return { groupId: group.id, orders: created };
-  });
+  }, { maxWait: 15000, timeout: 15000 });
 }
 
 type TransactionClient = Parameters<Parameters<typeof prisma["$transaction"]>[0]>[0];
