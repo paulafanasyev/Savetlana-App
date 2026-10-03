@@ -16,7 +16,8 @@
     "db:generate": "npm run db:generate --workspace=apps/web",
     "db:migrate": "npm run db:migrate --workspace=apps/web",
     "db:seed": "npm run db:seed --workspace=apps/web",
-    "android:build": "cd apps/android && ./gradlew assembleDebug"
+    "android:build": "cd apps/android && ./gradlew assembleDebug",
+    "db:generate:production": "npm run db:generate:production --workspace=apps/web"
   },
   "engines": {
     "node": ">=22"
