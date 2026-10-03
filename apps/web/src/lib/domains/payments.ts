@@ -130,7 +130,7 @@ export class SandboxPaymentProvider implements PaymentProvider {
 export class PartnerPaymentProvider implements PaymentProvider {
   readonly key = "partner-payment";
   readonly sandbox = false;
-  readonly available = Boolean(env.paymentProviderApiKey);
+  readonly available = Boolean(env.paymentProviderApiKey && env.paymentProviderBaseUrl);
 
   async createCharge(params: {
     orderId: string;
@@ -731,7 +731,13 @@ export async function processRefund(params: {
   if (!refund) throw new Error("refund not found");
   if (refund.status === "SUCCEEDED") {
     // Idempotent: an already-completed refund must not be refunded again.
-    return { status: "SUCCEEDED", providerRef: refund.providerRef, sandbox: false };
+    // Preserve the original payment's sandbox/live provenance instead of
+    // inventing a live status on a replay.
+    return {
+      status: "SUCCEEDED",
+      providerRef: refund.providerRef,
+      sandbox: refund.payment.sandbox,
+    };
   }
 
   const provider = getPaymentProvider();
