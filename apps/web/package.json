@@ -14,7 +14,8 @@
     "db:reset": "prisma migrate reset --force",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "db:generate:production": "prisma generate --schema=prisma/schema.postgres.prisma"
+    "db:generate:production": "prisma generate --schema=prisma-postgres/schema.prisma",
+    "db:migrate:production": "prisma migrate deploy --schema=prisma-postgres/schema.prisma"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
