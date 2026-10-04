@@ -139,7 +139,7 @@ export async function listAdminOrders(limit = 50) {
 }
 
 /**
- * All sellers with marketplace KPIs (spec §37 admin "Sellers" section):
+ * All sellers with sales KPIs (spec §37 admin "Sellers" section):
  * product count, order count, paid revenue and trust/verification state.
  */
 export async function listAdminSellers(limit = 50) {

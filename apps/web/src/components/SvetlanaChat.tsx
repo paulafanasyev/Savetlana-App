@@ -170,7 +170,7 @@ export function SvetlanaChat({
         </div>
         <div className="min-w-0">
           <div className="text-sm font-bold text-ink">{title}</div>
-          <div className="text-xs text-ink-soft">AI-помощник маркетплейса</div>
+          <div className="text-xs text-ink-soft">AI-помощник платформы</div>
         </div>
       </div>
 

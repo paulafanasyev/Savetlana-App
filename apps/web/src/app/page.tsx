@@ -30,7 +30,7 @@ export default async function Home() {
       {/* Hero: Светлана is the centrepiece, not a decoration */}
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="card flex flex-col justify-center gap-4 p-6 md:p-10">
-          <span className="chip w-fit">AI-нативный маркетплейс</span>
+          <span className="chip w-fit">AI-нативная платформа</span>
           <h1 className="text-3xl font-bold leading-tight text-ink md:text-5xl">
             Не ищите товар — <span className="text-svetlana-600">объясните задачу</span>.
           </h1>

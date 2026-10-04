@@ -115,7 +115,7 @@ export class AiGateway {
     throw new Error(
       `AI gateway: all providers failed (${attempted.join(" → ")}). ` +
         `Last error: ${lastError?.message ?? "unknown"}. ` +
-        `The marketplace itself remains fully usable.`
+        `The platform itself remains fully usable.`
     );
   }
 

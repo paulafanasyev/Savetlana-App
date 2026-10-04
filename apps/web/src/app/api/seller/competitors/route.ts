@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Competitor intelligence for one of the seller's own products. Uses only
- * publicly available offers in the marketplace catalog — never another
+ * publicly available offers in the public catalog — never another
  * seller's private cabinet data (spec §13, §26).
  */
 export const GET = apiRoute(async (request) => {

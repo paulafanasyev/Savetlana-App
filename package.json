@@ -2,7 +2,7 @@
   "name": "svetlana-ai-commerce",
   "private": true,
   "version": "0.1.0",
-  "description": "Svetlana AI Commerce — AI-native marketplace platform",
+  "description": "Svetlana AI Commerce — AI-native commerce platform",
   "workspaces": [
     "apps/web",
     "packages/*"

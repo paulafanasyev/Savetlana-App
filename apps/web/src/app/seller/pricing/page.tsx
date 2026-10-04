@@ -113,7 +113,7 @@ export default async function SellerPricingPage({
           <section className="card p-5">
             <h2 className="text-base font-bold text-ink">Конкуренты</h2>
             <p className="mt-1 text-xs text-ink-faint">
-              Только публичные предложения маркетплейса. Закрытые данные других
+              Только публичные предложения внешних площадок. Закрытые данные других
               продавцов не используются (spec §13).
             </p>
             {competitors.offers.length === 0 ? (

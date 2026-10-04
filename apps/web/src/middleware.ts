@@ -3,7 +3,7 @@
  *
  * Responsibilities:
  *   1. CSRF defence for cookie-authenticated state changes. SameSite=Lax is
- *      not sufficient for a financial marketplace, so every POST/PUT/PATCH/
+ *      not sufficient for a financial platform, so every POST/PUT/PATCH/
  *      DELETE carrying a session cookie must prove it originated from this
  *      site: the Origin (or Referer fallback) host must equal the request
  *      Host. A cross-site form forged by attacker.com cannot forge Origin.
