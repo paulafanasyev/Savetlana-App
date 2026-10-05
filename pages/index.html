@@ -1,54 +1,817 @@
 <!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Светлана — AI-платформа</title>
-<meta name="description" content="Временный статический preview Светланы.">
-<style>
-:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#173126;background:#f5faf7}
-*{box-sizing:border-box}body{margin:0}a{text-decoration:none;color:inherit}
-.wrap{max-width:1120px;margin:auto;padding:24px}
-nav{display:flex;justify-content:space-between;align-items:center;padding:8px 0 28px}
-.logo{font-weight:800;font-size:22px}.nav{display:flex;gap:20px;color:#527064;font-size:14px}
-.hero{display:grid;grid-template-columns:1.15fr .85fr;gap:24px;align-items:stretch}
-.card{background:#fff;border:1px solid #dcebe3;border-radius:24px;box-shadow:0 10px 35px #1731260d}
-.copy{padding:48px}.chip{display:inline-block;padding:7px 11px;border-radius:999px;background:#e5f5ec;color:#24704c;font-size:13px;font-weight:700}
-h1{font-size:clamp(38px,5vw,64px);line-height:1.03;margin:18px 0}p{color:#60776d;font-size:18px;line-height:1.6;max-width:650px}
-.buttons{display:flex;gap:12px;margin-top:26px;flex-wrap:wrap}.btn{padding:13px 18px;border-radius:12px;font-weight:700;font-size:14px}
-.primary{background:#267b50;color:#fff}.ghost{border:1px solid #cfe0d7;background:#fff}
-.chat{padding:28px;display:flex;flex-direction:column;justify-content:space-between;min-height:430px}
-.avatar{width:74px;height:74px;border-radius:50%;display:grid;place-items:center;background:#dff3e8;font-size:36px}
-.msg{background:#f0f7f3;border-radius:16px;padding:15px;line-height:1.5;margin-top:20px}
-.input{border:1px solid #d7e5de;border-radius:13px;padding:13px;color:#8aa097;margin-top:20px}
-.features{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:28px}
-.feature{padding:22px}.feature b{display:block;margin-bottom:8px}.feature span{color:#71867d;font-size:14px;line-height:1.5}
-footer{text-align:center;color:#7b9087;font-size:13px;padding:40px 0 20px}
-@media(max-width:760px){.hero{grid-template-columns:1fr}.copy{padding:30px}.features{grid-template-columns:1fr 1fr}.nav{display:none}}
-</style>
-</head>
-<body>
-<div class="wrap">
-<nav><div class="logo">Светлана</div><div class="nav"><a href="#features">Возможности</a><a href="#chat">Светлана</a></div></nav>
-<section class="hero">
-<div class="card copy">
-<span class="chip">AI-нативная платформа</span>
-<h1>Не ищите товар — <span style="color:#267b50">объясните задачу.</span></h1>
-<p>Светлана помогает сформулировать потребность, сравнить варианты и пройти путь покупки в одном интерфейсе.</p>
-<div class="buttons"><a class="btn primary" href="#chat">Поговорить со Светланой</a><a class="btn ghost" href="#features">Возможности</a></div>
-</div>
-<div class="card chat" id="chat">
-<div><div class="avatar">С</div><div class="msg"><b>Здравствуйте.</b><br>Опишите, что вы хотите найти, для кого это и какой у вас бюджет.</div></div>
-<div class="input">Например: «Нужен подарок до 2 000 000 ₫»</div>
-</div>
-</section>
-<section class="features" id="features">
-<div class="card feature"><b>Естественный поиск</b><span>Опишите задачу обычными словами.</span></div>
-<div class="card feature"><b>Сравнение</b><span>Сопоставляйте товары и условия продавцов.</span></div>
-<div class="card feature"><b>Покупки</b><span>Единый интерфейс для выбора и заказа.</span></div>
-<div class="card feature"><b>Продавцам</b><span>Инструменты для управления товарами и продажами.</span></div>
-</section>
-<footer>Временный статический preview · backend-функции доступны только в полном deployment</footer>
-</div>
-</body>
-</html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Svetlana демо</title><meta name="description" content="Демо маркетплейса Svetlana: каталог, корзина, тестовая оплата, кабинет продавца, споры и помощница Светлана.">
+<meta name="theme-color" content="#7d5cb0"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%237d5cb0'/%3E%3Ctext x='16' y='22' font-size='17' font-family='sans-serif' font-weight='700' text-anchor='middle' fill='%23fbf9fd'%3EС%3C/text%3E%3C/svg%3E">
+<style>:root{--bg:oklch(98.5% .006 300);--paper:oklch(99.5% .003 300);--ink:oklch(22% .02 300);--ink2:oklch(45% .02 300);--line:oklch(90% .012 300);--soft:oklch(95.5% .014 300);
+--brand:oklch(50% .13 300);--brand-d:oklch(42% .13 300);--brand-l:oklch(93% .04 300);--accent:oklch(55% .14 50);--ok:oklch(52% .12 150);--ok-l:oklch(94% .04 150);--warn:oklch(52% .14 50);--warn-l:oklch(95% .04 70);--bad:oklch(52% .17 25);
+--r:10px;--ease:cubic-bezier(.22,1,.36,1);font-size:16px}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1rem/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;font-optical-sizing:auto}
+a{color:var(--brand-d)}a:hover{color:var(--brand)}
+h1,h2,h3{text-wrap:balance;line-height:1.15;margin:0}
+:focus-visible{outline:3px solid var(--brand);outline-offset:2px;border-radius:4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.muted{color:var(--ink2)}.small{font-size:.875rem}.warn{color:var(--warn)}
+#app{min-height:100vh;display:flex;flex-direction:column}
+main{flex:1;width:100%;max-width:1200px;margin:0 auto;padding:24px 20px 72px;outline:none}
+.demo-bar{background:var(--ink);color:oklch(92% .01 300);font-size:.8125rem;text-align:center;padding:6px 12px}
+.demo-bar .linkish{color:oklch(88% .06 300)}
+.linkish{background:none;border:0;padding:0;font:inherit;color:var(--brand-d);text-decoration:underline;cursor:pointer}
+.top{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding:12px 20px;background:var(--paper);border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:8px;font-weight:750;font-size:1.25rem;color:var(--ink);text-decoration:none;letter-spacing:-.01em}
+.logo-mark{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--brand);color:var(--paper);font-size:1rem}
+.top-search{flex:1 1 220px;max-width:420px}.top-search input{width:100%}
+.roles{display:flex;background:var(--soft);border-radius:999px;padding:3px}
+.roles a{padding:6px 12px;border-radius:999px;text-decoration:none;color:var(--ink2);font-size:.875rem;font-weight:550}
+.roles a[aria-current]{background:var(--paper);color:var(--ink);box-shadow:0 1px 2px oklch(30% .03 300/.12)}
+.me{display:flex;align-items:center;gap:16px;margin-left:auto}.me a{text-decoration:none;color:var(--ink);font-size:.9375rem}
+.count-pill{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--accent);color:var(--paper);font-size:.75rem;font-weight:700;text-align:center;line-height:20px}
+input,select,textarea{font:inherit;color:inherit;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-height:44px;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--brand);outline:2px solid var(--brand-l)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 18px;border-radius:999px;border:1px solid var(--brand);background:var(--brand);color:var(--paper);font:600 .9375rem/1 inherit;font-family:inherit;text-decoration:none;cursor:pointer;transition:background .15s var(--ease),transform .15s var(--ease)}
+.btn:hover{background:var(--brand-d);color:var(--paper)}.btn:active{transform:scale(.98)}
+.btn:disabled,.btn.is-disabled{opacity:.45;pointer-events:none}
+.btn-ghost{background:transparent;color:var(--brand-d)}.btn-ghost:hover{background:var(--brand-l);color:var(--brand-d)}
+.btn-sm{min-height:36px;padding:0 14px;font-size:.875rem}.btn-lg{min-height:52px;padding:0 26px;font-size:1rem}.btn-block{width:100%}
+.ask-btn{background:var(--ink);border-color:var(--ink)}
+.hero{display:grid;grid-template-columns:1.5fr 1fr;gap:48px;align-items:end;padding:32px 0 40px}
+.eyebrow{text-transform:uppercase;letter-spacing:.1em;font-size:.75rem;font-weight:700;color:var(--accent);margin:0 0 12px}
+.hero h1{font-size:clamp(1.9rem,3.6vw,3rem);letter-spacing:-.02em;font-weight:760;max-width:22ch}
+.hero-ask{display:flex;gap:8px;margin-top:28px;max-width:560px}.hero-ask input{min-height:52px;border-radius:999px;padding-left:20px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.chip{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:7px 14px;font:inherit;font-size:.875rem;cursor:pointer;color:var(--ink)}.chip:hover{border-color:var(--brand);color:var(--brand-d)}
+.hero-facts{list-style:none;margin:0;padding:0;display:grid;gap:18px}
+.hero-facts li{padding-top:14px;border-top:1px solid var(--line);color:var(--ink2);font-size:.9375rem}.hero-facts b{display:block;color:var(--ink);font-size:1.125rem}
+.cats{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+.cats a{flex:none;padding:10px 16px;border-radius:var(--r);background:var(--soft);text-decoration:none;color:var(--ink);font-weight:550}.cats a:hover{background:var(--brand-l)}
+.sec{font-size:1.375rem;margin:36px 0 16px;letter-spacing:-.01em}.page{font-size:clamp(1.6rem,2.6vw,2.1rem);letter-spacing:-.015em;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:28px 20px}
+.tile{position:relative;display:flex;flex-direction:column}
+.tile-art{display:block;border-radius:var(--r);overflow:hidden;aspect-ratio:1}.tile-art svg{width:100%;height:100%;display:block;transition:transform .4s var(--ease)}.tile-art:hover svg{transform:scale(1.03)}
+.fav{position:absolute;top:8px;right:8px;width:36px;height:36px;border-radius:50%;border:0;background:var(--paper);color:var(--line);font-size:1rem;cursor:pointer;box-shadow:0 1px 3px oklch(30% .03 300/.15)}
+.fav:hover{color:var(--ink2)}.fav.on{color:var(--bad)}
+.tile-body{display:flex;flex-direction:column;gap:4px;padding-top:12px;flex:1}
+.price{font-weight:750;font-size:1.125rem;font-variant-numeric:tabular-nums}.price s,.pdp-price s{font-weight:400;font-size:.875rem;color:var(--ink2)}
+.tile-title{color:var(--ink);text-decoration:none;font-size:.9375rem;line-height:1.35;flex:1}.tile-title:hover{color:var(--brand-d)}
+.tile-meta{display:flex;gap:8px;font-size:.8125rem;align-items:center}.stars{color:var(--accent);font-weight:650}.stars .dim{color:var(--line)}
+.tile .btn{margin-top:8px;align-self:flex-start}
+.empty{padding:40px 24px;border:1px dashed var(--line);border-radius:var(--r);text-align:center;color:var(--ink2)}
+.filters{display:grid;grid-template-columns:2fr 1.4fr 1fr 1.4fr auto;gap:12px;align-items:end;margin-bottom:8px}
+.filters label span,.field>span{display:block;font-size:.8125rem;color:var(--ink2);margin-bottom:4px;font-weight:550}
+.count{margin:8px 0 20px}
+.crumbs{font-size:.875rem;color:var(--ink2);margin-bottom:16px}
+.pdp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:48px}
+.pdp-art{border-radius:16px;overflow:hidden;align-self:start;position:sticky;top:90px}.pdp-art svg{width:100%;height:auto;display:block}
+.pdp-info h1{font-size:clamp(1.5rem,2.4vw,2rem);letter-spacing:-.015em;margin-bottom:8px}
+.pdp-price{font-size:2rem;font-weight:780;margin:20px 0 4px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stock{font-size:.875rem;color:var(--ok)}.stock.out{color:var(--bad)}
+.pdp-buy{display:flex;gap:10px;margin:20px 0}
+.hist{display:flex;align-items:center;gap:16px;font-size:.8125rem;padding:12px 0;border-block:1px solid var(--line)}
+.spark{width:220px;height:48px}.spark path{fill:none;stroke:var(--brand);stroke-width:2;stroke-linejoin:round}
+.desc{max-width:65ch}.attrs{display:grid;grid-template-columns:max-content 1fr;gap:6px 24px;margin:16px 0 24px}.attrs dt{color:var(--ink2)}.attrs dd{margin:0}
+.seller-box{background:var(--soft);border-radius:var(--r);padding:16px 18px;display:grid;gap:6px;font-size:.9375rem}
+.trust{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}.trust span{font-size:.75rem;background:var(--paper);border-radius:999px;padding:3px 10px;color:var(--ok)}
+.reviews{list-style:none;padding:0;margin:0;display:grid;gap:20px;max-width:70ch}.reviews p{margin:4px 0 0}
+.cart,.checkout,.order{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:32px;align-items:start}
+.cart-group{padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--line)}.cart-group h2{font-size:1.0625rem;margin-bottom:8px}
+.line{display:grid;grid-template-columns:64px 1fr auto auto;gap:16px;align-items:center;padding:10px 0}
+.line-art{display:block;width:64px;height:64px;border-radius:8px;overflow:hidden}.line-art svg{width:100%;height:100%}
+.line-main a{color:var(--ink);text-decoration:none;font-weight:550}.line-main .muted{font-size:.875rem}.line-sum{font-weight:700;font-variant-numeric:tabular-nums;min-width:90px;text-align:right}
+.qty{display:flex;align-items:center;border:1px solid var(--line);border-radius:999px}.qty button{width:36px;height:36px;border:0;background:none;font-size:1.125rem;cursor:pointer;color:var(--ink);border-radius:50%}.qty button:disabled{opacity:.3}.qty output{min-width:24px;text-align:center;font-variant-numeric:tabular-nums}
+.summary{position:sticky;top:90px;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px;display:grid;gap:10px}
+.summary h3{font-size:1rem;margin-top:12px}
+.row{display:flex;justify-content:space-between;gap:12px;font-variant-numeric:tabular-nums}.row.total{font-size:1.25rem;padding-top:10px;border-top:1px solid var(--line)}
+fieldset{border:0;padding:0;margin:0 0 28px}legend{font-weight:700;font-size:1.125rem;margin-bottom:12px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 16px}
+.field{display:block}.field-err{display:block;color:var(--bad);font-size:.8125rem;margin-top:4px}.has-err input,.has-err textarea{border-color:var(--bad)}
+.radio{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:14px 16px;border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px;cursor:pointer;background:var(--paper)}
+.radio:has(input:checked){border-color:var(--brand);background:var(--brand-l)}.radio input{width:18px;min-height:18px;accent-color:var(--brand)}
+.pay{background:var(--brand-l);border-radius:14px;padding:20px;margin-bottom:24px;display:grid;gap:12px}.pay h3{font-size:1.25rem}.pay p{margin:0}.pay .btn{justify-self:start}
+.block{padding:18px 0;border-top:1px solid var(--line)}.block h2{font-size:1.125rem;margin-bottom:10px}.block summary{cursor:pointer;font-weight:650;color:var(--brand-d)}.block form{display:grid;gap:12px;margin-top:12px;max-width:520px}.block form .btn{justify-self:start}
+.narrow{max-width:620px;display:grid;gap:12px}.narrow .btn{justify-self:start}
+.order-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.order-head .page{margin:0}.order-head h2{margin:0}
+.orders{list-style:none;padding:0;margin:0}.orders a{display:grid;grid-template-columns:110px 1fr;gap:2px 20px;padding:16px 0;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink)}
+.orders a:hover{background:var(--soft)}.o-num{font-weight:750;grid-row:span 2}.o-end{display:flex;gap:16px;align-items:center;grid-column:2}
+.st{display:inline-block;font-size:.75rem;font-weight:650;padding:3px 10px;border-radius:999px;background:var(--soft);color:var(--ink2);white-space:nowrap}
+.st-paid,.st-confirmed,.st-shipped{background:var(--brand-l);color:var(--brand-d)}.st-delivered,.st-completed{background:var(--ok-l);color:var(--ok)}.st-payment_pending,.st-return_requested{background:var(--warn-l);color:var(--warn)}.st-cancelled,.st-refunded{background:var(--soft);color:var(--ink2)}
+.tl{list-style:none;margin:0;padding:0 0 0 16px;border-left:2px solid var(--line);display:grid;gap:12px;font-size:.875rem}.tl li{display:grid;position:relative}.tl li::before{content:"";position:absolute;left:-22px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--brand)}
+.events{list-style:none;padding:0;margin:0;display:grid;gap:8px;font-size:.9375rem}
+code{font-family:ui-monospace,Menlo,monospace;background:var(--soft);padding:2px 6px;border-radius:4px}
+.cab-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.cab-head .page{margin:0}.pick{display:flex;align-items:center;gap:8px}.pick select{width:auto}
+.subnav{display:flex;gap:4px;margin:16px 0 28px;border-bottom:1px solid var(--line);overflow-x:auto}.subnav a{padding:10px 14px;text-decoration:none;color:var(--ink2);font-weight:550;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}.subnav a[aria-current]{color:var(--ink);border-bottom-color:var(--brand)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0;border:1px solid var(--line);border-radius:14px;background:var(--paper);margin-bottom:24px}
+.kpis>div{padding:18px 20px;display:grid;gap:4px;border-left:1px solid var(--line)}.kpis>div:first-child{border-left:0}.kpis span{font-size:.8125rem}.kpis b{font-size:1.5rem;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.tbl-wrap{overflow-x:auto}.tbl{width:100%;border-collapse:collapse;font-size:.9375rem}.tbl th{text-align:left;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2);padding:8px 12px;border-bottom:1px solid var(--line)}.tbl td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top}.num{text-align:right;font-variant-numeric:tabular-nums}
+.ship{display:flex;gap:6px;flex-wrap:wrap}.ship select,.ship input{min-height:36px;padding:6px 10px;width:auto;flex:1 1 120px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.chat{position:fixed;right:20px;bottom:20px;z-index:40;width:min(400px,calc(100vw - 24px));height:min(600px,calc(100vh - 120px));background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 48px oklch(30% .05 300/.18);display:flex;flex-direction:column;animation:up .3s var(--ease)}
+@keyframes up{from{opacity:0;transform:translateY(12px)}}
+.chat header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)}.chat header div{display:grid}
+.icon{width:36px;height:36px;border-radius:50%;border:0;background:var(--soft);font-size:1.25rem;cursor:pointer;color:var(--ink)}
+.chat-log{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.bubble{margin:0;padding:10px 14px;border-radius:14px;max-width:88%;font-size:.9375rem;display:grid;gap:8px}.bubble p{margin:0}
+.bubble.me{align-self:flex-end;background:var(--brand);color:var(--paper);border-bottom-right-radius:4px}.bubble.her{background:var(--soft);border-bottom-left-radius:4px}
+.mini{display:grid;grid-template-columns:40px 1fr auto;gap:10px;align-items:center;background:var(--paper);border-radius:10px;padding:6px 10px 6px 6px;text-decoration:none;color:var(--ink);font-size:.8125rem}.mini svg{border-radius:6px}
+.chat-in{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}.chat-in .btn{width:48px;padding:0}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:50;background:var(--ink);color:var(--paper);padding:12px 20px;border-radius:999px;font-size:.9375rem;pointer-events:none;max-width:90vw}
+.toast:empty{display:none}
+.foot{display:flex;justify-content:space-between;gap:16px;max-width:1200px;width:100%;margin:0 auto;padding:24px 20px;border-top:1px solid var(--line);font-size:.875rem;color:var(--ink2)}
+@media (max-width:900px){.hero{grid-template-columns:1fr;gap:28px}.pdp,.cart,.checkout,.order{grid-template-columns:1fr}.pdp-art,.summary{position:static}.filters{grid-template-columns:1fr 1fr}.filters label:first-child{grid-column:1/-1}}
+@media (max-width:640px){main{padding:16px 14px 64px}.top{padding:10px 14px;gap:10px}.top-search{order:5;flex-basis:100%;max-width:none}.roles{order:4}.me{gap:12px;font-size:.875rem}.me a:first-child{display:none}
+.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 12px}.tile .btn{width:100%}.line{grid-template-columns:56px 1fr;}.line .qty,.line .line-sum{grid-column:2}.line-sum{text-align:left}
+.kpis>div{border-left:0;border-top:1px solid var(--line)}.kpis>div:first-child{border-top:0}.chat{right:0;bottom:0;width:100vw;height:85vh;border-radius:18px 18px 0 0}.orders a{grid-template-columns:1fr}.o-num{grid-row:auto}.o-end{grid-column:1}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+.bubble .btn{white-space:normal;height:auto;min-height:36px;padding:8px 14px;line-height:1.3;text-align:left;justify-content:flex-start}
+.pdp-buy .btn-ghost{border-color:var(--line)}
+</style></head>
+<body><div id="app"><noscript>Для демо нужен JavaScript.</noscript></div>
+<script>/* Демо-данные: те же продавцы и товары, что в prisma/seed.ts, плюс несколько для полноты витрины. */
+(function (root) {
+  var CATEGORIES = [
+    { slug: 'electronics', name: 'Электроника', children: ['laptops', 'phones', 'audio', 'e-accessories'] },
+    { slug: 'home', name: 'Для дома', children: ['kitchen', 'decor', 'textile'] },
+    { slug: 'fashion', name: 'Одежда и обувь', children: ['mens', 'womens', 'kids'] },
+    { slug: 'tools', name: 'Инструменты', children: ['hand-tools', 'power-tools'] },
+    { slug: 'services', name: 'Услуги', children: ['design', 'repair'] }
+  ];
+  var SUBCATS = {
+    laptops: 'Ноутбуки', phones: 'Смартфоны', audio: 'Аудио и наушники', 'e-accessories': 'Аксессуары',
+    kitchen: 'Кухня', decor: 'Декор', textile: 'Текстиль', mens: 'Мужская одежда', womens: 'Женская одежда', kids: 'Детям',
+    'hand-tools': 'Ручной инструмент', 'power-tools': 'Электроинструмент', design: 'Дизайн', repair: 'Ремонт и отделка'
+  };
+  var SELLERS = [
+    { id: 'techno-aurora', name: 'ТехноАврора', type: 'ИП', inn: '770123456789', about: 'Ноутбуки и компьютерная техника. Официальный дилер.', identity: true, business: true, npd: false, rating: 4.8, since: 2021, orders: 412 },
+    { id: 'mobile-market', name: 'МобайлМаркет', type: 'ООО', inn: '7709876543', about: 'Смартфоны, аудио и аксессуары. На площадке с 2019 года.', identity: true, business: true, npd: false, rating: 4.7, since: 2019, orders: 1290 },
+    { id: 'home-comfort', name: 'ДомУютно', type: 'Самозанятая', inn: '550123456789', about: 'Товары для дома ручной работы и декор для интерьера.', identity: true, business: false, npd: true, rating: 4.9, since: 2022, orders: 186 },
+    { id: 'style-lab', name: 'СтайлЛаб', type: 'ИП', inn: '770555123456', about: 'Одежда и аксессуары собственного производства.', identity: true, business: true, npd: false, rating: 4.6, since: 2020, orders: 640 },
+    { id: 'master-pro', name: 'МастерПро', type: 'ООО', inn: '7701112223', about: 'Инструмент и ремонтные услуги. Гарантия на работы.', identity: true, business: true, npd: false, rating: 4.7, since: 2018, orders: 905 },
+    { id: 'design-studio', name: 'Студия Дизайна', type: 'ИП', inn: '770999888777', about: 'Дизайн-проекты интерьеров и 3D-визуализация.', identity: true, business: true, npd: false, rating: 5.0, since: 2023, orders: 37 }
+  ];
+  function P(sku, title, cat, seller, price, old, art, qty, rating, desc, attrs, kw, reviews) {
+    return { sku: sku, title: title, cat: cat, seller: seller, price: price * 100, old: old ? old * 100 : null, art: art, qty: qty, rating: rating, desc: desc, attrs: attrs, kw: kw, reviews: reviews || [] };
+  }
+  var PRODUCTS = [
+    P('NB-001', 'Ноутбук Aurora 14, i5/16/512', 'laptops', 'techno-aurora', 74990, 89990, 'laptop', 12, 4.7, 'Лёгкий 14-дюймовый ноутбук для учёбы и работы. Алюминиевый корпус, 16 ГБ памяти, быстрый SSD на 512 ГБ.', { 'Диагональ': '14″', 'Память': '16 ГБ', 'SSD': '512 ГБ', 'Процессор': 'Intel Core i5', 'Вес': '1,3 кг' }, ['ноутбук', 'учёба', 'работа', 'лёгкий', 'программирование'], [[5, 'Отличный ноутбук для учёбы, быстро работает и мало весит.', 'Анна'], [4, 'Хороший аппарат, но хотелось бы больше портов USB.', 'Игорь']]),
+    P('NB-002', 'Игровой ноутбук Titan 15, i7/32/1TB/RTX', 'laptops', 'techno-aurora', 134900, null, 'laptop-dark', 5, 4.5, 'Мощный игровой ноутбук с дискретной графикой. Тянет современные игры на высоких настройках и подходит для рендеринга.', { 'Диагональ': '15,6″', 'Память': '32 ГБ', 'SSD': '1 ТБ', 'Видеокарта': 'RTX 4060', 'Вес': '2,1 кг' }, ['ноутбук', 'игровой', 'мощный', 'игры', 'рендеринг'], [[5, 'Игры идут на максималках, кулеры шумноваты под нагрузкой.', 'Дмитрий']]),
+    P('PH-001', 'Смартфон Vega 9, 128 ГБ', 'phones', 'mobile-market', 32990, 37990, 'phone', 30, 4.6, 'Сбалансированный смартфон с хорошей камерой и батареей на весь день.', { 'Память': '128 ГБ', 'Экран': '6,5″', 'Батарея': '5000 мАч' }, ['смартфон', 'телефон', 'камера', 'недорогой'], [[5, 'Отличный телефон за свои деньги, камера удивила.', 'Мария'], [5, 'Батареи хватает на полтора дня.', 'Олег']]),
+    P('AU-001', 'Наушники Harmonia Wireless Pro', 'audio', 'mobile-market', 12490, null, 'headphones', 40, 4.8, 'Беспроводные наушники с активным шумоподавлением и кейсом для зарядки.', { 'Тип': 'внутриканальные', 'Шумоподавление': 'да', 'Автономность': '24 ч' }, ['наушники', 'беспроводные', 'шумоподавление', 'bluetooth', 'подарок'], [[5, 'Шумодав отличный, в метро спасение.', 'Анна']]),
+    P('AU-002', 'Колонка Pulse Mini, водозащита', 'audio', 'mobile-market', 5990, 6990, 'speaker', 25, 4.5, 'Компактная колонка с защитой от воды IPX7 и 12 часами работы.', { 'Мощность': '10 Вт', 'Защита': 'IPX7', 'Автономность': '12 ч' }, ['колонка', 'музыка', 'bluetooth', 'подарок'], []),
+    P('AC-001', 'Зарядная станция 65 Вт GaN, 3 порта', 'e-accessories', 'mobile-market', 4290, null, 'charger', 55, 4.4, 'Компактная быстрая зарядка для ноутбука, телефона и наушников одновременно.', { 'Мощность': '65 Вт', 'Порты': '3', 'Технология': 'GaN' }, ['зарядка', 'блок питания', 'быстрая зарядка'], []),
+    P('KI-001', 'Набор ножей «Шеф-помощник», 5 предметов', 'kitchen', 'home-comfort', 8990, 11990, 'knives', 20, 4.9, 'Острые ножи из дамасской стали с удобными деревянными рукоятями.', { 'Сталь': 'дамасская', 'Предметов': '5', 'Рукоять': 'дерево' }, ['ножи', 'кухня', 'подарок', 'кулинария', 'маме'], [[5, 'Лучшие ножи, которые у меня были. Отличный подарок.', 'Елена'], [5, 'Острые как бритва, удобно лежат в руке.', 'Павел']]),
+    P('KI-002', 'Чайник стеклянный с подсветкой, 1,7 л', 'kitchen', 'home-comfort', 3490, null, 'kettle', 18, 4.6, 'Боросиликатное стекло, мягкая подсветка и автоотключение.', { 'Объём': '1,7 л', 'Мощность': '2200 Вт' }, ['чайник', 'кухня', 'подарок', 'дом'], []),
+    P('DC-001', 'Керамическая ваза «Утренний свет»', 'decor', 'home-comfort', 6740, null, 'vase', 15, 4.7, 'Напольная ваза ручной работы. Украсит гостиную и станет отличным подарком.', { 'Материал': 'керамика', 'Высота': '42 см', 'Цвет': 'молочный' }, ['ваза', 'декор', 'подарок', 'цветы', 'интерьер', 'маме'], [[5, 'Очень красивая ваза, выглядит дороже своей цены.', 'Ольга']]),
+    P('DC-002', 'Настольная лампа «Гриб», латунь', 'decor', 'home-comfort', 5290, 5990, 'lamp', 11, 4.8, 'Тёплый рассеянный свет, три уровня яркости, сенсорное управление.', { 'Свет': '2700 K', 'Управление': 'сенсор' }, ['лампа', 'свет', 'декор', 'подарок', 'интерьер'], []),
+    P('TX-001', 'Постельное бельё, хлопок 100%, 2-спальное', 'textile', 'home-comfort', 5480, null, 'bedding', 25, 4.5, 'Натуральное плотное хлопковое бельё, дышит и служит годами.', { 'Материал': 'хлопок 100%', 'Размер': '2-спальное', 'Плотность': '140 г/м²' }, ['постельное бельё', 'хлопок', 'дом', 'текстиль'], []),
+    P('TX-002', 'Плед вязаный, шерсть мериноса', 'textile', 'home-comfort', 7890, null, 'plaid', 9, 4.9, 'Мягкий крупной вязки, 130 × 170 см. Тёплый и лёгкий.', { 'Состав': 'меринос 60%', 'Размер': '130 × 170 см' }, ['плед', 'уют', 'подарок', 'маме', 'дом'], [[5, 'Очень мягкий, подарила маме, она в восторге.', 'Анна']]),
+    P('WM-001', 'Куртка демисезонная мужская, мембрана', 'mens', 'style-lab', 11490, null, 'jacket', 18, 4.6, 'Непромокаемая ветровка на межсезонье. Лёгкая, тёплая, не стесняет движений.', { 'Сезон': 'демисезон', 'Материал': 'мембрана', 'Водостойкость': '5000 мм' }, ['куртка', 'мужская', 'демисезон', 'непромокаемая'], [[4, 'Хорошая куртка, маломерит, берите на размер больше.', 'Сергей']]),
+    P('WW-001', 'Платье трикотажное, футляр', 'womens', 'style-lab', 6890, 8490, 'dress', 22, 4.8, 'Универсальное платье на каждый день и для офиса. Тянущийся мягкий трикотаж.', { 'Материал': 'трикотаж', 'Крой': 'футляр' }, ['платье', 'женское', 'офис'], [[5, 'Село идеально, ношу в офис почти каждую неделю.', 'Ирина']]),
+    P('SH-001', 'Кроссовки беговые Flow, амортизация', 'mens', 'style-lab', 8490, null, 'sneakers', 14, 4.7, 'Лёгкие беговые кроссовки с дышащим верхом и мягкой пеной.', { 'Вес': '260 г', 'Перепад': '8 мм' }, ['кроссовки', 'бег', 'спорт', 'обувь'], []),
+    P('KD-001', 'Конструктор «Город», 480 деталей', 'kids', 'style-lab', 3290, null, 'blocks', 33, 4.7, 'Развивающий конструктор для детей от 6 лет.', { 'Деталей': '480', 'Возраст': '6+' }, ['конструктор', 'детям', 'игрушка', 'подарок ребёнку'], [[4, 'Ребёнок доволен, деталей много, инструкция понятная.', 'Наталья']]),
+    P('HT-001', 'Набор отвёрток Precision, 32 бита', 'hand-tools', 'master-pro', 2790, null, 'screwdrivers', 44, 4.6, 'Точный инструмент для ремонта электроники и бытовой техники.', { 'Бит': '32', 'Магнит': 'да' }, ['отвёртка', 'набор', 'инструмент', 'ремонт'], []),
+    P('PT-001', 'Шуруповёрт аккумуляторный 18 В, 2 АКБ', 'power-tools', 'master-pro', 9490, 10990, 'drill', 16, 4.7, 'Дрель-шуруповёрт с двумя батареями и зарядкой. Хватит на весь ремонт.', { 'Напряжение': '18 В', 'АКБ': '2', 'Момент': '42 Нм' }, ['шуруповёрт', 'дрель', 'инструмент', 'ремонт', 'подарок папе'], [[5, 'Мощный, батареи держат долго.', 'Алексей'], [4, 'Хороший, но кейс хлипковат.', 'Виктор']]),
+    P('PT-002', 'Угловая шлифмашина 125 мм, 800 Вт', 'power-tools', 'master-pro', 5390, null, 'grinder', 9, 4.4, 'Надёжная болгарка для резки металла и камня.', { 'Мощность': '800 Вт', 'Диск': '125 мм' }, ['болгарка', 'ушм', 'инструмент'], []),
+    P('SV-001', 'Дизайн интерьера комнаты', 'design', 'design-studio', 25000, null, 'design', 10, 5.0, 'Планировка, 3D-визуализация и подбор материалов для одной комнаты.', { 'Формат': 'удалённо', 'Результат': '3D + план', 'Срок': 'от 7 дней' }, ['дизайн интерьера', 'дизайнер', '3d', 'ремонт', 'услуга'], [[5, 'Прекрасный проект, всё учли и по бюджету.', 'Марина']]),
+    P('SV-002', 'Ремонт квартиры под ключ, за м²', 'repair', 'master-pro', 6900, null, 'repair', 5, 4.8, 'Черновой и чистовой ремонт командой мастеров. Гарантия на работы.', { 'Формат': 'очно', 'Единица': 'м²', 'Гарантия': 'да' }, ['ремонт', 'отделка', 'мастер', 'квартира', 'услуга'], [[5, 'Сделали ремонт в срок и аккуратно.', 'Константин']])
+  ];
+  var SYNONYMS = {
+    'телефон': ['смартфон'], 'мобильник': ['смартфон'], 'ноут': ['ноутбук'], 'лэптоп': ['ноутбук'], 'комп': ['ноутбук'],
+    'уши': ['наушники'], 'гарнитура': ['наушники'], 'музыка': ['колонка', 'наушники'], 'болгарка': ['ушм'], 'дрель': ['шуруповёрт'],
+    'игрушка': ['конструктор'], 'ребенку': ['детям'], 'ребёнку': ['детям'], 'сыну': ['детям'], 'дочке': ['детям'],
+    'маме': ['маме', 'подарок'], 'бабушке': ['маме', 'подарок'], 'папе': ['подарок папе', 'инструмент'], 'мужу': ['подарок папе'],
+    'уют': ['плед', 'дом'], 'кухни': ['кухня'], 'обувь': ['кроссовки'], 'бег': ['кроссовки']
+  };
+  root.SV_DATA = { CATEGORIES: CATEGORIES, SUBCATS: SUBCATS, SELLERS: SELLERS, PRODUCTS: PRODUCTS, SYNONYMS: SYNONYMS };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* Логика демо: каталог, поиск, корзина, заказы, выплаты, споры и правила Светланы.
+   Всё хранится в браузере. Деньги считаются в копейках, как в основном приложении. */
+(function (root) {
+  var D = root.SV_DATA;
+  var KEY = 'svetlana-demo-v1';
+  var FEE_PERCENT = 1.5;
+  var DELIVERY = { pickup: { label: 'Пункт выдачи', price: 0, days: '2–4 дня' }, courier: { label: 'Курьер до двери', price: 39000, days: '1–2 дня' }, seller: { label: 'Доставка продавца', price: 19000, days: 'по договорённости' } };
+  var STATUS = { PAYMENT_PENDING: 'Ожидает оплаты', PAID: 'Оплачен', CONFIRMED: 'Собирается', SHIPPED: 'В пути', DELIVERED: 'Доставлен', COMPLETED: 'Завершён', CANCELLED: 'Отменён', RETURN_REQUESTED: 'Возврат оформлен', REFUNDED: 'Деньги возвращены' };
+  var NEXT = { PAYMENT_PENDING: ['PAID', 'CANCELLED'], PAID: ['CONFIRMED', 'CANCELLED'], CONFIRMED: ['SHIPPED', 'CANCELLED'], SHIPPED: ['DELIVERED'], DELIVERED: ['COMPLETED', 'RETURN_REQUESTED'], COMPLETED: ['RETURN_REQUESTED'], RETURN_REQUESTED: ['REFUNDED'], REFUNDED: [], CANCELLED: [] };
+
+  function storage() { try { return root.localStorage; } catch (e) { return null; } }
+  function now() { return Date.now(); }
+  function uid(p) { return p + '-' + Math.random().toString(36).slice(2, 8) + now().toString(36).slice(-4); }
+
+  function initialState() {
+    var products = {};
+    D.PRODUCTS.forEach(function (p) { products[p.sku] = Object.assign({}, p, { status: 'ACTIVE', stockConfirmedAt: now() - 36e5 * 20 }); });
+    return { v: 1, role: 'buyer', sellerId: 'techno-aurora', user: { name: 'Анна Иванова', email: 'anna@svetlana.example' }, products: products, cart: [], favorites: ['PH-001', 'DC-001'], orders: [], settlements: [], payouts: [], disputes: [], chat: [], seq: 1040, notices: [] };
+  }
+  var S = null;
+  function load() {
+    var st = storage(); var raw = st && st.getItem(KEY);
+    try { S = raw ? JSON.parse(raw) : null; } catch (e) { S = null; }
+    if (!S || S.v !== 1) S = initialState();
+    return S;
+  }
+  function save() { var st = storage(); if (st) try { st.setItem(KEY, JSON.stringify(S)); } catch (e) { } }
+  function reset() { S = initialState(); save(); return S; }
+  function state() { return S || load(); }
+
+  // ---------- форматирование ----------
+  function rub(k) { var r = Math.round(k) / 100; var s = (Math.round(r * 100) % 100 === 0 ? Math.round(r).toString() : r.toFixed(2).replace('.', ',')); return s.replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0') + '\u00a0₽'; }
+  function plural(n, a, b, c) { var m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20) ? b : c; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  // ---------- каталог и поиск ----------
+  function product(sku) { return state().products[sku] || null; }
+  function seller(id) { return D.SELLERS.filter(function (s) { return s.id === id; })[0] || null; }
+  function catOf(sub) { return D.CATEGORIES.filter(function (c) { return c.children.indexOf(sub) >= 0; })[0] || null; }
+  function activeProducts() { var p = state().products; return Object.keys(p).map(function (k) { return p[k]; }).filter(function (x) { return x.status === 'ACTIVE'; }); }
+  function norm(s) { return String(s || '').toLowerCase().replace(/ё/g, 'е'); }
+  function stem(w) { w = norm(w); return w.length > 5 ? w.slice(0, w.length - 2) : w.length > 4 ? w.slice(0, w.length - 1) : w; }
+  var STOP = ['для', 'и', 'в', 'на', 'с', 'до', 'от', 'по', 'мне', 'нужен', 'нужна', 'нужно', 'хочу', 'найди', 'подбери', 'покажи', 'какой', 'какие', 'что', 'бы', 'за', 'руб', 'рублей', 'тыс', 'тысяч', 'к'];
+  function parseBudget(q) {
+    var t = norm(q).replace(/\u00a0/g, ' ');
+    var m = t.match(/(?:до|не дороже|дешевле|max|бюджет)\s*(\d[\d\s]*)(\s*(?:к|тыс\.?|тысяч))?/);
+    if (!m) return null;
+    var n = parseInt(m[1].replace(/\s/g, ''), 10); if (m[2]) n *= 1000;
+    return isFinite(n) && n > 0 ? n * 100 : null;
+  }
+  function tokens(q) {
+    var t = norm(q).replace(/(?:до|не дороже|дешевле|бюджет)\s*\d[\d\s]*(?:\s*(?:к|тыс\.?|тысяч))?/g, ' ').replace(/[^a-zа-я0-9 ]/g, ' ');
+    var out = [];
+    t.split(/\s+/).forEach(function (w) { if (w && w.length > 1 && STOP.indexOf(w) < 0 && !/^\d+$/.test(w)) { out.push(w); (D.SYNONYMS[w] || []).forEach(function (s) { out.push(norm(s)); }); } });
+    return out;
+  }
+  function search(q, opts) {
+    opts = opts || {};
+    var budget = opts.max != null ? opts.max : parseBudget(q || '');
+    var tk = tokens(q || '');
+    var list = activeProducts().filter(function (p) {
+      if (opts.cat) { var c = catOf(p.cat); if (p.cat !== opts.cat && !(c && c.slug === opts.cat)) return false; }
+      if (budget && p.price > budget) return false;
+      if (opts.seller && p.seller !== opts.seller) return false;
+      return true;
+    }).map(function (p) {
+      if (!tk.length) return { p: p, score: p.rating };
+      var title = norm(p.title), kw = norm(p.kw.join(' ')), desc = norm(p.desc), cat = norm(D.SUBCATS[p.cat] + ' ' + ((catOf(p.cat) || {}).name || ''));
+      var score = 0, hit = 0;
+      tk.forEach(function (w) {
+        var s = stem(w), local = 0;
+        if (title.indexOf(s) >= 0) local += 6; if (kw.indexOf(s) >= 0) local += 4; if (cat.indexOf(s) >= 0) local += 3; if (desc.indexOf(s) >= 0) local += 1;
+        if (local) hit++; score += local;
+      });
+      return { p: p, score: hit ? score + hit * 2 + p.rating * 0.3 : 0 };
+    }).filter(function (x) { return x.score > 0; });
+    if (tk.length && list.length) { var top = Math.max.apply(null, list.map(function (x) { return x.score; })); list = list.filter(function (x) { return x.score >= top * 0.4; }); }
+    var sort = opts.sort || (tk.length ? 'relevance' : 'rating');
+    list.sort(function (a, b) {
+      if (sort === 'price-asc') return a.p.price - b.p.price;
+      if (sort === 'price-desc') return b.p.price - a.p.price;
+      if (sort === 'rating') return b.p.rating - a.p.rating;
+      return b.score - a.score;
+    });
+    return { items: list.map(function (x) { return x.p; }), budget: budget, tokens: tk };
+  }
+  function priceHistory(p) {
+    var base = p.old || Math.round(p.price * 1.08), pts = [], seed = 0;
+    for (var i = 0; i < p.sku.length; i++) seed = (seed * 31 + p.sku.charCodeAt(i)) % 9973;
+    for (var d = 0; d < 12; d++) { seed = (seed * 7919 + 13) % 9973; var k = d / 11; pts.push(Math.round((base * (1 - k) + p.price * k) * (0.97 + (seed % 60) / 1000) / 100) * 100); }
+    pts[11] = p.price; return pts;
+  }
+
+  // ---------- корзина ----------
+  function cartLines() {
+    return state().cart.map(function (l) { var p = product(l.sku); return p ? { sku: l.sku, qty: l.qty, p: p, snapshot: l.snapshot, total: p.price * l.qty, available: p.status === 'ACTIVE' && p.qty >= l.qty } : null; }).filter(Boolean);
+  }
+  function cartCount() { return state().cart.reduce(function (a, l) { return a + l.qty; }, 0); }
+  function addToCart(sku, qty) {
+    var p = product(sku); if (!p || p.status !== 'ACTIVE') throw new Error('Товар недоступен');
+    qty = qty || 1; var line = state().cart.filter(function (l) { return l.sku === sku; })[0];
+    var want = (line ? line.qty : 0) + qty; if (want > p.qty) throw new Error('В наличии только ' + p.qty + ' шт.');
+    if (line) line.qty = want; else state().cart.push({ sku: sku, qty: qty, snapshot: p.price });
+    save(); return cartCount();
+  }
+  function setQty(sku, qty) {
+    var p = product(sku); var c = state().cart;
+    for (var i = 0; i < c.length; i++) if (c[i].sku === sku) { if (qty <= 0) c.splice(i, 1); else c[i].qty = Math.min(qty, p ? p.qty : qty); break; }
+    save();
+  }
+  function cartBySeller() {
+    var g = {}; cartLines().forEach(function (l) { (g[l.p.seller] = g[l.p.seller] || []).push(l); });
+    return Object.keys(g).map(function (sid) { var lines = g[sid]; return { seller: seller(sid), lines: lines, subtotal: lines.reduce(function (a, l) { return a + l.total; }, 0) }; });
+  }
+  function toggleFav(sku) { var f = state().favorites, i = f.indexOf(sku); if (i >= 0) f.splice(i, 1); else f.push(sku); save(); return i < 0; }
+
+  // ---------- оформление и оплата ----------
+  function fee(subtotal) { return Math.round(subtotal * FEE_PERCENT / 100); }
+  function validateAddress(a) {
+    var e = {};
+    if (!a.city || a.city.trim().length < 2) e.city = 'Укажите город';
+    if (!a.street || a.street.trim().length < 2) e.street = 'Укажите улицу';
+    if (!a.house || !a.house.trim()) e.house = 'Укажите дом';
+    if (!a.name || a.name.trim().length < 2) e.name = 'Укажите получателя';
+    var digits = String(a.phone || '').replace(/\D/g, '');
+    if (digits.length !== 11 || !/^[78]/.test(digits)) e.phone = 'Телефон в формате +7 900 000-00-00';
+    return e;
+  }
+  function luhn(num) { var s = 0, alt = false; for (var i = num.length - 1; i >= 0; i--) { var n = +num[i]; if (alt) { n *= 2; if (n > 9) n -= 9; } s += n; alt = !alt; } return s % 10 === 0; }
+  function validateCard(c) {
+    var e = {}, n = String(c.number || '').replace(/\D/g, '');
+    if (n.length < 16 || !luhn(n)) e.number = 'Проверьте номер карты';
+    var m = String(c.exp || '').match(/^(\d{2})\s*\/\s*(\d{2})$/);
+    if (!m || +m[1] < 1 || +m[1] > 12) e.exp = 'Срок в формате ММ/ГГ';
+    if (!/^\d{3}$/.test(String(c.cvc || ''))) e.cvc = '3 цифры с обратной стороны';
+    return e;
+  }
+  function placeOrder(input) {
+    var st = state(); var groups = cartBySeller();
+    if (!groups.length) throw new Error('Корзина пуста');
+    var bad = cartLines().filter(function (l) { return !l.available; }); if (bad.length) throw new Error('Недоступно: ' + bad.map(function (l) { return l.p.title; }).join(', '));
+    var errs = validateAddress(input.address || {}); if (Object.keys(errs).length) { var er = new Error('Проверьте адрес'); er.fields = errs; throw er; }
+    if (st.lastCheckoutKey && st.lastCheckoutKey === input.key) return st.orders.filter(function (o) { return o.key === input.key; });
+    var del = DELIVERY[input.delivery] || DELIVERY.pickup;
+    var created = groups.map(function (g) {
+      g.lines.forEach(function (l) { l.p.qty -= l.qty; });
+      var o = { id: uid('ord'), key: input.key, number: 'СВ-' + (++st.seq), seller: g.seller.id, items: g.lines.map(function (l) { return { sku: l.sku, title: l.p.title, price: l.p.price, qty: l.qty, art: l.p.art }; }), subtotal: g.subtotal, delivery: del.price, deliveryKind: input.delivery || 'pickup', fee: fee(g.subtotal), total: g.subtotal + del.price, address: input.address, status: 'PAYMENT_PENDING', history: [{ s: 'PAYMENT_PENDING', at: now(), note: 'Заказ создан' }], payment: null, shipment: null, createdAt: now() };
+      st.orders.unshift(o); return o;
+    });
+    st.cart = []; st.lastCheckoutKey = input.key; save(); return created;
+  }
+  function order(id) { return state().orders.filter(function (o) { return o.id === id; })[0] || null; }
+  function move(o, to, note) {
+    if ((NEXT[o.status] || []).indexOf(to) < 0) throw new Error('Нельзя перевести заказ из «' + STATUS[o.status] + '» в «' + STATUS[to] + '»');
+    o.status = to; o.history.push({ s: to, at: now(), note: note || STATUS[to] });
+  }
+  function pay(id, card) {
+    var o = order(id); if (!o) throw new Error('Заказ не найден');
+    if (o.payment && o.payment.status === 'SUCCEEDED') return o; // повтор не списывает второй раз
+    if (o.status !== 'PAYMENT_PENDING') throw new Error('Оплата возможна только для заказа, ожидающего оплаты');
+    var errs = validateCard(card || {}); if (Object.keys(errs).length) { var er = new Error('Проверьте данные карты'); er.fields = errs; throw er; }
+    o.payment = { status: 'SUCCEEDED', ref: 'sb_' + o.id.slice(-8), amount: o.total, sandbox: true, last4: String(card.number).replace(/\D/g, '').slice(-4) };
+    move(o, 'PAID', 'Оплата прошла (тестовый платёж)');
+    state().settlements.push({ id: uid('set'), order: o.id, seller: o.seller, gross: o.subtotal, fee: o.fee, payout: o.subtotal - o.fee, status: 'PENDING', payoutId: null });
+    notice(o.seller, 'Новый оплаченный заказ ' + o.number);
+    save(); return o;
+  }
+  function cancel(id) {
+    var o = order(id); move(o, 'CANCELLED', 'Отменён покупателем');
+    o.items.forEach(function (it) { var p = product(it.sku); if (p) p.qty += it.qty; });
+    if (o.payment && o.payment.status === 'SUCCEEDED') { o.payment.status = 'REFUNDED'; settleFor(o).forEach(function (s) { s.status = 'CANCELLED'; }); }
+    save(); return o;
+  }
+  function settleFor(o) { return state().settlements.filter(function (s) { return s.order === o.id; }); }
+  function sellerConfirm(id) { var o = order(id); move(o, 'CONFIRMED', 'Продавец подтвердил заказ'); save(); return o; }
+  function sellerShip(id, carrier, track) {
+    var o = order(id); if (!carrier) throw new Error('Укажите перевозчика');
+    if (!track || track.trim().length < 5) throw new Error('Укажите трек-номер от перевозчика');
+    o.shipment = { carrier: carrier, track: track.trim(), events: [{ at: now(), text: 'Принят перевозчиком ' + carrier }] };
+    move(o, 'SHIPPED', 'Передан в доставку: ' + carrier); save(); return o;
+  }
+  function markDelivered(id) {
+    var o = order(id); move(o, 'DELIVERED', 'Получен покупателем'); o.shipment && o.shipment.events.push({ at: now(), text: 'Вручён получателю' });
+    settleFor(o).forEach(function (s) { if (s.status === 'PENDING') s.status = 'AVAILABLE'; }); save(); return o;
+  }
+  function requestReturn(id, reason) {
+    var o = order(id); if (!reason) throw new Error('Укажите причину возврата');
+    if (o.status === 'RETURN_REQUESTED' || o.status === 'REFUNDED') return o; // повтор ничего не создаёт
+    move(o, 'RETURN_REQUESTED', 'Возврат: ' + reason); o.returnReason = reason;
+    settleFor(o).forEach(function (s) { if (s.status !== 'PAID') s.status = 'HOLD'; });
+    notice(o.seller, 'Запрошен возврат по заказу ' + o.number); save(); return o;
+  }
+  function approveReturn(id) {
+    var o = order(id); if (!o) throw new Error('Заказ не найден'); move(o, 'REFUNDED', 'Продавец принял возврат, деньги вернутся на карту');
+    o.payment.status = 'REFUNDED'; o.items.forEach(function (it) { var p = product(it.sku); if (p) p.qty += it.qty; });
+    settleFor(o).forEach(function (s) { s.status = 'CANCELLED'; }); save(); return o;
+  }
+  function openDispute(id, text) {
+    var o = order(id); if (!o) throw new Error('Заказ не найден');
+    if (!o.payment || o.payment.status !== 'SUCCEEDED' || o.status === 'CANCELLED' || o.status === 'REFUNDED') throw new Error('Спор можно открыть только по оплаченному заказу');
+    if (!text || text.trim().length < 10) throw new Error('Опишите проблему подробнее (от 10 символов)');
+    var ex = state().disputes.filter(function (d) { return d.order === id && d.status === 'OPEN'; })[0]; if (ex) return ex;
+    var d = { id: uid('dsp'), order: id, seller: o.seller, text: text.trim(), status: 'OPEN', at: now(), resolution: null };
+    state().disputes.unshift(d); settleFor(o).forEach(function (s) { if (s.status !== 'PAID') s.status = 'HOLD'; }); save(); return d;
+  }
+  function resolveDispute(did, winner, note) {
+    var d = state().disputes.filter(function (x) { return x.id === did; })[0]; if (!d || d.status !== 'OPEN') throw new Error('Спор уже закрыт');
+    if (!note || note.trim().length < 5) throw new Error('Обоснуйте решение');
+    var o = order(d.order); d.status = winner === 'buyer' ? 'RESOLVED_BUYER' : 'RESOLVED_SELLER'; d.resolution = note.trim();
+    if (winner === 'buyer') { if (o.status !== 'REFUNDED') { if (o.status !== 'RETURN_REQUESTED') { o.status = 'RETURN_REQUESTED'; o.history.push({ s: 'RETURN_REQUESTED', at: now(), note: 'Открыт спор' }); } move(o, 'REFUNDED', 'Спор решён в пользу покупателя'); o.payment && (o.payment.status = 'REFUNDED'); o.items.forEach(function (it) { var p = product(it.sku); if (p) p.qty += it.qty; }); } settleFor(o).forEach(function (s) { s.status = 'CANCELLED'; }); }
+    else { var done = o.status === 'DELIVERED' || o.status === 'COMPLETED'; settleFor(o).forEach(function (s) { if (s.status === 'HOLD') s.status = done ? 'AVAILABLE' : 'PENDING'; }); }
+    save(); return d;
+  }
+
+  // ---------- продавец ----------
+  function sellerStats(sid) {
+    var orders = state().orders.filter(function (o) { return o.seller === sid; });
+    var set = state().settlements.filter(function (s) { return s.seller === sid; });
+    function sum(f) { return set.filter(f).reduce(function (a, s) { return a + s.payout; }, 0); }
+    return { orders: orders, toConfirm: orders.filter(function (o) { return o.status === 'PAID'; }).length, toShip: orders.filter(function (o) { return o.status === 'CONFIRMED'; }).length, revenue: set.filter(function (s) { return s.status !== 'CANCELLED'; }).reduce(function (a, s) { return a + s.gross; }, 0), available: sum(function (s) { return s.status === 'AVAILABLE'; }), pending: sum(function (s) { return s.status === 'PENDING' || s.status === 'HOLD'; }), paid: sum(function (s) { return s.status === 'PAID'; }) };
+  }
+  function requestPayout(sid) {
+    var set = state().settlements.filter(function (s) { return s.seller === sid && s.status === 'AVAILABLE' && !s.payoutId; });
+    if (!set.length) return null;
+    var key = sid + ':' + set.map(function (s) { return s.id; }).sort().join(',');
+    var ex = state().payouts.filter(function (p) { return p.key === key; })[0]; if (ex) return ex; // идемпотентно
+    var p = { id: uid('po'), key: key, seller: sid, amount: set.reduce(function (a, s) { return a + s.payout; }, 0), count: set.length, at: now(), status: 'SUCCEEDED', sandbox: true };
+    set.forEach(function (s) { s.status = 'PAID'; s.payoutId = p.id; }); state().payouts.unshift(p); save(); return p;
+  }
+  function confirmStock(sku) { var p = product(sku); p.stockConfirmedAt = now(); save(); return p; }
+  function draftProduct(title, sid, price) {
+    title = String(title || '').trim(); if (title.length < 4) throw new Error('Название слишком короткое');
+    var tk = tokens(title), sub = 'e-accessories', best = 0;
+    Object.keys(D.SUBCATS).forEach(function (k) { var score = 0; D.PRODUCTS.filter(function (p) { return p.cat === k; }).forEach(function (p) { tk.forEach(function (w) { if (norm(p.title + ' ' + p.kw.join(' ')).indexOf(stem(w)) >= 0) score++; }); }); if (score > best) { best = score; sub = k; } });
+    var kw = tk.slice(0, 5);
+    return { title: title, cat: sub, kw: kw, price: price ? Math.round(price * 100) : null, desc: title + ': ' + (D.SUBCATS[sub] || 'товар').toLowerCase() + ' от продавца ' + seller(sid).name + '. Проверьте характеристики перед публикацией: Светлана составила черновик по названию и не утверждает ничего, чего нет в вашем описании.', confidence: best ? 'по похожим товарам' : 'низкая, категорию стоит проверить' };
+  }
+  function publishProduct(draft, sid, qty) {
+    if (!draft.price || draft.price <= 0) throw new Error('Укажите цену');
+    if (!qty || qty <= 0) throw new Error('Укажите остаток');
+    var sku = 'NEW-' + (++state().seq);
+    state().products[sku] = { sku: sku, title: draft.title, cat: draft.cat, seller: sid, price: draft.price, old: null, art: artFor(draft.cat), qty: qty, rating: 0, desc: draft.desc, attrs: { 'Категория': D.SUBCATS[draft.cat] }, kw: draft.kw, reviews: [], status: 'ACTIVE', stockConfirmedAt: now(), isNew: true };
+    save(); return state().products[sku];
+  }
+  function artFor(cat) { var p = D.PRODUCTS.filter(function (x) { return x.cat === cat; })[0]; return p ? p.art : 'box'; }
+  function notice(sid, text) { state().notices.unshift({ seller: sid, text: text, at: now() }); state().notices = state().notices.slice(0, 30); }
+
+  // ---------- Светлана (правила, без нейросети) ----------
+  function svetlana(text) {
+    var t = norm(text), st = state();
+    var reply = { text: '', products: [], actions: [], mode: 'rules' };
+    var lastOrder = st.orders[0];
+    if (/^(привет|здравств|добрый)/.test(t)) { reply.text = 'Здравствуйте! Опишите, что ищете, для кого и какой бюджет. Например: «подарок маме до 10 000» или «лёгкий ноутбук для учёбы».'; return reply; }
+    if (/(где|статус|отследи|трек).*(заказ|посылк)|мой заказ/.test(t)) {
+      if (!lastOrder) { reply.text = 'Заказов пока нет. Могу помочь выбрать первый товар.'; return reply; }
+      reply.text = 'Заказ ' + lastOrder.number + ': ' + STATUS[lastOrder.status].toLowerCase() + '.' + (lastOrder.shipment ? ' Перевозчик ' + lastOrder.shipment.carrier + ', трек ' + lastOrder.shipment.track + '.' : lastOrder.status === 'PAYMENT_PENDING' ? ' Его можно оплатить в карточке заказа.' : ' Трек появится, когда продавец передаст посылку.');
+      reply.actions.push({ label: 'Открыть заказ', href: '#/order/' + lastOrder.id }); return reply;
+    }
+    if (/сравни/.test(t)) {
+      var r = search(text.replace(/сравни(ть)?/i, ''), {}).items.slice(0, 2);
+      if (r.length < 2) { reply.text = 'Назовите два товара или категорию, например «сравни ноутбуки».'; return reply; }
+      reply.text = 'Сравнила ' + r[0].title + ' и ' + r[1].title + '. ' + (r[0].price < r[1].price ? 'Первый дешевле на ' + rub(r[1].price - r[0].price) : 'Второй дешевле на ' + rub(r[0].price - r[1].price)) + ', рейтинг ' + r[0].rating + ' против ' + r[1].rating + '.';
+      reply.products = r; reply.compare = true; return reply;
+    }
+    var rv = t.match(/(?:что говорят|отзывы|отзыв)\s*(?:о|об|про)?\s*(.+)/);
+    if (rv) {
+      var p = search(rv[1], {}).items[0];
+      if (!p) { reply.text = 'Не нашла такой товар. Уточните название.'; return reply; }
+      var good = p.reviews.filter(function (x) { return x[0] >= 5; }).length;
+      reply.text = p.reviews.length ? 'О «' + p.title + '» ' + p.reviews.length + ' ' + plural(p.reviews.length, 'отзыв', 'отзыва', 'отзывов') + ' от покупателей с подтверждённой покупкой, ' + good + ' на пять звёзд. Чаще всего пишут: «' + p.reviews[0][1] + '»' : 'У «' + p.title + '» пока нет отзывов, поэтому не буду ничего утверждать о качестве.';
+      reply.products = [p]; return reply;
+    }
+    var gift = /подар/.test(t);
+    var res = search(text, {});
+    if (gift && res.items.length < 2) res = search('подарок ' + (res.budget ? 'до ' + res.budget / 100 : ''), {});
+    if (!res.items.length) {
+      reply.text = res.budget ? 'В бюджет до ' + rub(res.budget) + ' ничего подходящего не нашла. Попробуйте поднять бюджет или описать задачу иначе.' : 'Пока не нашла подходящего. Расскажите, для чего вещь и какой бюджет.';
+      return reply;
+    }
+    var top = res.items.slice(0, 3);
+    reply.text = (gift ? 'Вот идеи для подарка' : 'Нашла ' + res.items.length + ' ' + plural(res.items.length, 'вариант', 'варианта', 'вариантов')) + (res.budget ? ' в бюджете до ' + rub(res.budget) : '') + '. Лучше всего подходит «' + top[0].title + '» за ' + rub(top[0].price) + ': рейтинг ' + top[0].rating + (top[0].old ? ', сейчас дешевле на ' + rub(top[0].old - top[0].price) : '') + '.';
+    reply.products = top;
+    reply.actions.push({ label: 'Положить «' + top[0].title + '» в корзину', confirm: { type: 'cart', sku: top[0].sku } });
+    reply.actions.push({ label: 'Все результаты', href: '#/catalog?q=' + encodeURIComponent(text) });
+    return reply;
+  }
+
+  root.SV = { load: load, save: save, reset: reset, state: state, rub: rub, plural: plural, esc: esc, product: product, seller: seller, catOf: catOf, search: search, parseBudget: parseBudget, priceHistory: priceHistory, cartLines: cartLines, cartCount: cartCount, addToCart: addToCart, setQty: setQty, cartBySeller: cartBySeller, toggleFav: toggleFav, fee: fee, validateAddress: validateAddress, validateCard: validateCard, placeOrder: placeOrder, order: order, pay: pay, cancel: cancel, sellerConfirm: sellerConfirm, sellerShip: sellerShip, markDelivered: markDelivered, requestReturn: requestReturn, approveReturn: approveReturn, openDispute: openDispute, resolveDispute: resolveDispute, sellerStats: sellerStats, requestPayout: requestPayout, confirmStock: confirmStock, draftProduct: draftProduct, publishProduct: publishProduct, svetlana: svetlana, uid: uid, STATUS: STATUS, DELIVERY: DELIVERY, FEE_PERCENT: FEE_PERCENT, activeProducts: activeProducts };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* Плоские иллюстрации товаров (SVG), чтобы демо не зависело от внешних картинок. */
+(function (root) {
+  var BG = { laptops: '#ece7f6', phones: '#efe9f8', audio: '#e9ecf8', 'e-accessories': '#eef0f4', kitchen: '#f8ece3', decor: '#f6eee6', textile: '#f3ecf1', mens: '#e7eef0', womens: '#f6e9ee', kids: '#eef4e6', 'hand-tools': '#f2efe6', 'power-tools': '#f5ede3', design: '#eae8f6', repair: '#efeee8' };
+  var K = {
+    laptop: '<rect x="38" y="52" width="124" height="80" rx="7" fill="#c8c5d3"/><rect x="46" y="60" width="108" height="64" rx="4" fill="#7d5cb0"/><path d="M46 112 L86 84 L112 104 L154 76 L154 124 L46 124Z" fill="#9c7fce"/><circle cx="128" cy="76" r="7" fill="#f3c9a6"/><path d="M24 134 h152 l-8 12 H32Z" fill="#a9a5b8"/>',
+    'laptop-dark': '<rect x="34" y="50" width="132" height="84" rx="7" fill="#2a2638"/><rect x="42" y="58" width="116" height="68" rx="4" fill="#1b1828"/><path d="M50 118 L80 86 L100 104 L128 74 L152 118Z" fill="#d06a1f"/><path d="M20 136 h160 l-8 12 H28Z" fill="#3d3850"/><rect x="88" y="139" width="24" height="3" rx="1.5" fill="#d06a1f"/>',
+    phone: '<rect x="70" y="30" width="60" height="140" rx="12" fill="#38244e"/><rect x="75" y="40" width="50" height="118" rx="7" fill="#bca9e0"/><circle cx="100" cy="92" r="16" fill="#f6f4fb"/><circle cx="100" cy="92" r="7" fill="#7d5cb0"/><rect x="92" y="34" width="16" height="3" rx="1.5" fill="#654493"/>',
+    headphones: '<path d="M52 112 V96 a48 48 0 0 1 96 0 V112" fill="none" stroke="#432c61" stroke-width="10" stroke-linecap="round"/><rect x="38" y="104" width="30" height="46" rx="12" fill="#7d5cb0"/><rect x="132" y="104" width="30" height="46" rx="12" fill="#7d5cb0"/><rect x="46" y="114" width="14" height="26" rx="6" fill="#bca9e0"/><rect x="140" y="114" width="14" height="26" rx="6" fill="#bca9e0"/>',
+    speaker: '<rect x="56" y="58" width="88" height="96" rx="22" fill="#38244e"/><circle cx="100" cy="112" r="28" fill="#654493"/><circle cx="100" cy="112" r="14" fill="#9c7fce"/><circle cx="100" cy="76" r="6" fill="#9c7fce"/><rect x="74" y="44" width="52" height="10" rx="5" fill="#d06a1f"/>',
+    charger: '<rect x="64" y="52" width="72" height="96" rx="14" fill="#f6f4fb" stroke="#c8c5d3" stroke-width="3"/><rect x="80" y="70" width="40" height="8" rx="4" fill="#7d5cb0"/><rect x="80" y="86" width="40" height="8" rx="4" fill="#7d5cb0"/><rect x="88" y="104" width="24" height="8" rx="4" fill="#d06a1f"/><path d="M96 124 l10 -6 -4 10 8 -4" fill="none" stroke="#d06a1f" stroke-width="3" stroke-linejoin="round"/><rect x="88" y="148" width="6" height="18" fill="#a9a5b8"/><rect x="106" y="148" width="6" height="18" fill="#a9a5b8"/>',
+    knives: '<rect x="44" y="120" width="112" height="44" rx="8" fill="#8a5a3a"/><rect x="44" y="120" width="112" height="10" fill="#a06c46"/><path d="M62 120 L66 44 Q72 40 74 48 L72 120Z" fill="#c8ccd6"/><path d="M84 120 L88 56 Q94 52 96 60 L94 120Z" fill="#d7dae2"/><path d="M106 120 L110 36 Q118 30 120 42 L116 120Z" fill="#c8ccd6"/><path d="M130 120 L133 66 Q138 62 140 70 L138 120Z" fill="#d7dae2"/>',
+    kettle: '<path d="M60 150 L66 82 Q100 66 134 82 L140 150Z" fill="#dfe8f2" stroke="#9fb3c8" stroke-width="3"/><path d="M68 140 L72 104 Q100 94 128 104 L132 140Z" fill="#9c7fce" opacity=".55"/><path d="M134 92 Q160 100 150 132" fill="none" stroke="#38244e" stroke-width="8" stroke-linecap="round"/><rect x="56" y="150" width="88" height="12" rx="5" fill="#38244e"/><rect x="84" y="66" width="32" height="8" rx="4" fill="#38244e"/>',
+    vase: '<path d="M84 40 h32 v14 q26 26 22 64 q-4 32 -38 40 q-34 -8 -38 -40 q-4 -38 22 -64Z" fill="#f2e7da" stroke="#d9c2a8" stroke-width="3"/><path d="M70 110 q30 14 60 0" fill="none" stroke="#d06a1f" stroke-width="4"/><path d="M98 40 q-10 -20 -24 -22 M102 40 q8 -22 26 -24" fill="none" stroke="#5f8a4e" stroke-width="4" stroke-linecap="round"/>',
+    lamp: '<path d="M52 92 Q100 30 148 92Z" fill="#c99a4e"/><rect x="94" y="92" width="12" height="54" fill="#b0843e"/><rect x="66" y="146" width="68" height="12" rx="6" fill="#8f6a30"/><ellipse cx="100" cy="98" rx="30" ry="6" fill="#f7d98c" opacity=".8"/>',
+    bedding: '<rect x="34" y="96" width="132" height="56" rx="10" fill="#e8dff2"/><rect x="34" y="96" width="132" height="18" rx="9" fill="#bca9e0"/><rect x="44" y="74" width="50" height="30" rx="10" fill="#f6f4fb" stroke="#d9d0ee" stroke-width="3"/><rect x="104" y="74" width="50" height="30" rx="10" fill="#f6f4fb" stroke="#d9d0ee" stroke-width="3"/><path d="M34 132 h132" stroke="#9c7fce" stroke-width="3" stroke-dasharray="6 6"/>',
+    plaid: '<path d="M42 64 h116 v92 q-58 12 -116 0Z" fill="#c96a4a"/><path d="M42 84 h116 M42 108 h116 M42 132 h116" stroke="#e7a17f" stroke-width="5"/><path d="M70 64 v96 M100 64 v98 M130 64 v96" stroke="#a6503a" stroke-width="4" opacity=".6"/>',
+    jacket: '<path d="M70 44 L100 58 L130 44 L160 70 L148 100 L138 94 L138 162 H62 V94 L52 100 L40 70Z" fill="#3f5b66"/><path d="M100 58 V162" stroke="#2c434c" stroke-width="3"/><path d="M84 50 L100 76 L116 50" fill="none" stroke="#d06a1f" stroke-width="4"/><rect x="72" y="118" width="16" height="12" rx="3" fill="#2c434c"/><rect x="112" y="118" width="16" height="12" rx="3" fill="#2c434c"/>',
+    dress: '<path d="M84 40 h32 l-4 28 q20 10 22 40 l14 56 H52 l14 -56 q2 -30 22 -40Z" fill="#a8456a"/><path d="M88 68 h24" stroke="#7e2f4e" stroke-width="5"/><path d="M60 140 q40 10 80 0" fill="none" stroke="#c96d8e" stroke-width="3"/>',
+    sneakers: '<path d="M34 128 q10 -34 36 -40 q14 16 36 14 l50 22 q14 8 10 20 H40 q-8 0 -6 -16Z" fill="#f6f4fb" stroke="#38244e" stroke-width="4" stroke-linejoin="round"/><path d="M40 144 h126" stroke="#d06a1f" stroke-width="8" stroke-linecap="round"/><path d="M76 98 l10 12 M88 96 l10 12 M100 98 l8 10" stroke="#7d5cb0" stroke-width="3"/>',
+    blocks: '<rect x="44" y="110" width="52" height="40" rx="5" fill="#d06a1f"/><rect x="104" y="110" width="52" height="40" rx="5" fill="#7d5cb0"/><rect x="72" y="66" width="56" height="40" rx="5" fill="#5f8a4e"/><g fill="#ffffff" opacity=".45"><circle cx="58" cy="110" r="5"/><circle cx="82" cy="110" r="5"/><circle cx="118" cy="110" r="5"/><circle cx="142" cy="110" r="5"/><circle cx="88" cy="66" r="5"/><circle cx="112" cy="66" r="5"/></g>',
+    screwdrivers: '<rect x="38" y="60" width="124" height="88" rx="10" fill="#38244e"/><g fill="#d06a1f"><rect x="52" y="74" width="12" height="40" rx="5"/><rect x="72" y="74" width="12" height="40" rx="5"/><rect x="92" y="74" width="12" height="40" rx="5"/><rect x="112" y="74" width="12" height="40" rx="5"/><rect x="132" y="74" width="12" height="40" rx="5"/></g><g fill="#c8ccd6"><rect x="56" y="114" width="4" height="22"/><rect x="76" y="114" width="4" height="22"/><rect x="96" y="114" width="4" height="22"/><rect x="116" y="114" width="4" height="22"/><rect x="136" y="114" width="4" height="22"/></g>',
+    drill: '<rect x="44" y="62" width="96" height="40" rx="14" fill="#d06a1f"/><rect x="140" y="74" width="28" height="16" rx="4" fill="#38244e"/><rect x="168" y="79" width="16" height="6" fill="#a9a5b8"/><path d="M80 102 h34 l-6 46 h-24Z" fill="#38244e"/><rect x="70" y="146" width="56" height="20" rx="6" fill="#432c61"/><rect x="58" y="72" width="30" height="8" rx="4" fill="#f0a46a"/>',
+    grinder: '<rect x="40" y="88" width="104" height="34" rx="16" fill="#5f6b7a"/><circle cx="148" cy="96" r="30" fill="#c8ccd6" stroke="#8a93a0" stroke-width="5"/><circle cx="148" cy="96" r="6" fill="#38244e"/><rect x="60" y="74" width="30" height="16" rx="5" fill="#d06a1f"/><rect x="40" y="96" width="22" height="18" rx="6" fill="#38244e"/>',
+    design: '<rect x="40" y="56" width="120" height="96" rx="6" fill="#f6f4fb" stroke="#bca9e0" stroke-width="3"/><path d="M40 112 h56 v40 M96 56 v28 h64" fill="none" stroke="#7d5cb0" stroke-width="4"/><rect x="108" y="98" width="38" height="24" rx="4" fill="#d06a1f" opacity=".85"/><circle cx="66" cy="84" r="12" fill="#9c7fce"/>',
+    repair: '<path d="M60 150 L120 90" stroke="#8a5a3a" stroke-width="12" stroke-linecap="round"/><rect x="108" y="56" width="48" height="30" rx="6" fill="#5f6b7a" transform="rotate(45 132 71)"/><path d="M56 70 h50 v24 h-50Z" fill="#d06a1f"/><path d="M106 82 h18 v54" fill="none" stroke="#38244e" stroke-width="6" stroke-linecap="round"/><rect x="118" y="134" width="12" height="26" rx="4" fill="#38244e"/>',
+    box: '<path d="M50 80 L100 58 L150 80 V138 L100 160 L50 138Z" fill="#d9c2a8"/><path d="M50 80 L100 102 L150 80 M100 102 V160" fill="none" stroke="#b39270" stroke-width="3"/>'
+  };
+  function art(p, size) {
+    var bg = BG[p.cat] || '#efedf4';
+    return '<svg viewBox="0 0 200 200" width="' + (size || 200) + '" height="' + (size || 200) + '" role="img" aria-label="' + String(p.title).replace(/"/g, '&quot;') + '" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" fill="' + bg + '"/>' + (K[p.art] || K.box) + '</svg>';
+  }
+  root.SV_ART = art;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* Демо-витрина Svetlana: роутер на hash, отрисовка строками, делегирование событий. */
+(function (root) {
+  var SV = root.SV, D = root.SV_DATA, ART = root.SV_ART, h = SV.esc, rub = SV.rub;
+  var ui = { chatOpen: false, flash: null, errors: {}, draft: null, payFor: null };
+
+  // ---------- роутинг ----------
+  function parseHash(hash) {
+    var raw = String(hash || '').replace(/^#/, '') || '/';
+    var qi = raw.indexOf('?'), path = qi >= 0 ? raw.slice(0, qi) : raw, qs = qi >= 0 ? raw.slice(qi + 1) : '';
+    var q = {}; qs.split('&').forEach(function (kv) { if (!kv) return; var i = kv.indexOf('='); var k = decodeURIComponent(i < 0 ? kv : kv.slice(0, i)); q[k] = i < 0 ? '' : decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' ')); });
+    var parts = path.split('/').filter(Boolean);
+    return { path: path, parts: parts, q: q };
+  }
+  function link(path, q) { var s = Object.keys(q || {}).filter(function (k) { return q[k] !== '' && q[k] != null; }).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(q[k]); }).join('&'); return '#' + path + (s ? '?' + s : ''); }
+
+  // ---------- мелкие куски ----------
+  function stars(r) { if (!r) return '<span class="muted">Нет оценок</span>'; return '<span class="stars" aria-label="Рейтинг ' + r + ' из 5">★ ' + String(r).replace('.', ',') + '</span>'; }
+  function date(t) { var d = new Date(t); return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + ', ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
+  function badge(status) { return '<span class="st st-' + status.toLowerCase() + '">' + h(SV.STATUS[status] || status) + '</span>'; }
+  function err(name) { var e = ui.errors[name]; return e ? '<span class="field-err" id="e-' + name + '">' + h(e) + '</span>' : ''; }
+  function field(name, label, value, attrs) {
+    var e = ui.errors[name];
+    return '<label class="field' + (e ? ' has-err' : '') + '"><span>' + h(label) + '</span><input name="' + name + '" value="' + h(value || '') + '"' + (e ? ' aria-invalid="true" aria-describedby="e-' + name + '"' : '') + ' ' + (attrs || '') + '>' + err(name) + '</label>';
+  }
+  function stockNote(p) {
+    var hrs = Math.round((Date.now() - p.stockConfirmedAt) / 36e5);
+    if (p.qty <= 0) return '<span class="stock out">Нет в наличии</span>';
+    return '<span class="stock">В наличии ' + p.qty + ' шт.' + (hrs > 48 ? ' · остаток не подтверждён ' + Math.floor(hrs / 24) + ' дн.' : '') + '</span>';
+  }
+  function tile(p) {
+    var s = SV.seller(p.seller), fav = SV.state().favorites.indexOf(p.sku) >= 0;
+    return '<article class="tile"><a class="tile-art" href="#/p/' + h(p.sku) + '" aria-label="' + h(p.title) + '">' + ART(p, 160) + '</a>' +
+      '<button class="fav' + (fav ? ' on' : '') + '" data-act="fav" data-sku="' + h(p.sku) + '" aria-pressed="' + fav + '" aria-label="' + (fav ? 'Убрать из избранного' : 'В избранное') + '">♥</button>' +
+      '<div class="tile-body"><div class="price">' + rub(p.price) + (p.old ? ' <s>' + rub(p.old) + '</s>' : '') + '</div>' +
+      '<a class="tile-title" href="#/p/' + h(p.sku) + '">' + h(p.title) + '</a>' +
+      '<div class="tile-meta">' + stars(p.rating) + ' <span class="muted">' + h(s ? s.name : '') + '</span></div>' +
+      '<button class="btn btn-sm" data-act="add" data-sku="' + h(p.sku) + '"' + (p.qty <= 0 ? ' disabled' : '') + '>' + (p.qty <= 0 ? 'Нет в наличии' : 'В корзину') + '</button></div></article>';
+  }
+  function grid(items, empty) { return items.length ? '<div class="grid">' + items.map(tile).join('') + '</div>' : '<div class="empty">' + empty + '</div>'; }
+
+  // ---------- покупатель ----------
+  function vHome() {
+    var all = SV.activeProducts();
+    var deals = all.filter(function (p) { return p.old; }).sort(function (a, b) { return (b.old - b.price) / b.old - (a.old - a.price) / a.old; }).slice(0, 4);
+    var top = all.slice().sort(function (a, b) { return b.rating - a.rating; }).slice(0, 8);
+    return '<section class="hero"><div class="hero-text"><p class="eyebrow">Маркетплейс с помощницей</p><h1>Скажите Светлане, что нужно. Она найдёт, сравнит и честно скажет, чего не знает.</h1>' +
+      '<form class="hero-ask" data-form="ask"><label class="sr" for="ask">Запрос для Светланы</label><input id="ask" name="q" placeholder="Подарок маме до 10 000" autocomplete="off"><button class="btn">Спросить</button></form>' +
+      '<div class="chips">' + ['Лёгкий ноутбук для учёбы', 'Наушники до 15 000', 'Сравни ноутбуки', 'Где мой заказ'].map(function (t) { return '<button class="chip" data-act="ask" data-q="' + h(t) + '">' + h(t) + '</button>'; }).join('') + '</div></div>' +
+      '<ul class="hero-facts"><li><b>' + D.SELLERS.length + '</b> проверенных продавцов, у каждого видны ИНН и статус</li><li><b>' + String(SV.FEE_PERCENT).replace('.', ',') + '%</b> комиссия площадки, без скрытых сборов для покупателя</li><li><b>Деньги у продавца</b> только после того, как вы получили заказ</li></ul></section>' +
+      '<nav class="cats" aria-label="Категории">' + D.CATEGORIES.map(function (c) { return '<a href="' + link('/catalog', { cat: c.slug }) + '">' + h(c.name) + '</a>'; }).join('') + '</nav>' +
+      (deals.length ? '<h2 class="sec">Подешевело</h2>' + grid(deals, '') : '') + '<h2 class="sec">Хвалят покупатели</h2>' + grid(top, '');
+  }
+  function vCatalog(r) {
+    var q = r.q.q || '', cat = r.q.cat || '', sort = r.q.sort || '', max = r.q.max ? Math.round(+r.q.max) : null;
+    var res = SV.search(q, { cat: cat, sort: sort, max: max ? max * 100 : null });
+    var catName = cat ? ((D.CATEGORIES.filter(function (c) { return c.slug === cat; })[0] || {}).name || D.SUBCATS[cat] || '') : '';
+    var opts = function (list, cur) { return list.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === cur ? ' selected' : '') + '>' + o[1] + '</option>'; }).join(''); };
+    var catOpts = [['', 'Все категории']]; D.CATEGORIES.forEach(function (c) { catOpts.push([c.slug, c.name]); c.children.forEach(function (k) { catOpts.push([k, '\u00a0\u00a0' + D.SUBCATS[k]]); }); });
+    return '<h1 class="page">' + (q ? 'По запросу «' + h(q) + '»' : catName ? h(catName) : 'Каталог') + '</h1>' +
+      '<form class="filters" data-form="filter"><label><span>Поиск</span><input name="q" value="' + h(q) + '" placeholder="Что ищете?"></label>' +
+      '<label><span>Категория</span><select name="cat">' + opts(catOpts, cat) + '</select></label>' +
+      '<label><span>Цена до, ₽</span><input name="max" inputmode="numeric" value="' + (max || '') + '" placeholder="Любая"></label>' +
+      '<label><span>Сортировка</span><select name="sort">' + opts([['', 'Сначала подходящие'], ['price-asc', 'Сначала дешевле'], ['price-desc', 'Сначала дороже'], ['rating', 'По рейтингу']], sort) + '</select></label><button class="btn">Показать</button></form>' +
+      '<p class="muted count">' + res.items.length + ' ' + SV.plural(res.items.length, 'товар', 'товара', 'товаров') + (res.budget ? ' до ' + rub(res.budget) : '') + '</p>' +
+      grid(res.items, 'Ничего не нашлось. Попробуйте другое слово или <a href="#/catalog">сбросьте фильтры</a>.');
+  }
+  function spark(pts) {
+    var mn = Math.min.apply(null, pts), mx = Math.max.apply(null, pts), w = 220, hgt = 48, rng = mx - mn || 1;
+    var d = pts.map(function (v, i) { return (i ? 'L' : 'M') + (i * w / (pts.length - 1)).toFixed(1) + ' ' + (hgt - 4 - (v - mn) / rng * (hgt - 8)).toFixed(1); }).join(' ');
+    return '<svg class="spark" viewBox="0 0 ' + w + ' ' + hgt + '" role="img" aria-label="Цена за 12 недель: от ' + rub(mn) + ' до ' + rub(mx) + '"><path d="' + d + '"/></svg>';
+  }
+  function vProduct(r) {
+    var p = SV.product(r.parts[1]);
+    if (!p) return '<div class="empty"><h1 class="page">Товар не найден</h1><p>Возможно, продавец снял его с продажи. <a href="#/catalog">В каталог</a></p></div>';
+    var s = SV.seller(p.seller), c = SV.catOf(p.cat), hist = SV.priceHistory(p), fav = SV.state().favorites.indexOf(p.sku) >= 0;
+    var similar = SV.search('', { cat: p.cat }).items.filter(function (x) { return x.sku !== p.sku; }).slice(0, 4);
+    return '<nav class="crumbs" aria-label="Путь"><a href="#/catalog">Каталог</a> / ' + (c ? '<a href="' + link('/catalog', { cat: c.slug }) + '">' + h(c.name) + '</a> / ' : '') + '<a href="' + link('/catalog', { cat: p.cat }) + '">' + h(D.SUBCATS[p.cat]) + '</a></nav>' +
+      '<div class="pdp"><div class="pdp-art">' + ART(p, 360) + '</div><div class="pdp-info"><h1>' + h(p.title) + '</h1><div class="tile-meta">' + stars(p.rating) + ' <span class="muted">' + p.reviews.length + ' ' + SV.plural(p.reviews.length, 'отзыв', 'отзыва', 'отзывов') + '</span></div>' +
+      '<div class="pdp-price">' + rub(p.price) + (p.old ? ' <s>' + rub(p.old) + '</s>' : '') + '</div>' + stockNote(p) +
+      '<div class="pdp-buy"><button class="btn btn-lg" data-act="add" data-sku="' + h(p.sku) + '"' + (p.qty <= 0 ? ' disabled' : '') + '>В корзину</button><button class="btn btn-ghost" data-act="fav" data-sku="' + h(p.sku) + '" aria-pressed="' + fav + '">' + (fav ? '♥ В избранном' : '♡ В избранное') + '</button></div>' +
+      '<div class="hist"><span class="muted">Цена за 12 недель</span>' + spark(hist) + '</div>' +
+      '<p class="desc">' + h(p.desc) + '</p><dl class="attrs">' + Object.keys(p.attrs || {}).map(function (k) { return '<dt>' + h(k) + '</dt><dd>' + h(p.attrs[k]) + '</dd>'; }).join('') + '</dl>' +
+      '<div class="seller-box"><div><b>' + h(s.name) + '</b> <span class="muted">' + h(s.type) + ', ИНН ' + h(s.inn) + '</span></div><div class="muted">' + h(s.about) + '</div><div class="trust">' + (s.identity ? '<span>Личность подтверждена</span>' : '') + (s.business ? '<span>Бизнес проверен</span>' : '') + (s.npd ? '<span>Самозанятый, чек НПД</span>' : '') + '<span>' + stars(s.rating).replace(/<[^>]+>/g, '') + ' · ' + s.orders + ' заказов</span></div></div></div></div>' +
+      '<h2 class="sec">Отзывы</h2>' + (p.reviews.length ? '<ul class="reviews">' + p.reviews.map(function (x) { return '<li><span class="stars">' + '★'.repeat(x[0]) + '<span class="dim">' + '★'.repeat(5 - x[0]) + '</span></span> <b>' + h(x[2]) + '</b> <span class="muted">купил на площадке</span><p>' + h(x[1]) + '</p></li>'; }).join('') + '</ul>' : '<div class="empty">Отзывов пока нет. Оставить отзыв можно после получения заказа.</div>') +
+      (similar.length ? '<h2 class="sec">Похожие</h2>' + grid(similar, '') : '');
+  }
+  function vFav() { var f = SV.state().favorites.map(SV.product).filter(Boolean); return '<h1 class="page">Избранное</h1>' + grid(f, 'Пока пусто. Нажмите ♥ на карточке, чтобы отложить товар.'); }
+  function vCart() {
+    var groups = SV.cartBySeller();
+    if (!groups.length) return '<h1 class="page">Корзина</h1><div class="empty">В корзине пусто. <a href="#/catalog">Перейти в каталог</a> или <button class="linkish" data-act="chat">спросить Светлану</button>.</div>';
+    var total = groups.reduce(function (a, g) { return a + g.subtotal; }, 0), bad = SV.cartLines().some(function (l) { return !l.available; });
+    return '<h1 class="page">Корзина</h1><div class="cart"><div>' + groups.map(function (g) {
+      return '<section class="cart-group"><h2>' + h(g.seller.name) + ' <span class="muted">отдельный заказ</span></h2>' + g.lines.map(function (l) {
+        var changed = l.snapshot && l.snapshot !== l.p.price;
+        return '<div class="line"><a class="line-art" href="#/p/' + h(l.sku) + '">' + ART(l.p, 64) + '</a><div class="line-main"><a href="#/p/' + h(l.sku) + '">' + h(l.p.title) + '</a><div class="muted">' + rub(l.p.price) + ' за шт.' + (changed ? ' <span class="warn">цена изменилась, было ' + rub(l.snapshot) + '</span>' : '') + (!l.available ? ' <span class="warn">доступно ' + l.p.qty + ' шт.</span>' : '') + '</div></div>' +
+          '<div class="qty"><button data-act="qty" data-sku="' + h(l.sku) + '" data-d="-1" aria-label="Меньше">−</button><output aria-label="Количество">' + l.qty + '</output><button data-act="qty" data-sku="' + h(l.sku) + '" data-d="1" aria-label="Больше"' + (l.qty >= l.p.qty ? ' disabled' : '') + '>+</button></div><div class="line-sum">' + rub(l.total) + '</div></div>';
+      }).join('') + '</section>';
+    }).join('') + '</div><aside class="summary"><div class="row"><span>Товары</span><b>' + rub(total) + '</b></div><div class="row muted"><span>Доставка</span><span>на следующем шаге</span></div>' +
+      (groups.length > 1 ? '<p class="muted small">Товары от ' + groups.length + ' продавцов оформятся отдельными заказами, оплата одна.</p>' : '') +
+      (bad ? '<p class="warn">Уменьшите количество отмеченных товаров.</p>' : '') + '<a class="btn btn-lg btn-block' + (bad ? ' is-disabled" aria-disabled="true' : '') + '" href="#/checkout">Оформить</a></aside></div>';
+  }
+  function vCheckout() {
+    var groups = SV.cartBySeller(); if (!groups.length) return vCart();
+    var st = SV.state(), a = st.lastAddress || { name: st.user.name, phone: '', city: 'Москва', street: '', house: '', flat: '' }, del = ui.delivery || 'pickup';
+    var sub = groups.reduce(function (x, g) { return x + g.subtotal; }, 0), dprice = SV.DELIVERY[del].price * groups.length;
+    return '<h1 class="page">Оформление</h1><form class="checkout" data-form="checkout" novalidate><div><fieldset><legend>Получатель и адрес</legend><div class="fgrid">' +
+      field('name', 'Получатель', a.name, 'autocomplete="name"') + field('phone', 'Телефон', a.phone, 'type="tel" autocomplete="tel" placeholder="+7 900 000-00-00"') + field('city', 'Город', a.city, 'autocomplete="address-level2"') + field('street', 'Улица', a.street, 'autocomplete="address-line1"') + field('house', 'Дом', a.house) + field('flat', 'Квартира', a.flat, 'placeholder="Необязательно"') +
+      '</div></fieldset><fieldset><legend>Доставка</legend>' + Object.keys(SV.DELIVERY).map(function (k) { var d = SV.DELIVERY[k]; return '<label class="radio"><input type="radio" name="delivery" value="' + k + '"' + (k === del ? ' checked' : '') + ' data-act="delivery"><span><b>' + h(d.label) + '</b> <span class="muted">' + h(d.days) + '</span></span><span>' + (d.price ? rub(d.price) : 'бесплатно') + '</span></label>'; }).join('') + (groups.length > 1 ? '<p class="muted small">Доставка считается за каждый из ' + groups.length + ' заказов.</p>' : '') + '</fieldset></div>' +
+      '<aside class="summary">' + groups.map(function (g) { return '<div class="row"><span>' + h(g.seller.name) + '</span><span>' + rub(g.subtotal) + '</span></div>'; }).join('') + '<div class="row"><span>Доставка</span><span>' + (dprice ? rub(dprice) : 'бесплатно') + '</span></div><div class="row total"><span>Итого</span><b>' + rub(sub + dprice) + '</b></div>' +
+      '<input type="hidden" name="key" value="' + h(ui.checkoutKey || (ui.checkoutKey = SV.uid('co'))) + '"><button class="btn btn-lg btn-block">Перейти к оплате</button><p class="muted small">Следующий шаг: тестовая оплата картой. Настоящие деньги не списываются.</p></aside></form>';
+  }
+  function payForm(o) {
+    return '<form class="pay" data-form="pay" data-id="' + h(o.id) + '" novalidate><h3>Оплата ' + rub(o.total) + '</h3><p class="muted small">Тестовая карта: 4242 4242 4242 4242, любой будущий срок, любой CVC.</p><div class="fgrid">' +
+      field('number', 'Номер карты', '', 'inputmode="numeric" autocomplete="cc-number" placeholder="0000 0000 0000 0000"') + field('exp', 'Срок', '', 'placeholder="ММ/ГГ" autocomplete="cc-exp"') + field('cvc', 'CVC', '', 'inputmode="numeric" maxlength="3" autocomplete="cc-csc"') + '</div><button class="btn btn-lg">Оплатить</button></form>';
+  }
+  function vOrders() {
+    var os = SV.state().orders;
+    return '<h1 class="page">Мои заказы</h1>' + (os.length ? '<ul class="orders">' + os.map(function (o) {
+      return '<li><a href="#/order/' + h(o.id) + '"><span class="o-num">' + h(o.number) + '</span><span class="muted">' + date(o.createdAt) + ' · ' + h(SV.seller(o.seller).name) + '</span><span>' + o.items.map(function (i) { return h(i.title); }).join(', ') + '</span><span class="o-end">' + badge(o.status) + '<b>' + rub(o.total) + '</b></span></a></li>';
+    }).join('') + '</ul>' : '<div class="empty">Заказов пока нет. <a href="#/catalog">Выбрать что-нибудь</a></div>');
+  }
+  function timeline(o) { return '<ol class="tl">' + o.history.map(function (x) { return '<li><b>' + h(SV.STATUS[x.s]) + '</b><span class="muted">' + date(x.at) + '</span><span>' + h(x.note) + '</span></li>'; }).join('') + '</ol>'; }
+  function vOrder(r) {
+    var o = SV.order(r.parts[1]); if (!o) return '<div class="empty"><h1 class="page">Заказ не найден</h1><a href="#/orders">Все заказы</a></div>';
+    var d = SV.state().disputes.filter(function (x) { return x.order === o.id; })[0], s = SV.seller(o.seller), act = [];
+    if (o.status === 'PAYMENT_PENDING' || o.status === 'PAID' || o.status === 'CONFIRMED') act.push('<button class="btn btn-ghost" data-act="cancel" data-id="' + o.id + '">Отменить заказ</button>');
+    if (o.status === 'SHIPPED') act.push('<button class="btn" data-act="delivered" data-id="' + o.id + '">Я получил заказ</button>');
+    var canReturn = o.status === 'DELIVERED' || o.status === 'COMPLETED', canDispute = o.payment && o.payment.status === 'SUCCEEDED' && !d && o.status !== 'CANCELLED' && o.status !== 'REFUNDED';
+    return '<nav class="crumbs"><a href="#/orders">Мои заказы</a></nav><div class="order-head"><h1 class="page">Заказ ' + h(o.number) + '</h1>' + badge(o.status) + '</div>' +
+      '<div class="order"><div>' + (o.status === 'PAYMENT_PENDING' ? payForm(o) : '') +
+      '<section class="block"><h2>Состав</h2>' + o.items.map(function (i) { var p = SV.product(i.sku) || i; return '<div class="line"><span class="line-art">' + ART(p, 56) + '</span><div class="line-main"><a href="#/p/' + h(i.sku) + '">' + h(i.title) + '</a><div class="muted">' + i.qty + ' × ' + rub(i.price) + '</div></div><div class="line-sum">' + rub(i.price * i.qty) + '</div></div>'; }).join('') + '</section>' +
+      (o.shipment ? '<section class="block"><h2>Доставка</h2><p>' + h(o.shipment.carrier) + ', трек <code>' + h(o.shipment.track) + '</code></p><ul class="events">' + o.shipment.events.map(function (e) { return '<li><span class="muted">' + date(e.at) + '</span> ' + h(e.text) + '</li>'; }).join('') + '</ul></section>' : '') +
+      (canReturn ? '<details class="block"><summary>Вернуть товар</summary><form data-form="return" data-id="' + o.id + '"><label class="field"><span>Причина</span><select name="reason"><option>Не подошёл</option><option>Брак или поломка</option><option>Не соответствует описанию</option><option>Пришёл не тот товар</option></select></label><button class="btn">Оформить возврат</button></form></details>' : '') +
+      (d ? '<section class="block"><h2>Спор</h2><p>' + h(d.text) + '</p><p>' + (d.status === 'OPEN' ? '<span class="st st-paid">На рассмотрении</span> Деньги продавцу заморожены до решения.' : '<span class="st st-completed">Решён ' + (d.status === 'RESOLVED_BUYER' ? 'в вашу пользу' : 'в пользу продавца') + '</span> ' + h(d.resolution)) + '</p></section>' :
+        canDispute ? '<details class="block"><summary>Проблема с заказом? Открыть спор</summary><form data-form="dispute" data-id="' + o.id + '"><label class="field' + (ui.errors.text ? ' has-err' : '') + '"><span>Что случилось</span><textarea name="text" rows="3" placeholder="Например: коробка вскрыта, нет зарядного устройства">' + '</textarea>' + err('text') + '</label><button class="btn">Отправить в арбитраж</button></form></details>' : '') +
+      '</div><aside class="summary"><div class="row"><span>Продавец</span><span>' + h(s.name) + '</span></div><div class="row"><span>Товары</span><span>' + rub(o.subtotal) + '</span></div><div class="row"><span>' + h(SV.DELIVERY[o.deliveryKind].label) + '</span><span>' + (o.delivery ? rub(o.delivery) : 'бесплатно') + '</span></div><div class="row total"><span>Итого</span><b>' + rub(o.total) + '</b></div>' +
+      (o.payment ? '<p class="muted small">Оплачено картой •• ' + h(o.payment.last4) + (o.payment.status === 'REFUNDED' ? ', деньги возвращены' : '') + '</p>' : '') + '<p class="muted small">' + h(o.address.city + ', ' + o.address.street + ', д. ' + o.address.house + (o.address.flat ? ', кв. ' + o.address.flat : '')) + '</p>' + act.join('') + '<h3>История</h3>' + timeline(o) + '</aside></div>';
+  }
+
+  // ---------- Светлана ----------
+  function chatPanel() {
+    var msgs = SV.state().chat;
+    return '<aside class="chat" id="chat" aria-label="Светлана"><header><div><b>Светлана</b><span class="muted small">помощница на правилах, без нейросети</span></div><button class="icon" data-act="chat" aria-label="Закрыть чат">×</button></header><div class="chat-log" aria-live="polite">' +
+      (msgs.length ? '' : '<p class="bubble her">Здравствуйте! Подберу товар под задачу и бюджет, сравню два варианта, подскажу статус заказа. В корзину кладу только после вашего подтверждения.</p>') +
+      msgs.map(function (m, idx) {
+        if (m.who === 'me') return '<p class="bubble me">' + h(m.text) + '</p>';
+        return '<div class="bubble her"><p>' + h(m.text) + '</p>' + (m.products || []).map(function (sku) { var p = SV.product(sku); return p ? '<a class="mini" href="#/p/' + h(sku) + '">' + ART(p, 40) + '<span>' + h(p.title) + '</span><b>' + rub(p.price) + '</b></a>' : ''; }).join('') +
+          (m.actions || []).map(function (a, j) { return a.href ? '<a class="btn btn-sm btn-ghost" href="' + h(a.href) + '">' + h(a.label) + '</a>' : m.done && m.done[j] ? '<span class="muted small">Готово: ' + h(a.label.toLowerCase()) + '</span>' : '<button class="btn btn-sm" data-act="confirm" data-m="' + idx + '" data-j="' + j + '">' + h(a.label) + '</button>'; }).join(' ') + '</div>';
+      }).join('') + '</div><form class="chat-in" data-form="chat"><label class="sr" for="chat-q">Сообщение Светлане</label><input id="chat-q" name="q" autocomplete="off" placeholder="Например, наушники до 15 000"><button class="btn">→</button></form></aside>';
+  }
+  function askSvetlana(text) {
+    text = String(text || '').trim(); if (!text) return;
+    var st = SV.state(), rep = SV.svetlana(text);
+    st.chat.push({ who: 'me', text: text });
+    st.chat.push({ who: 'her', text: rep.text, products: rep.products.map(function (p) { return p.sku; }), actions: rep.actions, done: {} });
+    st.chat = st.chat.slice(-40); SV.save(); ui.chatOpen = true;
+  }
+
+  // ---------- продавец ----------
+  function sellerNav(cur) { return '<nav class="subnav" aria-label="Кабинет продавца">' + [['/seller', 'Сводка'], ['/seller/orders', 'Заказы'], ['/seller/products', 'Товары'], ['/seller/new', 'Новый товар'], ['/seller/payouts', 'Выплаты']].map(function (x) { return '<a href="#' + x[0] + '"' + (x[0] === cur ? ' aria-current="page"' : '') + '>' + x[1] + '</a>'; }).join('') + '</nav>'; }
+  function sellerPick() { var sid = SV.state().sellerId; return '<label class="pick"><span class="muted small">Вы вошли как</span><select data-act="seller-pick" aria-label="Продавец">' + D.SELLERS.map(function (s) { return '<option value="' + s.id + '"' + (s.id === sid ? ' selected' : '') + '>' + h(s.name) + '</option>'; }).join('') + '</select></label>'; }
+  function sellerOrderRow(o) {
+    var b = '';
+    if (o.status === 'PAID') b = '<button class="btn btn-sm" data-act="s-confirm" data-id="' + o.id + '">Подтвердить</button>';
+    else if (o.status === 'CONFIRMED') b = '<form class="ship" data-form="ship" data-id="' + o.id + '"><select name="carrier" aria-label="Перевозчик"><option>СДЭК</option><option>Почта России</option><option>Boxberry</option><option>Яндекс Доставка</option></select><input name="track" placeholder="Трек-номер" aria-label="Трек-номер" required minlength="5"><button class="btn btn-sm">Отправить</button></form>';
+    else if (o.status === 'RETURN_REQUESTED') b = '<button class="btn btn-sm" data-act="s-return" data-id="' + o.id + '">Принять возврат</button>';
+    return '<tr><td><b>' + h(o.number) + '</b><div class="muted small">' + date(o.createdAt) + '</div></td><td>' + o.items.map(function (i) { return h(i.title) + ' × ' + i.qty; }).join('<br>') + (o.returnReason ? '<div class="warn small">Возврат: ' + h(o.returnReason) + '</div>' : '') + '</td><td class="num">' + rub(o.subtotal) + '</td><td>' + badge(o.status) + '</td><td>' + b + '</td></tr>';
+  }
+  function ordersTable(list, row, empty) { return list.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Заказ</th><th>Состав</th><th class="num">Сумма</th><th>Статус</th><th><span class="sr">Действие</span></th></tr></thead><tbody>' + list.map(row).join('') + '</tbody></table></div>' : '<div class="empty">' + empty + '</div>'; }
+  function vSeller(r) {
+    var st = SV.state(), sid = st.sellerId, s = SV.seller(sid), k = SV.sellerStats(sid), sub = r.parts[1] || '';
+    var head = '<div class="cab-head"><h1 class="page">' + h(s.name) + '</h1>' + sellerPick() + '</div>' + sellerNav('/seller' + (sub ? '/' + sub : ''));
+    var mine = SV.activeProducts().filter(function (p) { return p.seller === sid; });
+    if (!sub) {
+      var notes = st.notices.filter(function (n) { return n.seller === sid; }).slice(0, 5);
+      var stale = mine.filter(function (p) { return Date.now() - p.stockConfirmedAt > 48 * 36e5; }).length;
+      return head + '<div class="kpis"><div><span class="muted">Ждут подтверждения</span><b>' + k.toConfirm + '</b></div><div><span class="muted">Ждут отправки</span><b>' + k.toShip + '</b></div><div><span class="muted">Можно вывести</span><b>' + rub(k.available) + '</b></div><div><span class="muted">В ожидании</span><b>' + rub(k.pending) + '</b></div></div>' +
+        (stale ? '<p class="warn">У ' + stale + ' ' + SV.plural(stale, 'товара', 'товаров', 'товаров') + ' остаток не подтверждался больше двух дней. <a href="#/seller/products">Подтвердить</a></p>' : '') +
+        '<h2 class="sec">Последние события</h2>' + (notes.length ? '<ul class="events">' + notes.map(function (n) { return '<li><span class="muted">' + date(n.at) + '</span> ' + h(n.text) + '</li>'; }).join('') + '</ul>' : '<div class="empty">Пока тихо. Оформите заказ как покупатель, и он появится здесь.</div>');
+    }
+    if (sub === 'orders') return head + ordersTable(k.orders, sellerOrderRow, 'Заказов пока нет. Переключитесь на покупателя и купите товар этого продавца.');
+    if (sub === 'products') return head + '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Товар</th><th class="num">Цена</th><th class="num">Остаток</th><th>Подтверждён</th><th><span class="sr">Действие</span></th></tr></thead><tbody>' + mine.map(function (p) { var hrs = Math.round((Date.now() - p.stockConfirmedAt) / 36e5); return '<tr><td><a href="#/p/' + h(p.sku) + '">' + h(p.title) + '</a>' + (p.isNew ? ' <span class="st st-paid">новый</span>' : '') + '</td><td class="num">' + rub(p.price) + '</td><td class="num">' + p.qty + '</td><td>' + (hrs < 1 ? 'только что' : hrs < 48 ? hrs + ' ч назад' : '<span class="warn">' + Math.floor(hrs / 24) + ' дн. назад</span>') + '</td><td><button class="btn btn-sm btn-ghost" data-act="stock" data-sku="' + h(p.sku) + '">Остаток верный</button></td></tr>'; }).join('') + '</tbody></table></div>';
+    if (sub === 'new') {
+      var d = ui.draft;
+      return head + '<form class="block narrow" data-form="draft"><h2>Черновик по названию</h2><p class="muted">Светлана подберёт категорию и ключевые слова. Описание проверьте сами: она не придумывает характеристики.</p>' + field('title', 'Название товара', d ? d.title : '', 'placeholder="Например, керамическая кружка ручной работы"') + field('price', 'Цена, ₽', d && d.price ? d.price / 100 : '', 'inputmode="numeric"') + '<button class="btn">Составить черновик</button></form>' +
+        (d ? '<form class="block narrow" data-form="publish"><h2>Проверьте перед публикацией</h2><label class="field"><span>Категория</span><select name="cat">' + Object.keys(D.SUBCATS).map(function (c) { return '<option value="' + c + '"' + (c === d.cat ? ' selected' : '') + '>' + h(D.SUBCATS[c]) + '</option>'; }).join('') + '</select></label><p class="muted small">Уверенность: ' + h(d.confidence) + '</p><label class="field"><span>Описание</span><textarea name="desc" rows="4">' + h(d.desc) + '</textarea></label>' + field('qty', 'Остаток, шт.', '1', 'inputmode="numeric"') + '<button class="btn">Опубликовать</button></form>' : '');
+    }
+    if (sub === 'payouts') {
+      var pos = st.payouts.filter(function (p) { return p.seller === sid; });
+      return head + '<div class="kpis"><div><span class="muted">Можно вывести</span><b>' + rub(k.available) + '</b></div><div><span class="muted">Заморожено до доставки или спора</span><b>' + rub(k.pending) + '</b></div><div><span class="muted">Выплачено</span><b>' + rub(k.paid) + '</b></div></div>' +
+        '<p class="muted">Деньги становятся доступны после того, как покупатель получил заказ. Комиссия площадки ' + String(SV.FEE_PERCENT).replace('.', ',') + '% уже вычтена.</p><button class="btn btn-lg" data-act="payout"' + (k.available ? '' : ' disabled') + '>Вывести ' + rub(k.available) + '</button>' +
+        '<h2 class="sec">История выплат</h2>' + (pos.length ? '<ul class="events">' + pos.map(function (p) { return '<li><span class="muted">' + date(p.at) + '</span> ' + rub(p.amount) + ' за ' + p.count + ' ' + SV.plural(p.count, 'заказ', 'заказа', 'заказов') + ' <span class="muted">(тестовая выплата)</span></li>'; }).join('') + '</ul>' : '<div class="empty">Выплат ещё не было.</div>');
+    }
+    return head + '<div class="empty">Раздел не найден.</div>';
+  }
+
+  // ---------- админ ----------
+  function vAdmin(r) {
+    var st = SV.state(), sub = r.parts[1] || '', nav = '<nav class="subnav" aria-label="Администрирование">' + [['/admin', 'Обзор'], ['/admin/disputes', 'Споры'], ['/admin/orders', 'Заказы'], ['/admin/sellers', 'Продавцы']].map(function (x) { return '<a href="#' + x[0] + '"' + (x[0] === '/admin' + (sub ? '/' + sub : '') ? ' aria-current="page"' : '') + '>' + x[1] + '</a>'; }).join('') + '</nav>';
+    var head = '<h1 class="page">Администрирование</h1>' + nav, open = st.disputes.filter(function (d) { return d.status === 'OPEN'; });
+    if (!sub) {
+      var gmv = st.orders.filter(function (o) { return o.payment && o.payment.status === 'SUCCEEDED'; }).reduce(function (a, o) { return a + o.subtotal; }, 0);
+      var fees = st.settlements.filter(function (s) { return s.status !== 'CANCELLED'; }).reduce(function (a, s) { return a + s.fee; }, 0);
+      return head + '<div class="kpis"><div><span class="muted">Оборот (оплачено)</span><b>' + rub(gmv) + '</b></div><div><span class="muted">Комиссия площадки</span><b>' + rub(fees) + '</b></div><div><span class="muted">Заказов</span><b>' + st.orders.length + '</b></div><div><span class="muted">Открытых споров</span><b>' + open.length + '</b></div></div>' + (open.length ? '<p><a class="btn" href="#/admin/disputes">Разобрать споры</a></p>' : '');
+    }
+    if (sub === 'disputes') return head + (st.disputes.length ? st.disputes.map(function (d) {
+      var o = SV.order(d.order);
+      return '<section class="block"><div class="order-head"><h2>Заказ ' + h(o.number) + ' · ' + h(SV.seller(d.seller).name) + '</h2>' + (d.status === 'OPEN' ? '<span class="st st-paid">Открыт</span>' : '<span class="st st-completed">' + (d.status === 'RESOLVED_BUYER' ? 'За покупателем' : 'За продавцом') + '</span>') + '</div><p>' + h(d.text) + '</p><p class="muted small">Сумма ' + rub(o.total) + ', статус заказа: ' + h(SV.STATUS[o.status].toLowerCase()) + '</p>' +
+        (d.status === 'OPEN' ? '<form data-form="resolve" data-id="' + d.id + '"><label class="field"><span>Обоснование решения</span><textarea name="note" rows="2" required></textarea></label><div class="btns"><button class="btn" name="w" value="buyer">Вернуть деньги покупателю</button><button class="btn btn-ghost" name="w" value="seller">В пользу продавца</button></div></form>' : '<p>' + h(d.resolution) + '</p>') + '</section>';
+    }).join('') : '<div class="empty">Споров нет. Откройте спор по оплаченному заказу в роли покупателя.</div>');
+    if (sub === 'orders') return head + ordersTable(st.orders, function (o) { return '<tr><td><b>' + h(o.number) + '</b><div class="muted small">' + date(o.createdAt) + '</div></td><td>' + h(SV.seller(o.seller).name) + '<div class="muted small">' + o.items.length + ' ' + SV.plural(o.items.length, 'позиция', 'позиции', 'позиций') + '</div></td><td class="num">' + rub(o.total) + '</td><td>' + badge(o.status) + '</td><td class="muted small">комиссия ' + rub(o.fee) + '</td></tr>'; }, 'Заказов пока нет.');
+    if (sub === 'sellers') return head + '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Продавец</th><th>Форма</th><th>Проверки</th><th class="num">Товаров</th><th class="num">Рейтинг</th></tr></thead><tbody>' + D.SELLERS.map(function (s) { var n = SV.activeProducts().filter(function (p) { return p.seller === s.id; }).length; return '<tr><td><b>' + h(s.name) + '</b><div class="muted small">ИНН ' + h(s.inn) + '</div></td><td>' + h(s.type) + '</td><td>' + [s.identity && 'личность', s.business && 'бизнес', s.npd && 'НПД'].filter(Boolean).join(', ') + '</td><td class="num">' + n + '</td><td class="num">' + String(s.rating).replace('.', ',') + '</td></tr>'; }).join('') + '</tbody></table></div>';
+    return head + '<div class="empty">Раздел не найден.</div>';
+  }
+
+  // ---------- каркас ----------
+  function route(r) {
+    var p = r.parts[0] || '';
+    if (!p) return vHome(); if (p === 'catalog') return vCatalog(r); if (p === 'p') return vProduct(r); if (p === 'fav') return vFav(); if (p === 'cart') return vCart(); if (p === 'checkout') return vCheckout();
+    if (p === 'orders') return vOrders(); if (p === 'order') return vOrder(r); if (p === 'seller') return vSeller(r); if (p === 'admin') return vAdmin(r);
+    return '<div class="empty"><h1 class="page">Страница не найдена</h1><a href="#/">На главную</a></div>';
+  }
+  function header(r) {
+    var st = SV.state(), n = SV.cartCount(), area = r.parts[0] === 'seller' ? 'seller' : r.parts[0] === 'admin' ? 'admin' : 'buyer';
+    return '<div class="demo-bar" role="note">Демо: данные хранятся только в этом браузере, оплата тестовая. <button class="linkish" data-act="reset">Начать заново</button></div>' +
+      '<header class="top"><a class="logo" href="#/" aria-label="Svetlana, на главную"><span class="logo-mark" aria-hidden="true">С</span>Svetlana</a>' +
+      '<form class="top-search" data-form="search" role="search"><label class="sr" for="top-q">Поиск товаров</label><input id="top-q" name="q" placeholder="Поиск по товарам" value="' + h(r.parts[0] === 'catalog' ? r.q.q || '' : '') + '"></form>' +
+      '<nav class="roles" aria-label="Роль в демо">' + [['buyer', '#/', 'Покупатель'], ['seller', '#/seller', 'Продавец'], ['admin', '#/admin', 'Админ']].map(function (x) { return '<a href="' + x[1] + '"' + (x[0] === area ? ' aria-current="true"' : '') + '>' + x[2] + '</a>'; }).join('') + '</nav>' +
+      '<nav class="me" aria-label="Покупки"><a href="#/fav">Избранное</a><a href="#/orders">Заказы</a><a href="#/cart" class="cart-link">Корзина' + (n ? ' <span class="count-pill">' + n + '</span>' : '') + '</a><button class="btn btn-sm ask-btn" data-act="chat" aria-expanded="' + ui.chatOpen + '" aria-controls="chat">Светлана</button></nav></header>';
+  }
+  function page(hash) {
+    var r = parseHash(hash);
+    return header(r) + '<main id="main" tabindex="-1">' + route(r) + '</main>' + (ui.chatOpen ? chatPanel() : '') + '<div class="toast" role="status" aria-live="polite">' + (ui.flash ? h(ui.flash) : '') + '</div>' +
+      '<footer class="foot"><span>Svetlana AI Commerce · демо-версия</span><a href="https://github.com/paulafanasyev/Savetlana-App">Исходный код</a></footer>';
+  }
+
+  // ---------- действия ----------
+  function flash(t) { ui.flash = t; clearTimeout(ui.ft); ui.ft = setTimeout(function () { ui.flash = null; var el = document.querySelector('.toast'); if (el) el.textContent = ''; }, 3200); }
+  function go(hash) { if (location.hash === hash) render(); else location.hash = hash; }
+  function formData(f) { var o = {}; Array.prototype.forEach.call(f.elements, function (el) { if (!el.name || el.type === 'submit') return; if ((el.type === 'radio' || el.type === 'checkbox') && !el.checked) return; o[el.name] = el.value; }); return o; }
+  function onClick(e) {
+    var t = e.target.closest('[data-act]'); if (!t || t.tagName === 'SELECT' || t.type === 'radio') return;
+    var a = t.dataset.act, sku = t.dataset.sku, id = t.dataset.id;
+    try {
+      if (a === 'add') { SV.addToCart(sku, 1); flash('Добавлено в корзину'); }
+      else if (a === 'fav') flash(SV.toggleFav(sku) ? 'Добавлено в избранное' : 'Убрано из избранного');
+      else if (a === 'qty') { var l = SV.cartLines().filter(function (x) { return x.sku === sku; })[0]; if (l) SV.setQty(sku, l.qty + +t.dataset.d); }
+      else if (a === 'chat') { ui.chatOpen = !ui.chatOpen; }
+      else if (a === 'ask') { askSvetlana(t.dataset.q); }
+      else if (a === 'confirm') { var m = SV.state().chat[+t.dataset.m], ac = m && m.actions[+t.dataset.j]; if (ac && ac.confirm && ac.confirm.type === 'cart') { SV.addToCart(ac.confirm.sku, 1); m.done[t.dataset.j] = true; SV.save(); flash('Добавлено в корзину'); } }
+      else if (a === 'reset') { if (confirm('Сбросить демо: заказы, корзину и выплаты?')) { SV.reset(); ui.draft = null; ui.checkoutKey = null; flash('Демо сброшено'); go('#/'); return; } return; }
+      else if (a === 'cancel') { if (!confirm('Отменить заказ? Если он оплачен, деньги вернутся на карту.')) return; SV.cancel(id); flash('Заказ отменён'); }
+      else if (a === 'delivered') { SV.markDelivered(id); flash('Отлично! Деньги продавцу станут доступны к выводу'); }
+      else if (a === 's-confirm') { SV.sellerConfirm(id); flash('Заказ подтверждён, соберите и отправьте его'); }
+      else if (a === 's-return') { SV.approveReturn(id); flash('Возврат принят, деньги вернутся покупателю'); }
+      else if (a === 'stock') { SV.confirmStock(sku); flash('Остаток подтверждён'); }
+      else if (a === 'payout') { var p = SV.requestPayout(SV.state().sellerId); flash(p ? 'Выплата ' + rub(p.amount) + ' отправлена (тестовая)' : 'Нечего выводить'); }
+      else return;
+    } catch (ex) { flash(ex.message); }
+    e.preventDefault(); render();
+  }
+  function onChange(e) {
+    var t = e.target;
+    if (t.dataset.act === 'seller-pick') { SV.state().sellerId = t.value; SV.save(); render(); }
+    else if (t.dataset.act === 'delivery') { ui.delivery = t.value; var keep = formData(t.form); SV.state().lastAddress = keep; render(); }
+  }
+  function onSubmit(e) {
+    var f = e.target, kind = f.dataset.form; if (!kind) return; e.preventDefault();
+    var v = formData(f), id = f.dataset.id; ui.errors = {};
+    try {
+      if (kind === 'search') { go(link('/catalog', { q: v.q })); return; }
+      if (kind === 'filter') { go(link('/catalog', { q: v.q, cat: v.cat, sort: v.sort, max: String(v.max || '').replace(/\D/g, '') })); return; }
+      if (kind === 'ask' || kind === 'chat') { askSvetlana(v.q); }
+      else if (kind === 'checkout') {
+        var addr = { name: v.name, phone: v.phone, city: v.city, street: v.street, house: v.house, flat: v.flat }; SV.state().lastAddress = addr; SV.save();
+        var made = SV.placeOrder({ address: addr, delivery: v.delivery, key: v.key }); ui.checkoutKey = null;
+        flash(made.length > 1 ? 'Создано ' + made.length + ' ' + SV.plural(made.length, 'заказ', 'заказа', 'заказов') + ', оплатите первый' : 'Заказ создан, осталось оплатить'); go('#/order/' + made[made.length - 1].id); return;
+      }
+      else if (kind === 'pay') { SV.pay(id, v); flash('Оплата прошла. Продавец получил заказ'); var next = SV.state().orders.filter(function (o) { return o.status === 'PAYMENT_PENDING' && o.key && o.key === SV.order(id).key; })[0]; if (next) { flash('Оплачено. Остался ещё заказ ' + next.number); go('#/order/' + next.id); return; } }
+      else if (kind === 'return') { SV.requestReturn(id, v.reason); flash('Возврат оформлен, продавец получил уведомление'); }
+      else if (kind === 'dispute') { SV.openDispute(id, v.text); flash('Спор открыт. Деньги продавцу заморожены'); }
+      else if (kind === 'ship') { SV.sellerShip(id, v.carrier, v.track); flash('Отправлено, покупатель видит трек'); }
+      else if (kind === 'draft') { var pr = +String(v.price || '').replace(',', '.').replace(/[^\d.]/g, ''); ui.draft = SV.draftProduct(v.title, SV.state().sellerId, pr || null); }
+      else if (kind === 'publish') { var d = Object.assign({}, ui.draft, { cat: v.cat, desc: v.desc }); var np = SV.publishProduct(d, SV.state().sellerId, Math.round(+v.qty)); ui.draft = null; flash('Опубликовано'); go('#/p/' + np.sku); return; }
+      else if (kind === 'resolve') { var w = e.submitter ? e.submitter.value : 'buyer'; SV.resolveDispute(id, w, v.note); flash(w === 'buyer' ? 'Деньги возвращены покупателю' : 'Деньги разморожены продавцу'); }
+    } catch (ex) { if (ex.fields) ui.errors = ex.fields; else if (kind === 'dispute') ui.errors = { text: ex.message }; flash(ex.message); }
+    render();
+    if (Object.keys(ui.errors).length) { var bad = document.querySelector('[aria-invalid="true"]'); if (bad) bad.focus(); }
+    if (kind === 'chat' || kind === 'ask') { var log = document.querySelector('.chat-log'); if (log) log.scrollTop = log.scrollHeight; var ci = document.getElementById('chat-q'); if (ci) ci.focus(); }
+  }
+  var lastPath = null;
+  function render() {
+    var app = document.getElementById('app'), r = parseHash(location.hash), focusId = document.activeElement && document.activeElement.id;
+    app.innerHTML = page(location.hash);
+    document.title = (document.querySelector('main h1') || {}).textContent ? document.querySelector('main h1').textContent + ' · Svetlana демо' : 'Svetlana демо';
+    if (r.path !== lastPath) { if (lastPath !== null) { window.scrollTo(0, 0); var m = document.getElementById('main'); if (m) m.focus({ preventScroll: true }); } lastPath = r.path; ui.errors = {}; }
+    else if (focusId) { var el = document.getElementById(focusId); if (el) el.focus(); }
+  }
+  root.SV_APP = { page: page, parseHash: parseHash, link: link, ui: ui, askSvetlana: askSvetlana };
+  if (typeof document !== 'undefined' && document.getElementById) {
+    SV.load();
+    document.addEventListener('click', onClick); document.addEventListener('change', onChange); document.addEventListener('submit', onSubmit);
+    window.addEventListener('hashchange', render); window.addEventListener('keydown', function (e) { if (e.key === 'Escape' && ui.chatOpen) { ui.chatOpen = false; render(); } });
+    render();
+  }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script></body></html>
