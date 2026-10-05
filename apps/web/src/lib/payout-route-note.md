@@ -1,1 +1,1 @@
-Payout and checkout route hardening is tracked in PR #1 (server-derived payout idempotency key in src/lib/payout-key.ts; buyer-scoped checkout idempotency).
+TODO (audit, not yet applied): use payoutIdempotencyKey() in api/seller/payouts/route.ts, scope checkout idempotency key to buyer in api/checkout/route.ts, cap refunds in api/admin/disputes/[id]/route.ts, hide carrier errors in api/seller/orders/[id]/ship/route.ts.
