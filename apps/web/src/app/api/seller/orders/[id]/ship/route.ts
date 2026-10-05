@@ -7,10 +7,9 @@ import { notify } from "@/lib/domains/notifications";
 export const dynamic = "force-dynamic";
 
 /**
- * Seller hands an order to a carrier (spec §24, §33). The carrier is chosen
- * from the configured providers; if no real carrier adapter is available the
- * domain throws and the route reports an honest error instead of fabricating a
- * tracking number (spec §49). Requires a verified seller (P0).
+ * Seller hands an order to a carrier (spec §24, §33). If no real carrier
+ * adapter is available the domain throws and the route reports an honest
+ * error instead of fabricating a tracking number (spec §49).
  */
 export const POST = apiRoute(async (request, { params }) => {
   const { sellerId, user } = await requireVerifiedSeller(request, "отправлять заказы");
@@ -32,8 +31,6 @@ export const POST = apiRoute(async (request, { params }) => {
     return Response.json({ error: "Это заказ другого продавца", code: "forbidden" }, { status: 403 });
   }
 
-  // Seller may name their own carrier and supply the real tracking number they
-  // received from it. Both spellings are accepted; the carrier is preserved.
   const carrier = body.carrier ?? body.carrierName;
   if (!carrier) {
     return Response.json(
@@ -68,12 +65,16 @@ export const POST = apiRoute(async (request, { params }) => {
       sandbox: shipment.sandbox,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "carrier unavailable";
+    // Audit fix: raw carrier errors stay in server logs; only short Russian
+    // domain messages reach the seller.
+    console.error("[seller-ship] shipment failed", { orderId: order.id, sellerUserId: user.id, error: err });
+    const raw = err instanceof Error ? err.message : "";
+    const safe =
+      /^[А-Яа-яЁё]/.test(raw) && raw.length <= 200 && !/https?:\/\//i.test(raw)
+        ? raw
+        : "перевозчик временно недоступен";
     return Response.json(
-      {
-        error: `Не удалось создать отправление: ${message}`,
-        code: "carrier_unavailable",
-      },
+      { error: `Не удалось создать отправление: ${safe}`, code: "carrier_unavailable" },
       { status: 502 }
     );
   }

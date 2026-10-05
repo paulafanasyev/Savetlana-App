@@ -1,5 +1,6 @@
 import { apiRoute, jsonBody, readIdempotencyKey, tooManyRequests } from "@/lib/api-helpers";
 import { requireBuyer } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { createOrdersFromCart } from "@/lib/domains/orders";
 import { getCartView } from "@/lib/domains/cart";
 import { evaluateOrderRisk } from "@/lib/domains/risk";
@@ -24,12 +25,31 @@ export const POST = apiRoute(async (request) => {
     phone?: string;
   }>(request);
 
+  const clientKey = body.idempotencyKey ?? readIdempotencyKey(request);
+  if (clientKey !== undefined && (typeof clientKey !== "string" || clientKey.length === 0 || clientKey.length > 128)) {
+    return Response.json({ error: "Некорректный ключ идемпотентности", code: "bad_idempotency_key" }, { status: 400 });
+  }
+  if (clientKey) {
+    // Audit fix: an idempotency key is scoped to its buyer. A replay of someone
+    // else's key must never return their order group (IDOR via replay).
+    const existing = await prisma.orderGroup.findUnique({
+      where: { idempotencyKey: clientKey },
+      select: { buyerId: true },
+    });
+    if (existing && existing.buyerId !== user.id) {
+      return Response.json(
+        { error: "Этот ключ оформления уже использован. Обновите страницу и попробуйте снова.", code: "idempotency_conflict" },
+        { status: 409 },
+      );
+    }
+  }
+
   const view = await getCartView(user.id);
   if (view.lines.length === 0) {
     return Response.json({ error: "Корзина пуста", code: "empty_cart" }, { status: 400 });
   }
 
-  const idempotencyKey = body.idempotencyKey ?? readIdempotencyKey(request) ?? generateOrderNumber();
+  const idempotencyKey = clientKey ?? generateOrderNumber();
   const created = await createOrdersFromCart({
     buyerId: user.id,
     idempotencyKey,

@@ -22,23 +22,31 @@ const config: Config = {
           800: "#432c61",
           900: "#38244e",
         },
+        // Audit (a11y): #e8833a with white text was 2.7:1; #ad5512 is 5.1:1 (WCAG AA).
         accent: {
-          DEFAULT: "#e8833a",
-          dark: "#c96a26",
+          DEFAULT: "#ad5512",
+          dark: "#8f450e",
+          soft: "#fbeee3",
         },
         ink: {
           DEFAULT: "#1e1b2e",
           soft: "#5b5670",
-          faint: "#9a95ad",
+          // Audit (a11y): was #9a95ad (2.9:1 on white), now 5.2:1.
+          faint: "#6e6985",
+          // Aliases used by seller fulfilment UI (classes were undefined before).
+          2: "#5b5670",
+          3: "#6e6985",
         },
         surface: {
           DEFAULT: "#ffffff",
           muted: "#f7f6fa",
           line: "#e6e3ef",
+          2: "#f7f6fa",
         },
-        ok: "#1f9d55",
-        warn: "#d97706",
-        bad: "#dc2626",
+        ok: "#1f7a45",
+        good: "#1f7a45",
+        warn: "#b45309",
+        bad: "#c81e1e",
       },
       fontFamily: {
         sans: ["system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],

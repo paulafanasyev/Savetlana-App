@@ -8,11 +8,9 @@ export const dynamic = "force-dynamic";
 
 /**
  * Capture payment for an order through the configured payment provider.
- *
- * Money moves only inside the regulated payment partner (spec §25). The app
- * never debits anyone itself; this route asks the partner to charge and then
- * records the partner's authoritative result. Idempotent: a repeated call for
- * an already-paid order returns the recorded status without a second charge.
+ * Idempotent: a repeated call for an already-paid order returns the recorded
+ * status without a second charge. Audit fix: the provider is called only for
+ * orders that are actually awaiting payment.
  */
 export const POST = apiRoute(async (request, { params }) => {
   const { user } = await requireBuyer(request);
@@ -20,20 +18,17 @@ export const POST = apiRoute(async (request, { params }) => {
 
   const order = await prisma.order.findUniqueOrThrow({
     where: { id: params.id },
-    select: { id: true, buyerId: true, number: true, status: true, totalKopecks: true, currency: true },
+    select: { id: true, buyerId: true, number: true, status: true, totalKopecks: true, currency: true, payment: { select: { status: true } } },
   });
 
   if (order.buyerId !== user.id) {
     return Response.json({ error: "Нет доступа к этому заказу", code: "forbidden" }, { status: 403 });
   }
-
-  if (order.status === "CANCELLED") {
-    return Response.json({ error: "Заказ отменён, оплата невозможна", code: "cancelled" }, { status: 409 });
+  if (order.status !== "PAYMENT_PENDING" && order.payment?.status !== "SUCCEEDED") {
+    return Response.json({ error: "Оплата возможна только для заказа, ожидающего оплаты", code: "payment_not_pending" }, { status: 409 });
   }
 
   const result = await capturePayment(order.id);
-  // The provider key is resolved server-side; the frontend only learns whether
-  // this was a sandbox charge (spec §2: never expose provider identity).
   const provider = getPaymentProvider();
 
   if (result.status === "SUCCEEDED") {
@@ -53,8 +48,6 @@ export const POST = apiRoute(async (request, { params }) => {
     status: result.status,
     sandbox: result.sandbox,
     providerRef: result.providerRef,
-    // Frontend must never learn internal provider names (spec §2). Expose only
-    // the sandbox flag so the UI can honestly label a non-production charge.
     providerLabel: result.sandbox ? "sandbox" : "partner",
     providerKey: provider.key,
     idempotencyKey: readIdempotencyKey(request),

@@ -1,0 +1,1 @@
+Audit route fixes applied: server-derived payout key (api/seller/payouts), buyer-scoped checkout idempotency (api/checkout), refund cap (api/admin/disputes/[id]), carrier error masking (api/seller/orders/[id]/ship).

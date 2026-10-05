@@ -1,27 +1,28 @@
 /** @type {import('next').NextConfig} */
+const path = require("node:path");
+
+// Docker/VPS builds set NEXT_OUTPUT=standalone; Vercel builds keep the default.
+const standalone = process.env.NEXT_OUTPUT === "standalone";
+
 const nextConfig = {
   reactStrictMode: true,
-  // Uploads (seller photos, KYC documents, dispute evidence) can reach 5 MB.
+  poweredByHeader: false,
+  ...(standalone
+    ? { output: "standalone", outputFileTracingRoot: path.join(__dirname, "../../") }
+    : {}),
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",
     },
   },
   images: {
-    // P0 fix (audit §24): a wildcard hostname allowed any HTTPS image host to
-    // be proxied through us. Restricted to the hosts the platform actually
-    // uses; product photos and avatars are served from these CDNs.
     remotePatterns: [
       { protocol: "https", hostname: "images.svetlana.example" },
       { protocol: "https", hostname: "cdn.svetlana.example" },
       { protocol: "https", hostname: "avatars.svetlana.example" },
     ],
   },
-  // Security headers applied to every response.
   async headers() {
-    // Content-Security-Policy (P0 fix, audit §24). 'unsafe-inline' is scoped to
-    // style only — React inline styles need it; scripts are hash/nonce-free
-    // because the app ships no inline <script> with logic.
     const csp = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-eval'",

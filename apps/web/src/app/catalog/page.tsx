@@ -23,6 +23,8 @@ function CatalogInner() {
   const params = useSearchParams();
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [photo, setPhoto] = useState<VisionResult | null>(null);
   // useSearchParams() can be null during server rendering.
   const [q, setQ] = useState(params?.get("q") ?? "");
@@ -35,12 +37,20 @@ function CatalogInner() {
     if (query) url.searchParams.set("q", query);
     if (category) url.searchParams.set("category", category);
     setLoading(true);
+    setFailed(false);
     void fetch(url.toString())
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((d) => setItems(d.items ?? []))
-      .catch(() => setItems([]))
+      .catch(() => {
+        // A failed request is not the same as "nothing found": say so honestly.
+        setItems([]);
+        setFailed(true);
+      })
       .finally(() => setLoading(false));
-  }, [query, category]);
+  }, [query, category, attempt]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
@@ -70,6 +80,7 @@ function CatalogInner() {
         </button>
         <PhotoSearch onResult={(d) => {
           setPhoto(d);
+          setFailed(false);
           setItems(d.candidates.map((c) => ({
             id: c.productId,
             title: c.title,
@@ -88,7 +99,7 @@ function CatalogInner() {
           <div className="font-medium text-ink">{photo.explanation}</div>
           {photo.status === "MOCK_VERIFIED" && (
             <div className="mt-1 text-xs text-amber-800">
-              Распознавание работает в тестовом режиме — результат не является
+              Распознавание работает в тестовом режиме: результат не является
               настоящим анализом фотографии.
             </div>
           )}
@@ -103,12 +114,20 @@ function CatalogInner() {
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div>
           {loading ? (
-            <div className="card p-8 text-center text-ink-soft">Ищем подходящие варианты…</div>
+            <div className="card p-8 text-center text-ink-soft" aria-busy="true">Ищем подходящие варианты…</div>
+          ) : failed ? (
+            <div className="card p-8 text-center" role="alert">
+              <div className="text-lg font-semibold text-ink">Не удалось загрузить каталог</div>
+              <p className="mt-2 text-sm text-ink-soft">Проверьте соединение и попробуйте ещё раз.</p>
+              <button className="btn btn-primary mt-4" type="button" onClick={() => setAttempt((n) => n + 1)}>
+                Повторить
+              </button>
+            </div>
           ) : items.length === 0 ? (
             <div className="card p-8 text-center">
               <div className="text-lg font-semibold text-ink">Ничего не нашлось</div>
               <p className="mt-2 text-sm text-ink-soft">
-                Переформулируйте запрос или спросите Светлану — она подберёт альтернативы.
+                Переформулируйте запрос или спросите Светлану: она подберёт альтернативы.
               </p>
             </div>
           ) : (
@@ -173,7 +192,7 @@ interface VisionResult {
 
 /**
  * Photo search entry point (spec §6). Uploads an image to the vision pipeline
- * and surfaces the result — including the honest sandbox warning when the
+ * and surfaces the result, including the honest sandbox warning when the
  * recognition is not from a real model.
  */
 function PhotoSearch({ onResult }: { onResult: (d: VisionResult) => void }) {
@@ -223,7 +242,7 @@ function PhotoSearch({ onResult }: { onResult: (d: VisionResult) => void }) {
         <span className="hidden sm:inline">{busy ? "Распознаём…" : "По фото"}</span>
       </label>
       {error && (
-        <div className="absolute right-0 top-full mt-2 w-64 rounded-lg border border-line bg-white p-3 text-xs text-bad shadow-float">
+        <div className="absolute right-0 top-full mt-2 w-64 rounded-lg border border-surface-line bg-white p-3 text-xs text-bad shadow-float" role="alert">
           {error}
         </div>
       )}

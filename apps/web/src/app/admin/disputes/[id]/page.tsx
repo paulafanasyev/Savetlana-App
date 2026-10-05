@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 const REASON_CODES = [
   { code: "ITEM_NOT_RECEIVED", label: "Товар не получен" },
-  { code: "ITEM_NOT_AS_DESCRACTED", label: "Не соответствует описанию" },
+  { code: "ITEM_NOT_AS_DESCRIBED", label: "Не соответствует описанию" },
   { code: "ITEM_DAMAGED", label: "Товар повреждён" },
   { code: "PAYMENT_DISPUTE", label: "Спор по оплате" },
   { code: "RETURN_DISPUTE", label: "Спор по возврату" },
@@ -56,7 +56,7 @@ export default async function AdminDisputeCasePage({
       <header className="card p-6">
         <h1 className="text-xl font-bold text-ink">Дело {dispute.id.slice(0, 8)}</h1>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <span className="chip bg-surface-muted">Покупатель: {dispute.buyer.name ?? "—"}</span>
+          <span className="chip bg-surface-muted">Покупатель: {dispute.buyer.name ?? "не указан"}</span>
           <span className="chip bg-surface-muted">Продавец: {dispute.sellerProfile.displayName}</span>
           <span className="chip bg-surface-muted">Сумма заказа: {rub(orderTotal)}</span>
           {dispute.slaBreached && (

@@ -8,15 +8,20 @@ export const dynamic = "force-dynamic";
 /**
  * Background job entry point (P0-18, spec §50).
  *
- * Driven by Vercel Cron (see vercel.json) or any external scheduler that hits
- * this URL. Protected by a shared secret so the endpoint cannot be abused to
- * trigger unbounded payout work: the caller must present CRON_SECRET, which
- * only the deployment platform knows.
+ * Driven by Vercel Cron (see vercel.json), the `cron` container of the
+ * self-hosted docker-compose stack, or any external scheduler that hits this
+ * URL. Protected by a shared secret so the endpoint cannot be abused to
+ * trigger unbounded payout work: the caller must present
+ * `Authorization: Bearer <CRON_SECRET>`, which only the deployment knows.
+ *
+ * Vercel Cron issues GET requests, self-hosted schedulers use POST: both are
+ * accepted and share exactly the same authorization check. Before this fix
+ * only POST existed, so Vercel Cron received 405 and no job ever ran.
  *
  * Each call performs one bounded slice of every category (see jobs.ts), so a
  * missed tick degrades to slightly staler work rather than a lost job.
  */
-export const POST = apiRoute(async (request) => {
+async function handle(request: Request): Promise<Response> {
   const provided = request.headers.get("authorization");
   const expected = env.cronSecret;
   if (!expected) {
@@ -43,4 +48,7 @@ export const POST = apiRoute(async (request) => {
   }).catch(() => undefined);
 
   return Response.json(result);
-});
+}
+
+export const POST = apiRoute(async (request) => handle(request));
+export const GET = apiRoute(async (request) => handle(request));
