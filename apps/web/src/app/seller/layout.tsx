@@ -8,6 +8,7 @@ const NAV: { href: string; label: string }[] = [
   { href: "/seller", label: "Главная" },
   { href: "/seller/products", label: "Товары" },
   { href: "/seller/orders", label: "Заказы" },
+  { href: "/seller/payouts", label: "Выплаты" },
   { href: "/seller/disputes", label: "Споры" },
   { href: "/seller/documents", label: "Документы" },
   { href: "/seller/analytics", label: "Аналитика" },
@@ -20,7 +21,7 @@ export default async function SellerLayout({ children }: { children: ReactNode }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      <nav className="mb-6 flex flex-wrap gap-2">
+      <nav className="mb-6 flex flex-wrap gap-2" aria-label="Кабинет продавца">
         {NAV.map((item) => (
           <Link key={item.href} href={item.href} className="btn btn-ghost text-sm">
             {item.label}
