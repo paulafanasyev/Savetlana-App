@@ -32,7 +32,7 @@ export default async function Home() {
         <div className="card flex flex-col justify-center gap-4 p-6 md:p-10">
           <span className="chip w-fit">AI-нативная платформа</span>
           <h1 className="text-3xl font-bold leading-tight text-ink md:text-5xl">
-            Не ищите товар — <span className="text-svetlana-600">объясните задачу</span>.
+            Не ищите товар, <span className="text-svetlana-600">объясните задачу</span>.
           </h1>
           <p className="max-w-xl text-base text-ink-soft md:text-lg">
             Светлана понимает контекст покупки: для кого, зачем, в каком бюджете и к какому сроку.
@@ -75,28 +75,38 @@ export default async function Home() {
 
       <section className="mt-10">
         <h2 className="mb-4 text-xl font-bold text-ink">Популярные товары</h2>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {products.map((p) => (
-            <Link key={p.id} href={`/product/${p.id}`} className="card overflow-hidden transition-shadow hover:shadow-float">
-              <div className="aspect-square bg-surface-muted">
-                {p.images[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.images[0].url} alt={p.title} className="h-full w-full object-contain" />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-3xl">📦</div>
-                )}
-              </div>
-              <div className="space-y-1.5 p-3">
-                <div className="line-clamp-2 text-sm font-medium text-ink">{p.title}</div>
-                <div className="text-base font-bold text-svetlana-700">{rub(p.priceKopecks)}</div>
-                <div className="text-xs text-ink-soft">{p.sellerProfile.displayName}</div>
-                <div className="text-xs text-ink-faint">
-                  {p.inventory?.confirmedBySeller ? "✓ наличие подтверждено" : "наличе уточняется"}
-                </div>
-              </div>
+        {products.length === 0 ? (
+          <div className="card p-10 text-center text-ink-soft">
+            Витрина пока пустая. Продавцы скоро добавят товары, а пока можно{" "}
+            <Link href="/svetlana" className="text-svetlana-700 hover:underline">
+              рассказать Светлане, что вы ищете
             </Link>
-          ))}
-        </div>
+            .
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {products.map((p) => (
+              <Link key={p.id} href={`/product/${p.id}`} className="card overflow-hidden transition-shadow hover:shadow-float">
+                <div className="aspect-square bg-surface-muted">
+                  {p.images[0] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.images[0].url} alt={p.title} className="h-full w-full object-contain" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-3xl" aria-hidden="true">📦</div>
+                  )}
+                </div>
+                <div className="space-y-1.5 p-3">
+                  <div className="line-clamp-2 text-sm font-medium text-ink">{p.title}</div>
+                  <div className="text-base font-bold text-svetlana-700">{rub(p.priceKopecks)}</div>
+                  <div className="text-xs text-ink-soft">{p.sellerProfile.displayName}</div>
+                  <div className="text-xs text-ink-faint">
+                    {p.inventory?.confirmedBySeller ? "✓ наличие подтверждено" : "наличие уточняется"}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );
