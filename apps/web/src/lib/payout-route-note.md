@@ -1,1 +1,1 @@
-TODO (audit, not yet applied): use payoutIdempotencyKey() in api/seller/payouts/route.ts, scope checkout idempotency key to buyer in api/checkout/route.ts, cap refunds in api/admin/disputes/[id]/route.ts, hide carrier errors in api/seller/orders/[id]/ship/route.ts.
+Audit route fixes applied: server-derived payout key (api/seller/payouts), buyer-scoped checkout idempotency (api/checkout), refund cap (api/admin/disputes/[id]), carrier error masking (api/seller/orders/[id]/ship).
