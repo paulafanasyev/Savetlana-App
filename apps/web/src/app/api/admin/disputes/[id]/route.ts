@@ -33,30 +33,36 @@ export const POST = apiRoute(async (request, ctx) => {
   if (!rateLimit("admin:dispute:act", 10, 60_000)) return tooManyRequests();
   const auth = await requireAdmin(request);
 
-  const raw: Record<string, string> = request.headers
-    .get("content-type")
-    ?.includes("application/json")
+  // Admin forms are HTML form-encoded; the JSON shape is kept for API clients.
+  const isJson = request.headers.get("content-type")?.includes("application/json") ?? false;
+  const raw: Record<string, string> = isJson
     ? await jsonBody<Record<string, string>>(request)
     : Object.fromEntries(
         (await request.formData()).entries().map(([k, v]) => [k, String(v)]),
       );
+  // HTML forms get a redirect back to the case file instead of a raw JSON page.
+  const done = (payload: unknown, flag: string) =>
+    isJson
+      ? Response.json(payload)
+      : new Response(null, { status: 303, headers: { Location: `/admin/disputes/${encodeURIComponent(ctx.params.id)}?done=${flag}` } });
 
-  const action = raw.action;
+  const action = raw.action ?? "";
   const refundRub = Number(raw.refundRub ?? 0);
 
   if (action === "assign") {
     const d = await assignAdmin(ctx.params.id, auth.user.id);
-    return Response.json({ dispute: d });
+    return done({ dispute: d }, "assigned");
   }
 
-  if (action === "resolve") {
-    const winner: "buyer" | "seller" | undefined = raw.winner
-      ? (raw.winner as "buyer" | "seller")
-      : action.startsWith("resolve_")
-        ? (action.slice("resolve_".length) as "buyer" | "seller")
-        : undefined;
+  // Audit fix: the case-file form submits action=resolve_buyer / resolve_seller;
+  // before, only the literal "resolve" was accepted, so admins could never
+  // resolve a dispute from the UI.
+  if (action === "resolve" || action.startsWith("resolve_")) {
+    const fromAction = action.startsWith("resolve_") ? action.slice("resolve_".length) : undefined;
+    const winnerRaw = raw.winner ?? fromAction;
+    const winner = winnerRaw === "buyer" || winnerRaw === "seller" ? winnerRaw : undefined;
     if (!winner || !raw.reasonCode || !raw.resolution) {
-      throw new ApiError(400, "Укажите winner, reasonCode и resolution");
+      throw new ApiError(400, "Укажите сторону, код причины и обоснование решения");
     }
 
     let refundAmountKopecks: number | undefined =
@@ -80,7 +86,7 @@ export const POST = apiRoute(async (request, ctx) => {
       resolution: raw.resolution,
       refundAmountKopecks,
     });
-    return Response.json(result);
+    return done(result, "resolved");
   }
 
   throw new ApiError(400, "Неизвестное действие");

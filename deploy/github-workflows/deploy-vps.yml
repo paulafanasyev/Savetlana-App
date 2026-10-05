@@ -1,0 +1,91 @@
+name: Deploy to VPS
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+env:
+  APP_IMAGE: ghcr.io/${{ github.repository_owner }}/savetlana-app
+  TOOLS_IMAGE: ghcr.io/${{ github.repository_owner }}/savetlana-app-tools
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runner
+          push: true
+          tags: ${{ env.APP_IMAGE }}:${{ steps.meta.outputs.tag }},${{ env.APP_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: tools
+          push: true
+          tags: ${{ env.TOOLS_IMAGE }}:${{ steps.meta.outputs.tag }},${{ env.TOOLS_IMAGE }}:latest
+          cache-from: type=gha
+
+  deploy:
+    needs: images
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "deploy/docker-compose.yml,deploy/Caddyfile"
+          target: /opt/svetlana
+          strip_components: 1
+      - uses: appleboy/ssh-action@v1.2.0
+        env:
+          TAG: ${{ needs.images.outputs.tag }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          APP_IMAGE: ${{ env.APP_IMAGE }}
+          TOOLS_IMAGE: ${{ env.TOOLS_IMAGE }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: TAG,GHCR_TOKEN,GHCR_USER,APP_IMAGE,TOOLS_IMAGE
+          script: |
+            set -euo pipefail
+            cd /opt/svetlana
+            sed -i "s#^APP_IMAGE=.*#APP_IMAGE=$APP_IMAGE:$TAG#; s#^TOOLS_IMAGE=.*#TOOLS_IMAGE=$TOOLS_IMAGE:$TAG#" .env
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            docker compose pull
+            docker logout ghcr.io
+            docker compose up -d --remove-orphans
+            for i in $(seq 1 30); do
+              if docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
+                echo "health OK ($TAG)"; docker image prune -f >/dev/null; exit 0
+              fi
+              sleep 5
+            done
+            echo "health FAILED"; docker compose logs --tail=80 app migrate; exit 1
