@@ -120,6 +120,13 @@ export const env = {
   // Signing secret for incoming payment webhooks (P0-7). Without it the
   // platform refuses to accept provider events at all.
   paymentWebhookSecret: optional("PAYMENT_WEBHOOK_SECRET"),
+  // ЮKassa (api.yookassa.ru/v3). Без ключей — sandbox. Уведомления: /api/webhooks/yookassa.
+  yookassaShopId: optional("YOOKASSA_SHOP_ID"),
+  yookassaSecretKey: optional("YOOKASSA_SECRET_KEY"),
+  // Чек 54-ФЗ в каждом платеже (включать, если подключены «Чеки от ЮKassa»).
+  yookassaReceipts: booleanFlag("YOOKASSA_RECEIPTS", false),
+  // Ставка НДС для чека: 1 — без НДС (справочник vat_code ЮKassa).
+  yookassaVatCode: Number(optional("YOOKASSA_VAT_CODE") ?? "1"),
   deliveryProviderApiKey: optional("DELIVERY_PROVIDER_API_KEY"),
   // --- Real carrier adapters (audit §10) ----------------------------------
   // CDEK works with either a personal OAuth token OR an account/secure-key
@@ -210,7 +217,8 @@ export const hasExternalAiCredentials = Boolean(
 export const integrationStatus = {
   externalAi: hasExternalAiCredentials ? "READY" : "PENDING_EXTERNAL_ACCESS",
   payment:
-    env.paymentProviderApiKey && env.paymentProviderBaseUrl
+    (env.yookassaShopId && env.yookassaSecretKey) ||
+    (env.paymentProviderApiKey && env.paymentProviderBaseUrl)
       ? "READY"
       : "PENDING_EXTERNAL_ACCESS",
   delivery: env.deliveryProviderApiKey ? "READY" : "PENDING_EXTERNAL_ACCESS",
