@@ -10,6 +10,7 @@
  *      cleanup.
  *   3. Carrier tracking sync for in-flight shipments.
  *   4. Сверка зависших платежей — если уведомление банка потерялось.
+ *   5. Автоотмена заказов, не оплаченных за 24 часа (товар возвращается в продажу).
  *
  * This module exposes a single `runJobs()` entry point that performs one
  * bounded slice of every category, so it can be driven by Vercel Cron
@@ -24,6 +25,7 @@
 import { prisma } from "../prisma";
 import { processPayoutOutbox } from "./payments";
 import { reconcilePendingPayments } from "./payment-webhooks";
+import { expireUnpaidOrders } from "./order-expiry";
 import { sweepStaleAvailability } from "./inventory";
 import { sweepExpiredDocuments } from "./documents";
 import { syncTracking } from "./delivery";
@@ -59,11 +61,16 @@ async function timed<T>(
 export async function runJobs(): Promise<JobRunResult> {
   const startedAt = new Date();
 
+  // Сначала сверка оплат и только потом автоотмена: оплаченный заказ не
+  // должен успеть отмениться раньше, чем пройдёт его оплата.
+  const reconcile = await timed("payment_reconcile", () => reconcilePendingPayments({ limit: 20 }), (r) =>
+    `${r.checked} checked, ${r.updated} updated, ${r.failed} failed`);
+  const expiry = await timed("unpaid_orders_expiry", () => expireUnpaidOrders({ limit: 25 }), (r) =>
+    `${r.checked} checked, ${r.cancelled} cancelled, ${r.paid} paid, ${r.waiting} waiting, ${r.failed} failed`);
+
   const entries = await Promise.all([
     timed("payout_outbox", () => processPayoutOutbox({ limit: 25 }), (r) =>
       `${r.processed} processed, ${r.succeeded} succeeded, ${r.failed} failed`),
-    timed("payment_reconcile", () => reconcilePendingPayments({ limit: 20 }), (r) =>
-      `${r.checked} checked, ${r.updated} updated, ${r.failed} failed`),
     timed("stale_availability", () => sweepStaleAvailability(), (r) =>
       `${r.hidden.length} hidden, ${r.unknown.length} unconfirmed, ${r.warned.length} warned`),
     timed("expired_documents", () => sweepExpiredDocuments(), (n) => `${n} expired`),
@@ -77,7 +84,7 @@ export async function runJobs(): Promise<JobRunResult> {
   return {
     startedAt: startedAt.toISOString(),
     finishedAt: new Date().toISOString(),
-    categories: Object.fromEntries(entries),
+    categories: Object.fromEntries([reconcile, expiry, ...entries]),
   };
 }
 
