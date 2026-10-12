@@ -7,6 +7,9 @@
  * (уведомления ЮKassa не подписаны, источник правды — только её API) и только
  * тогда помечаем заказ оплаченным.
  *
+ * method="sbp" — платёж сразу через СБП (payment_method_data.type = "sbp"):
+ * покупатель выбирает свой банк и подтверждает оплату в приложении.
+ *
  * Включается переменными (только сервер):
  *   YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY
  *   YOOKASSA_RECEIPTS=true  — передавать чек по 54-ФЗ (нужно, если включены «Чеки от ЮKassa»)
@@ -165,6 +168,7 @@ export class YooKassaPaymentProvider implements PaymentProvider {
       description: (params.description ?? `Заказ ${params.orderId}`).slice(0, 128),
       metadata: { order_id: params.orderId },
     };
+    if (params.method === "sbp") body.payment_method_data = { type: "sbp" };
     if (params.receipt) body.receipt = params.receipt;
     const p = await this.call<YooPayment>("/payments", { method: "POST", body, idempotenceKey: params.idempotencyKey });
     return {

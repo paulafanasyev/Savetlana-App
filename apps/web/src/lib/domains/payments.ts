@@ -15,7 +15,8 @@
  *   delivery         = carrier-calculated, per seller order
  *   payout           = gross - platformFee - paymentFee - delivery - adjustments
  *
- * Provider order: ЮKassa (YOOKASSA_SHOP_ID/SECRET_KEY) → generic partner → sandbox.
+ * Эквайеры: ЮKassa, Т-Банк, Сбербанк, Альфа-Банк, generic partner → sandbox.
+ * Основной выбирается PAYMENT_ACQUIRER, иначе первый настроенный. См. docs/PAYMENTS_RU.md.
  */
 import { prisma } from "../prisma";
 import { env } from "../env";
@@ -24,6 +25,8 @@ import { toKopecks } from "../utils";
 import type { PayoutStatus } from "../db/enums";
 import { audit } from "./audit";
 import { YooKassaPaymentProvider, buildReceipt, type YooReceipt } from "./yookassa";
+import { TbankPaymentProvider } from "./tbank";
+import { RbsPaymentProvider } from "./rbs";
 
 export const PLATFORM_FEE_PERCENT = env.platformFeePercent;
 
@@ -67,6 +70,9 @@ export function computeSettlement(params: {
 // for development/tests and is *always* recorded with sandbox: true, so a
 // sandbox payment can never be mistaken for a real one (spec §49, §161).
 
+/** Способ оплаты, который выбрал покупатель: карта (страница банка) или СБП. */
+export type PaymentMethod = "card" | "sbp";
+
 export interface ChargeParams {
   orderId: string;
   amountKopecks: number;
@@ -78,6 +84,8 @@ export interface ChargeParams {
   returnUrl?: string;
   /** Fiscal receipt (54-ФЗ) for partners that issue it. */
   receipt?: YooReceipt;
+  /** «Оплатить через СБП»: ЮKassa и Т-Банк дают прямую ссылку СБП. */
+  method?: PaymentMethod;
 }
 
 export interface ChargeResult {
@@ -214,23 +222,46 @@ export class PartnerPaymentProvider implements PaymentProvider {
   }
 }
 
+/** Все реальные эквайеры в порядке по умолчанию (включены те, у кого есть ключи). */
+export function listPaymentProviders(): PaymentProvider[] {
+  return [
+    new YooKassaPaymentProvider(),
+    new TbankPaymentProvider(),
+    new RbsPaymentProvider("sber"),
+    new RbsPaymentProvider("alfa"),
+    new PartnerPaymentProvider(),
+  ];
+}
+
 export function getPaymentProvider(): PaymentProvider {
-  const yookassa = new YooKassaPaymentProvider();
-  if (yookassa.available) return yookassa;
-  const partner = new PartnerPaymentProvider();
-  if (partner.available) return partner;
-  return new SandboxPaymentProvider();
+  const all = listPaymentProviders();
+  const wanted = env.paymentAcquirer?.trim().toLowerCase();
+  if (wanted) {
+    const key = wanted === "partner" ? "partner-payment" : wanted;
+    const chosen = all.find((p) => p.key === key);
+    if (chosen?.available) return chosen;
+  }
+  return all.find((p) => p.available) ?? new SandboxPaymentProvider();
+}
+
+/** Эквайер, которым проведён платёж (для возврата через тот же банк). */
+export function getPaymentProviderByKey(key: string | null | undefined): PaymentProvider | null {
+  if (!key) return null;
+  if (key === "sandbox-payment") return new SandboxPaymentProvider();
+  const found = listPaymentProviders().find((p) => p.key === key);
+  return found && found.available ? found : null;
 }
 
 /**
  * Idempotent payment capture (spec §125). The idempotency key is derived from
  * the order, so a retried checkout can never double-charge.
  *
- * Redirect partners (ЮKassa) return PENDING plus `confirmationUrl`: the buyer
- * pays on the partner page, and the order is marked PAID only by the webhook
- * after the partner API confirms the payment.
+ * Redirect partners (ЮKassa, Т-Банк, Сбер, Альфа) return PENDING plus
+ * `confirmationUrl`: the buyer pays on the bank page (or in the bank app via
+ * СБП), and the order is marked PAID only by the webhook after the bank API
+ * confirms the payment.
  */
-export async function capturePayment(orderId: string): Promise<{
+export async function capturePayment(orderId: string, method: PaymentMethod = "card"): Promise<{
   status: string;
   sandbox: boolean;
   providerRef: string | null;
@@ -255,7 +286,7 @@ export async function capturePayment(orderId: string): Promise<{
   }
 
   const provider = getPaymentProvider();
-  const idempotencyKey = `ord_${order.id}`;
+  const idempotencyKey = method === "sbp" ? `ord_${order.id}_sbp` : `ord_${order.id}`;
 
   let receipt: YooReceipt | undefined;
   if (provider.key === "yookassa" && env.yookassaReceipts) {
@@ -282,6 +313,7 @@ export async function capturePayment(orderId: string): Promise<{
     description: `Заказ ${order.number}`,
     returnUrl: `${env.publicAppUrl}/orders/${order.id}`,
     receipt,
+    method,
   });
 
   const payment = await prisma.payment.upsert({
@@ -785,7 +817,8 @@ export async function processRefund(params: {
     };
   }
 
-  const provider = getPaymentProvider();
+  // Возврат идёт через тот банк, которым платили.
+  const provider = getPaymentProviderByKey(refund.payment.provider) ?? getPaymentProvider();
 
   // Persist intent BEFORE the partner call, then execute outside any DB
   // transaction. A timeout must not leave the platform unsure whether the

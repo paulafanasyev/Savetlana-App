@@ -293,57 +293,78 @@ function ReturnActions({ orderId, onChanged }: { orderId: string; onChanged: () 
   );
 }
 
+/**
+ * Две кнопки: карта (страница банка: карты, «Мир», SberPay, T-Pay) и СБП
+ * (оплата в приложении своего банка по QR или ссылке). Заказ становится
+ * оплаченным только после подтверждения банка.
+ */
 function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void }) {
   const [state, setState] = useState<"idle" | "busy" | "ok" | "wait" | "err">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [busyMethod, setBusyMethod] = useState<"card" | "sbp" | null>(null);
+
+  async function pay(method: "card" | "sbp") {
+    setState("busy");
+    setBusyMethod(method);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/pay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setState("err");
+        setMessage(body?.error ?? "Оплата не удалась");
+        return;
+      }
+      if (body.status !== "SUCCEEDED" && typeof body.confirmationUrl === "string" && body.confirmationUrl.startsWith("https://")) {
+        // Оплата на странице банка или в приложении банка (СБП), потом покупатель вернётся сюда.
+        setMessage(method === "sbp" ? "Открываем СБП: выберите свой банк и подтвердите оплату…" : "Переходим на защищённую страницу оплаты…");
+        window.location.assign(body.confirmationUrl);
+        return;
+      }
+      if (body.status !== "SUCCEEDED") {
+        setState("wait");
+        setMessage("Ждём подтверждение оплаты от банка. Статус обновится автоматически.");
+        onPaid();
+        return;
+      }
+      setState("ok");
+      setMessage(
+        body.sandbox
+          ? "Оплата проведена в песочнице (sandbox). Продавец приступит к сборке."
+          : "Оплата подтверждена банком."
+      );
+      onPaid();
+    } catch {
+      setState("err");
+      setMessage("Не удалось связаться с платёжным сервисом");
+    } finally {
+      setBusyMethod(null);
+    }
+  }
+
+  const disabled = state === "busy" || state === "ok";
 
   return (
     <div className="mt-4 border-t border-line pt-4">
-      <button
-        className="btn btn-primary w-full sm:w-auto"
-        disabled={state === "busy" || state === "ok"}
-        onClick={async () => {
-          setState("busy");
-          setMessage(null);
-          try {
-            const res = await fetch(`/api/orders/${orderId}/pay`, { method: "POST" });
-            const body = await res.json();
-            if (!res.ok) {
-              setState("err");
-              setMessage(body?.error ?? "Оплата не удалась");
-              return;
-            }
-            if (body.status !== "SUCCEEDED" && typeof body.confirmationUrl === "string" && body.confirmationUrl.startsWith("https://")) {
-              // ЮKassa: оплата на её странице, потом покупатель вернётся сюда.
-              setMessage("Переходим на защищённую страницу оплаты…");
-              window.location.assign(body.confirmationUrl);
-              return;
-            }
-            if (body.status !== "SUCCEEDED") {
-              setState("wait");
-              setMessage("Ждём подтверждение оплаты от платёжного сервиса. Статус обновится автоматически.");
-              onPaid();
-              return;
-            }
-            setState("ok");
-            setMessage(
-              body.sandbox
-                ? "Оплата проведена в песочнице (sandbox). Продавец приступит к сборке."
-                : "Оплата подтверждена платёжным партнёром."
-            );
-            onPaid();
-          } catch {
-            setState("err");
-            setMessage("Не удалось связаться с платёжным сервисом");
-          }
-        }}
-      >
-        {state === "busy" && "Оплачиваем…"}
-        {state === "idle" && "Оплатить заказ"}
-        {state === "ok" && "✓ Оплачено"}
-        {state === "wait" && "Проверить оплату"}
-        {state === "err" && "Повторить оплату"}
-      </button>
+      {state === "ok" ? (
+        <button className="btn btn-primary w-full sm:w-auto" disabled>
+          ✓ Оплачено
+        </button>
+      ) : (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button className="btn btn-primary w-full sm:w-auto" disabled={disabled} onClick={() => void pay("card")}>
+            {busyMethod === "card" ? "Оплачиваем…" : state === "wait" ? "Проверить оплату" : "Оплатить картой"}
+          </button>
+          <button className="btn btn-ghost w-full sm:w-auto" disabled={disabled} onClick={() => void pay("sbp")}>
+            {busyMethod === "sbp" ? "Открываем СБП…" : "Оплатить через СБП"}
+          </button>
+        </div>
+      )}
+      <p className="mt-2 text-xs text-ink-soft">Карты «Мир», Visa, Mastercard, SberPay, T-Pay и СБП. Данные карты вводятся только на странице банка.</p>
       {message && (
         <p className={`mt-2 text-xs ${state === "ok" ? "text-good" : state === "wait" || state === "busy" ? "text-ink-soft" : "text-bad"}`}>{message}</p>
       )}
