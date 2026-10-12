@@ -25,7 +25,16 @@ export const POST = apiRoute(async (request, { params }) => {
 
   const order = await prisma.order.findUniqueOrThrow({
     where: { id: params.id },
-    select: { id: true, buyerId: true, number: true, status: true, totalKopecks: true, currency: true, payment: { select: { status: true } } },
+    select: {
+      id: true,
+      buyerId: true,
+      number: true,
+      status: true,
+      totalKopecks: true,
+      currency: true,
+      payment: { select: { status: true } },
+      sellerProfile: { select: { userId: true } },
+    },
   });
 
   if (order.buyerId !== user.id) {
@@ -35,6 +44,7 @@ export const POST = apiRoute(async (request, { params }) => {
     return Response.json({ error: "Оплата возможна только для заказа, ожидающего оплаты", code: "payment_not_pending" }, { status: 409 });
   }
 
+  const wasPaid = order.payment?.status === "SUCCEEDED";
   const result = await capturePayment(order.id, method);
   const provider = getPaymentProvider();
 
@@ -48,6 +58,18 @@ export const POST = apiRoute(async (request, { params }) => {
         : "Оплата подтверждена платёжным партнёром. Продавец приступит к сборке.",
       url: `/orders/${order.id}`,
     });
+    // Продавцу — один раз, когда оплата прошла именно сейчас.
+    if (!wasPaid && order.sellerProfile?.userId) {
+      await notify({
+        userId: order.sellerProfile.userId,
+        kind: "order_status",
+        title: `Новый оплаченный заказ ${order.number}`,
+        body: result.sandbox
+          ? "Тестовая оплата (sandbox). Подтвердите заказ и передайте в доставку."
+          : "Покупатель оплатил заказ. Подтвердите его и передайте в доставку.",
+        url: `/seller/orders`,
+      }).catch(() => undefined);
+    }
   }
 
   return Response.json({
