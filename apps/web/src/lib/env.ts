@@ -71,6 +71,18 @@ function booleanFlag(name: string, def = true): boolean {
 const TEST_DATABASE_URL = optional("SVETLANA_TEST_DB");
 
 /**
+ * Vercel Postgres/Neon integrations name the connection string differently
+ * depending on the chosen prefix: DATABASE_URL (default), STORAGE_URL
+ * (prefix "STORAGE") or POSTGRES_PRISMA_URL / POSTGRES_URL (legacy Vercel
+ * Postgres). The first non-empty one wins; DATABASE_URL always has priority.
+ */
+const PLATFORM_DATABASE_URL =
+  optional("DATABASE_URL") ??
+  optional("STORAGE_URL") ??
+  optional("POSTGRES_PRISMA_URL") ??
+  optional("POSTGRES_URL");
+
+/**
  * SQLite relative paths are resolved against the app root (apps/web) so the
  * process works regardless of ambient CWD or an inherited `DATABASE_URL` from
  * the container environment. Absolute URLs (Postgres in production, or the
@@ -88,7 +100,7 @@ function resolveDatabaseUrl(raw: string): string {
 
 export const env = {
   databaseUrl: TEST_DATABASE_URL ?? resolveDatabaseUrl(
-    requiredInProduction("DATABASE_URL", "file:./prisma/dev.db"),
+    PLATFORM_DATABASE_URL ?? requiredInProduction("DATABASE_URL", "file:./prisma/dev.db"),
   ),
   jwtSecret: requiredInProduction("JWT_SECRET", "dev-only-insecure-secret"),
   jwtExpiresIn: required("JWT_EXPIRES_IN", "7d"),
