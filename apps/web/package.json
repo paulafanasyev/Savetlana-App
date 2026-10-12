@@ -18,7 +18,7 @@
     "db:migrate:production": "prisma migrate deploy --schema=prisma-postgres/schema.prisma"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
+    "@prisma/client": "^7.10.0",
     "bcryptjs": "^2.4.3",
     "next": "^15.5.27",
     "react": "^18.3.1",
