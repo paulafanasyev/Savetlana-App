@@ -6,13 +6,18 @@ import type { ScanTier } from "@/lib/marketplaces";
 export const dynamic = "force-dynamic";
 
 /**
- * Global product search (spec §11–§13). Svetlana searches the platform AND
- * external marketplaces. Tier 1 (Россия) is the default; tier 2 (глобально)
- * is opt-in so cross-border offers never silently enter the home verdict.
+ * Рыночный поиск (spec §11–§13): платформа + внешние маркетплейсы.
+ *
+ * Только для продавца и администратора — это инструмент анализа цен конкурентов.
+ * Покупателя АИКО никогда не отправляет на другие площадки: его поиск — /api/catalog/search.
+ * Tier 1 (Россия) по умолчанию; tier 2 (глобально) — по запросу.
  */
 export const GET = apiRoute(async (request) => {
   if (!rateLimit("global-search:read", 30, 60_000)) return tooManyRequests();
-  await requireUser(request);
+  const { user } = await requireUser(request);
+  if (user.role !== "SELLER" && user.role !== "ADMIN") {
+    throw new ApiError(403, "Сравнение с другими площадками доступно только продавцам. Ищите товары в каталоге АИКО.", "sellers_only");
+  }
   const url = new URL(request.url);
 
   const text = url.searchParams.get("q")?.trim();
