@@ -39,6 +39,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/favorites" className="hover:text-svetlana-700">Избранное</a>
               <a href="/seller" className="hover:text-svetlana-700">Кабинет продавца</a>
             </div>
+            <div className="flex flex-wrap justify-center gap-4">
+              <a href="/legal/payment-delivery" className="hover:text-svetlana-700">Оплата и доставка</a>
+              <a href="/legal/returns" className="hover:text-svetlana-700">Возврат и обмен</a>
+              <a href="/legal/offer" className="hover:text-svetlana-700">Оферта</a>
+              <a href="/contacts" className="hover:text-svetlana-700">Контакты и реквизиты</a>
+            </div>
           </div>
         </footer>
       </body>
