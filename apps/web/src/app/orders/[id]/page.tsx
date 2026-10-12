@@ -294,7 +294,7 @@ function ReturnActions({ orderId, onChanged }: { orderId: string; onChanged: () 
 }
 
 function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void }) {
-  const [state, setState] = useState<"idle" | "busy" | "ok" | "err">("idle");
+  const [state, setState] = useState<"idle" | "busy" | "ok" | "wait" | "err">("idle");
   const [message, setMessage] = useState<string | null>(null);
 
   return (
@@ -313,6 +313,18 @@ function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void })
               setMessage(body?.error ?? "Оплата не удалась");
               return;
             }
+            if (body.status !== "SUCCEEDED" && typeof body.confirmationUrl === "string" && body.confirmationUrl.startsWith("https://")) {
+              // ЮKassa: оплата на её странице, потом покупатель вернётся сюда.
+              setMessage("Переходим на защищённую страницу оплаты…");
+              window.location.assign(body.confirmationUrl);
+              return;
+            }
+            if (body.status !== "SUCCEEDED") {
+              setState("wait");
+              setMessage("Ждём подтверждение оплаты от платёжного сервиса. Статус обновится автоматически.");
+              onPaid();
+              return;
+            }
             setState("ok");
             setMessage(
               body.sandbox
@@ -329,10 +341,11 @@ function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void })
         {state === "busy" && "Оплачиваем…"}
         {state === "idle" && "Оплатить заказ"}
         {state === "ok" && "✓ Оплачено"}
+        {state === "wait" && "Проверить оплату"}
         {state === "err" && "Повторить оплату"}
       </button>
       {message && (
-        <p className={`mt-2 text-xs ${state === "ok" ? "text-good" : "text-bad"}`}>{message}</p>
+        <p className={`mt-2 text-xs ${state === "ok" ? "text-good" : state === "wait" || state === "busy" ? "text-ink-soft" : "text-bad"}`}>{message}</p>
       )}
     </div>
   );
