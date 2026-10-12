@@ -163,10 +163,11 @@ jobs:
           NODE
       - name: Upload PostgreSQL migration artifact
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: postgres-migration-baseline
           path: apps/web/prisma-postgres/migrations/00000000000000_baseline/migration.sql
-          retention-days: 7
+          retention-days: 1
 
   # ---------------------------------------------------------------------------
   # Production build. Proves the app compiles and every route renders.
@@ -193,12 +194,6 @@ jobs:
           if grep -rl "sk_test_\|sk_live_" .next/static 2>/dev/null; then
             echo "::error::Secret pattern found in client bundle"; exit 1
           fi
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-build
-          path: apps/web/.next
-          retention-days: 7
 
   # ---------------------------------------------------------------------------
   # Release gate: every prior stage must be green before anything deploys.
