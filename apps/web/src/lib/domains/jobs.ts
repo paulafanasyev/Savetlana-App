@@ -9,6 +9,7 @@
  *   2. Periodic sweeps — stale availability, expired documents, dead-letter
  *      cleanup.
  *   3. Carrier tracking sync for in-flight shipments.
+ *   4. Сверка зависших платежей — если уведомление банка потерялось.
  *
  * This module exposes a single `runJobs()` entry point that performs one
  * bounded slice of every category, so it can be driven by Vercel Cron
@@ -22,6 +23,7 @@
  */
 import { prisma } from "../prisma";
 import { processPayoutOutbox } from "./payments";
+import { reconcilePendingPayments } from "./payment-webhooks";
 import { sweepStaleAvailability } from "./inventory";
 import { sweepExpiredDocuments } from "./documents";
 import { syncTracking } from "./delivery";
@@ -60,6 +62,8 @@ export async function runJobs(): Promise<JobRunResult> {
   const entries = await Promise.all([
     timed("payout_outbox", () => processPayoutOutbox({ limit: 25 }), (r) =>
       `${r.processed} processed, ${r.succeeded} succeeded, ${r.failed} failed`),
+    timed("payment_reconcile", () => reconcilePendingPayments({ limit: 20 }), (r) =>
+      `${r.checked} checked, ${r.updated} updated, ${r.failed} failed`),
     timed("stale_availability", () => sweepStaleAvailability(), (r) =>
       `${r.hidden.length} hidden, ${r.unknown.length} unconfirmed, ${r.warned.length} warned`),
     timed("expired_documents", () => sweepExpiredDocuments(), (n) => `${n} expired`),
@@ -125,7 +129,7 @@ export async function sweepDeadLetters(): Promise<number> {
  * backlog so an operator can see the queue is being worked.
  */
 export async function jobBacklog(): Promise<Record<string, number>> {
-  const [payoutPending, inFlightShipments, deadLetters] = await Promise.all([
+  const [payoutPending, inFlightShipments, deadLetters, paymentsPending] = await Promise.all([
     prisma.outboxMessage.count({
       where: { aggregate: "payout", status: { in: ["PENDING", "IN_FLIGHT"] } },
     }),
@@ -136,11 +140,13 @@ export async function jobBacklog(): Promise<Record<string, number>> {
       },
     }),
     prisma.outboxMessage.count({ where: { status: "DEAD" } }),
+    prisma.payment.count({ where: { status: "PENDING", sandbox: false } }),
   ]);
 
   return {
     payoutOutboxPending: payoutPending,
     shipmentsAwaitingTrackingSync: inFlightShipments,
     deadLetters: deadLetters,
+    paymentsAwaitingBankConfirmation: paymentsPending,
   };
 }
