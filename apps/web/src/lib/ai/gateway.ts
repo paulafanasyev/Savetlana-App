@@ -10,6 +10,9 @@
  *
  * The user-facing brand is always Светлана. `provider`/`model` below are
  * internal metadata only and are never surfaced to the UI.
+ *
+ * Provider order: единая Светлана на своём сервере (svetlana-core, если заданы
+ * SVETLANA_CORE_URL/KEY и в запросе нет инструментов) → external → mock.
  */
 import { env, hasExternalAiCredentials } from "../env";
 import { prisma } from "../prisma";
@@ -24,11 +27,13 @@ import type {
 import { ExternalAiProvider } from "./providers/external";
 import { MockAiProvider, MockEmbeddingProvider } from "./providers/mock";
 import { SvetlanaModelProvider } from "./providers/svetlana";
+import { SvetlanaCoreProvider } from "./providers/core";
 import { classifyText, logOutboundPayload, redactForModel } from "./privacy";
 
 // --- Provider registry ----------------------------------------------------
 // The own model is deliberately NOT registered: it stays NOT_PROVEN until it
 // passes the evaluation suite (see providers/svetlana.ts).
+const coreProvider = new SvetlanaCoreProvider();
 const externalProvider = new ExternalAiProvider();
 const mockProvider = new MockAiProvider();
 const mockEmbedding = new MockEmbeddingProvider();
@@ -38,13 +43,15 @@ const mockEmbedding = new MockEmbeddingProvider();
  * deterministic sandbox answers everything, and every result it produces is
  * labelled MOCK VERIFIED.
  */
-function candidates(taskClass: AiTaskClass): AiProvider[] {
+function candidates(taskClass: AiTaskClass, request?: AiCompleteRequest): AiProvider[] {
   const order: AiProvider[] = [];
   if (taskClass === "embedding") {
     if (externalProvider.available) order.push(externalProvider);
     order.push(mockEmbedding);
     return order;
   }
+  // Единая Светлана отвечает текстом: задачи с tool calling идут сразу к external.
+  if (request && coreProvider.available && coreProvider.supports(request)) order.push(coreProvider);
   if (hasExternalAiCredentials) order.push(externalProvider);
   order.push(mockProvider);
   return order;
@@ -60,7 +67,7 @@ export interface GatewayResult {
 
 export class AiGateway {
   async complete(request: AiCompleteRequest): Promise<GatewayResult> {
-    const chain = candidates(request.taskClass);
+    const chain = candidates(request.taskClass, request);
     const attempted: string[] = [];
     let lastError: Error | undefined;
 
@@ -178,6 +185,9 @@ export const aiGateway = new AiGateway();
 export function aiMode(): { mode: "LIVE" | "SANDBOX"; provider: string } {
   if (hasExternalAiCredentials) {
     return { mode: "LIVE", provider: env.aiGatewayModel };
+  }
+  if (coreProvider.available) {
+    return { mode: "LIVE", provider: coreProvider.key };
   }
   return { mode: "SANDBOX", provider: "sandbox-rule-engine" };
 }
