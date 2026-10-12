@@ -1,0 +1,20 @@
+# Dependabot: обновления зависимостей приходят PR-ами, CI проверяет каждый.
+# source-map-js — транзитивная зависимость Next.js/PostCSS с уязвимостью high
+# (GHSA-68fv-2mgg-jv7q, исправлена в 1.2.2), поэтому разрешены и косвенные.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    target-branch: "svetlana/initial-implementation"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 5
+    allow:
+      - dependency-name: "source-map-js"
+        dependency-type: "all"
+      - dependency-type: "direct"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+        exclude-patterns: ["source-map-js"]
+    labels: ["dependencies"]
