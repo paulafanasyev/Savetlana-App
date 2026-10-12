@@ -120,6 +120,9 @@ export const env = {
   // Signing secret for incoming payment webhooks (P0-7). Without it the
   // platform refuses to accept provider events at all.
   paymentWebhookSecret: optional("PAYMENT_WEBHOOK_SECRET"),
+  // Основной эквайер, если подключено несколько: yookassa | tbank | sber | alfa | partner.
+  // Не задан — берётся первый настроенный (ЮKassa → Т-Банк → Сбер → Альфа → партнёр).
+  paymentAcquirer: optional("PAYMENT_ACQUIRER"),
   // ЮKassa (api.yookassa.ru/v3). Без ключей — sandbox. Уведомления: /api/webhooks/yookassa.
   yookassaShopId: optional("YOOKASSA_SHOP_ID"),
   yookassaSecretKey: optional("YOOKASSA_SECRET_KEY"),
@@ -127,6 +130,20 @@ export const env = {
   yookassaReceipts: booleanFlag("YOOKASSA_RECEIPTS", false),
   // Ставка НДС для чека: 1 — без НДС (справочник vat_code ЮKassa).
   yookassaVatCode: Number(optional("YOOKASSA_VAT_CODE") ?? "1"),
+  // Т-Банк интернет-эквайринг (карты, СБП, T-Pay). Уведомления: /api/webhooks/tbank.
+  tbankTerminalKey: optional("TBANK_TERMINAL_KEY"),
+  tbankPassword: optional("TBANK_PASSWORD"),
+  tbankApiUrl: optional("TBANK_API_URL") ?? "https://securepay.tinkoff.ru/v2",
+  // Сбербанк интернет-эквайринг (RBS). Callback: /api/webhooks/sber.
+  sberUserName: optional("SBER_USERNAME"),
+  sberPassword: optional("SBER_PASSWORD"),
+  sberApiUrl: optional("SBER_API_URL") ?? "https://securepayments.sberbank.ru/payment/rest",
+  sberCallbackSecret: optional("SBER_CALLBACK_SECRET"),
+  // Альфа-Банк интернет-эквайринг (RBS). Callback: /api/webhooks/alfa.
+  alfaUserName: optional("ALFA_USERNAME"),
+  alfaPassword: optional("ALFA_PASSWORD"),
+  alfaApiUrl: optional("ALFA_API_URL") ?? "https://payment.alfabank.ru/payment/rest",
+  alfaCallbackSecret: optional("ALFA_CALLBACK_SECRET"),
   deliveryProviderApiKey: optional("DELIVERY_PROVIDER_API_KEY"),
   // --- Real carrier adapters (audit §10) ----------------------------------
   // CDEK works with either a personal OAuth token OR an account/secure-key
@@ -209,6 +226,15 @@ export const hasExternalAiCredentials = Boolean(
   env.aiGatewayApiKey && env.aiGatewayBaseUrl && !env.aiGatewayBaseUrl.includes("localhost"),
 );
 
+/** Хотя бы один эквайер настроен ключами. */
+const hasPaymentCredentials = Boolean(
+  (env.yookassaShopId && env.yookassaSecretKey) ||
+    (env.tbankTerminalKey && env.tbankPassword) ||
+    (env.sberUserName && env.sberPassword) ||
+    (env.alfaUserName && env.alfaPassword) ||
+    (env.paymentProviderApiKey && env.paymentProviderBaseUrl),
+);
+
 /**
  * Integration readiness registry. An entry is only "ready" when the
  * credentials it needs exist. Anything else is PENDING_EXTERNAL_ACCESS and
@@ -216,11 +242,7 @@ export const hasExternalAiCredentials = Boolean(
  */
 export const integrationStatus = {
   externalAi: hasExternalAiCredentials ? "READY" : "PENDING_EXTERNAL_ACCESS",
-  payment:
-    (env.yookassaShopId && env.yookassaSecretKey) ||
-    (env.paymentProviderApiKey && env.paymentProviderBaseUrl)
-      ? "READY"
-      : "PENDING_EXTERNAL_ACCESS",
+  payment: hasPaymentCredentials ? "READY" : "PENDING_EXTERNAL_ACCESS",
   delivery: env.deliveryProviderApiKey ? "READY" : "PENDING_EXTERNAL_ACCESS",
   vk: env.vkAppId && env.vkClientSecret ? "READY" : "PENDING_EXTERNAL_ACCESS",
   esia:
