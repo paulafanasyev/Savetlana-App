@@ -11,6 +11,9 @@ export const dynamic = "force-dynamic";
  * Idempotent: a repeated call for an already-paid order returns the recorded
  * status without a second charge. Audit fix: the provider is called only for
  * orders that are actually awaiting payment.
+ *
+ * ЮKassa: ответ содержит confirmationUrl — покупатель платит на странице ЮKassa, заказ
+ * становится оплаченным по уведомлению /api/webhooks/yookassa.
  */
 export const POST = apiRoute(async (request, { params }) => {
   const { user } = await requireBuyer(request);
@@ -50,6 +53,8 @@ export const POST = apiRoute(async (request, { params }) => {
     providerRef: result.providerRef,
     providerLabel: result.sandbox ? "sandbox" : "partner",
     providerKey: provider.key,
+    // Ссылка на страницу оплаты ЮKassa (только https-адрес партнёра).
+    confirmationUrl: result.confirmationUrl && /^https:\/\//.test(result.confirmationUrl) ? result.confirmationUrl : null,
     idempotencyKey: readIdempotencyKey(request),
   });
 });

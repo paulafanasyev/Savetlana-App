@@ -10,15 +10,23 @@ export const dynamic = "force-dynamic";
 
 const TIER_SELECT: Record<number, string> = { 1: "🇷🇺 Россия", 2: "🌍 Весь мир" };
 
+/**
+ * Рыночная аналитика для продавца: сравнение своих цен с другими площадками.
+ * Покупатель сюда не попадает: АИКО не отправляет покупателей на чужие маркетплейсы,
+ * поэтому его запрос уходит в каталог платформы.
+ */
 export default async function GlobalSearchPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string; tier?: string }>;
 }) {
-  const user = await requireUserServer();
+  const { user } = await requireUserServer();
 
   const query = await resolveSearchParams(searchParams);
   const q = query.q?.trim() ?? "";
+  if (user.role !== "SELLER" && user.role !== "ADMIN") {
+    redirect(q ? `/catalog?q=${encodeURIComponent(q)}` : "/catalog");
+  }
   const tier = query.tier === "2" ? 2 : 1;
   const availability = await getMarketplaceAvailability();
 
@@ -30,10 +38,10 @@ export default async function GlobalSearchPage({
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold">Глобальный поиск</h1>
+        <h1 className="text-2xl font-bold">Рынок: цены конкурентов</h1>
         <p className="mt-1 text-sm text-zinc-600">
-          Светлана ищет товар по всей сети — и всегда показывает предложения нашей платформы
-          первыми
+          Инструмент продавца: Светлана сравнивает предложения АИКО с другими площадками,
+          чтобы вы видели свою позицию по цене. Покупателям эта страница не показывается.
         </p>
       </header>
 
@@ -64,27 +72,27 @@ export default async function GlobalSearchPage({
       {report && report.platformAdvantage && (
         <section className="mb-6 rounded-xl border border-svetlana-200 bg-svetlana-50 p-4">
           <h2 className="text-sm font-semibold text-svetlana-900">
-            Сравнение в пользу платформы
+            Позиция АИКО по цене
           </h2>
           <p className="mt-1 text-sm text-svetlana-800">
             {report.platformAdvantage.platformIsCheapest
-              ? `Наша платформа предлагает самую низкую цену: ${rub(
+              ? `На АИКО самая низкая цена: ${rub(
                   report.platformAdvantage.cheapestPlatform,
-                )} против ${rub(report.platformAdvantage.cheapestExternal)} у внешних площадок. Выгода ${fromKopecks(
+                )} против ${rub(report.platformAdvantage.cheapestExternal)} у других площадок. Преимущество ${fromKopecks(
                   report.platformAdvantage.savingKopecks,
                 )} ₽.`
-              : `Внешние площадки дешевле на ${fromKopecks(
+              : `Другие площадки дешевле на ${fromKopecks(
                   report.platformAdvantage.cheapestExternal - report.platformAdvantage.cheapestPlatform,
-                )} ₽ (${rub(report.platformAdvantage.cheapestExternal)} против нашего ${rub(
+                )} ₽ (${rub(report.platformAdvantage.cheapestExternal)} против ${rub(
                   report.platformAdvantage.cheapestPlatform,
-                )}), но предложения платформы остаются первыми в выдаче — у них проверенный продавец и наша защита сделки.`}
+                )} на АИКО). Стоит пересмотреть цену или условия доставки.`}
           </p>
         </section>
       )}
 
       {report && (
         <p className="mb-3 text-sm text-zinc-500">
-          Найдено: {report.bySource.platform} на платформе · {report.bySource.external} на внешних
+          Найдено: {report.bySource.platform} на АИКО · {report.bySource.external} на других
           площадках · охват: {tierLabel(tier)}
         </p>
       )}
@@ -101,7 +109,7 @@ export default async function GlobalSearchPage({
 
       {!report ? (
         <div className="rounded-xl border border-dashed border-zinc-300 p-12 text-center text-zinc-500">
-          Введите запрос — Светлана найдёт товар на платформе и во внешних магазинах.
+          Введите запрос — Светлана покажет цены на АИКО и у конкурентов.
         </div>
       ) : report.hits.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 p-12 text-center text-zinc-500">
@@ -128,14 +136,14 @@ export default async function GlobalSearchPage({
                     }`}
                   >
                     {h.source === "platform"
-                      ? "Наша платформа"
-                      : h.marketplace ?? "Внешний магазин"}
+                      ? "АИКО"
+                      : h.marketplace ?? "Другая площадка"}
                   </span>
                   <a
                     href={h.url}
                     className="block font-semibold hover:underline"
                     target={h.source === "platform" ? undefined : "_blank"}
-                    rel={h.source === "platform" ? undefined : "noopener noreferrer"}
+                    rel={h.source === "platform" ? undefined : "noopener noreferrer nofollow"}
                   >
                     {h.title}
                   </a>

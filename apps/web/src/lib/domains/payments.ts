@@ -14,6 +14,8 @@
  *   paymentFee       = passed through from the partner   (kept separate from commission)
  *   delivery         = carrier-calculated, per seller order
  *   payout           = gross - platformFee - paymentFee - delivery - adjustments
+ *
+ * Provider order: ЮKassa (YOOKASSA_SHOP_ID/SECRET_KEY) → generic partner → sandbox.
  */
 import { prisma } from "../prisma";
 import { env } from "../env";
@@ -21,6 +23,7 @@ import { canTransition } from "./orders";
 import { toKopecks } from "../utils";
 import type { PayoutStatus } from "../db/enums";
 import { audit } from "./audit";
+import { YooKassaPaymentProvider, buildReceipt, type YooReceipt } from "./yookassa";
 
 export const PLATFORM_FEE_PERCENT = env.platformFeePercent;
 
@@ -64,16 +67,34 @@ export function computeSettlement(params: {
 // for development/tests and is *always* recorded with sandbox: true, so a
 // sandbox payment can never be mistaken for a real one (spec §49, §161).
 
+export interface ChargeParams {
+  orderId: string;
+  amountKopecks: number;
+  currency: string;
+  idempotencyKey: string;
+  /** Human-readable purpose shown by the partner (e.g. "Заказ A-123"). */
+  description?: string;
+  /** Where the partner returns the buyer after a redirect payment. */
+  returnUrl?: string;
+  /** Fiscal receipt (54-ФЗ) for partners that issue it. */
+  receipt?: YooReceipt;
+}
+
+export interface ChargeResult {
+  providerRef: string;
+  status: string;
+  /**
+   * Redirect payments (ЮKassa): the buyer must open this page to pay. The
+   * order becomes PAID only after the partner confirms via webhook.
+   */
+  confirmationUrl?: string;
+}
+
 export interface PaymentProvider {
   readonly key: string;
   readonly sandbox: boolean;
   readonly available: boolean;
-  createCharge(params: {
-    orderId: string;
-    amountKopecks: number;
-    currency: string;
-    idempotencyKey: string;
-  }): Promise<{ providerRef: string; status: string }>;
+  createCharge(params: ChargeParams): Promise<ChargeResult>;
   getStatus(providerRef: string): Promise<{ status: string }>;
   /**
    * Refunds a captured charge (P0-7, spec §29 return states).
@@ -95,11 +116,7 @@ export class SandboxPaymentProvider implements PaymentProvider {
   readonly sandbox = true;
   readonly available = true;
 
-  async createCharge(params: {
-    orderId: string;
-    amountKopecks: number;
-    idempotencyKey: string;
-  }): Promise<{ providerRef: string; status: string }> {
+  async createCharge(params: ChargeParams): Promise<ChargeResult> {
     // Deterministic fake reference. Real money never moves.
     return {
       providerRef: `sb_${params.idempotencyKey.slice(0, 16)}_${params.orderId.slice(-6)}`,
@@ -132,12 +149,7 @@ export class PartnerPaymentProvider implements PaymentProvider {
   readonly sandbox = false;
   readonly available = Boolean(env.paymentProviderApiKey && env.paymentProviderBaseUrl);
 
-  async createCharge(params: {
-    orderId: string;
-    amountKopecks: number;
-    currency: string;
-    idempotencyKey: string;
-  }): Promise<{ providerRef: string; status: string }> {
+  async createCharge(params: ChargeParams): Promise<ChargeResult> {
     if (!this.available) throw new Error("payment partner not configured");
     const response = await fetch(`${env.paymentProviderBaseUrl}/charges`, {
       method: "POST",
@@ -203,6 +215,8 @@ export class PartnerPaymentProvider implements PaymentProvider {
 }
 
 export function getPaymentProvider(): PaymentProvider {
+  const yookassa = new YooKassaPaymentProvider();
+  if (yookassa.available) return yookassa;
   const partner = new PartnerPaymentProvider();
   if (partner.available) return partner;
   return new SandboxPaymentProvider();
@@ -211,15 +225,23 @@ export function getPaymentProvider(): PaymentProvider {
 /**
  * Idempotent payment capture (spec §125). The idempotency key is derived from
  * the order, so a retried checkout can never double-charge.
+ *
+ * Redirect partners (ЮKassa) return PENDING plus `confirmationUrl`: the buyer
+ * pays on the partner page, and the order is marked PAID only by the webhook
+ * after the partner API confirms the payment.
  */
 export async function capturePayment(orderId: string): Promise<{
   status: string;
   sandbox: boolean;
   providerRef: string | null;
+  confirmationUrl: string | null;
 }> {
   const order = await prisma.order.findUniqueOrThrow({
     where: { id: orderId },
-    include: { payment: true },
+    include: {
+      payment: true,
+      items: { select: { titleSnapshot: true, quantity: true, priceKopecks: true } },
+    },
   });
 
   if (order.payment && order.payment.status === "SUCCEEDED") {
@@ -228,16 +250,38 @@ export async function capturePayment(orderId: string): Promise<{
       status: order.payment.status,
       sandbox: order.payment.sandbox,
       providerRef: order.payment.providerRef,
+      confirmationUrl: null,
     };
   }
 
   const provider = getPaymentProvider();
   const idempotencyKey = `ord_${order.id}`;
+
+  let receipt: YooReceipt | undefined;
+  if (provider.key === "yookassa" && env.yookassaReceipts) {
+    const buyer = await prisma.user.findUnique({ where: { id: order.buyerId }, select: { email: true } });
+    const built = buildReceipt({
+      items: order.items,
+      deliveryKopecks: order.deliveryKopecks,
+      totalKopecks: order.totalKopecks,
+      email: buyer?.email,
+      currency: order.currency,
+      vatCode: env.yookassaVatCode,
+    });
+    if (!built) {
+      throw new Error("Не удалось сформировать чек: сумма позиций не совпадает с суммой заказа или нет e-mail покупателя");
+    }
+    receipt = built;
+  }
+
   const charge = await provider.createCharge({
     orderId: order.id,
     amountKopecks: order.totalKopecks,
     currency: order.currency,
     idempotencyKey,
+    description: `Заказ ${order.number}`,
+    returnUrl: `${env.publicAppUrl}/orders/${order.id}`,
+    receipt,
   });
 
   const payment = await prisma.payment.upsert({
@@ -270,6 +314,7 @@ export async function capturePayment(orderId: string): Promise<{
     status: payment.status,
     sandbox: payment.sandbox,
     providerRef: payment.providerRef,
+    confirmationUrl: charge.confirmationUrl ?? null,
   };
 }
 
