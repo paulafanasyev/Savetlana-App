@@ -14,6 +14,7 @@ import { prisma } from "../prisma";
 import { audit } from "./audit";
 import { markOrderPaid } from "./payments";
 import { canTransition } from "./orders";
+import { notify } from "./notifications";
 import { YooKassaPaymentProvider, mapYooStatus, valueToKopecks } from "./yookassa";
 import { TbankPaymentProvider, mapTbankStatus } from "./tbank";
 import { RbsPaymentProvider, mapRbsStatus } from "./rbs";
@@ -38,7 +39,15 @@ export async function applyVerifiedPayment(input: {
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { id: true, status: true, totalKopecks: true, payment: { select: { id: true, status: true, providerRef: true, provider: true } } },
+    select: {
+      id: true,
+      number: true,
+      buyerId: true,
+      status: true,
+      totalKopecks: true,
+      sellerProfile: { select: { userId: true } },
+      payment: { select: { id: true, status: true, providerRef: true, provider: true } },
+    },
   });
   const payment = order?.payment;
   if (!order || !payment || payment.provider !== input.providerKey) return "ignored";
@@ -94,6 +103,16 @@ export async function applyVerifiedPayment(input: {
     });
     if (canTransition(order.status, "PAID")) {
       await markOrderPaid(order.id, false);
+      await notifyOrderPaid(order).catch(() => undefined);
+    } else if (order.status === "CANCELLED") {
+      // Банк подтвердил оплату уже отменённого заказа — деньги нужно вернуть.
+      await audit({
+        actorRole: "system",
+        action: "payment.webhook.paid_after_cancel",
+        targetType: "Order",
+        targetId: order.id,
+        after: { provider: input.providerKey, providerRef: input.providerRef, amountKopecks: input.amountKopecks },
+      }).catch(() => undefined);
     }
     await audit({
       actorRole: "system",
@@ -112,6 +131,31 @@ export async function applyVerifiedPayment(input: {
     });
   }
   return "applied";
+}
+
+/** Покупателю — «оплачен», продавцу — «новый оплаченный заказ, соберите». */
+export async function notifyOrderPaid(order: {
+  id: string;
+  number: string;
+  buyerId: string;
+  sellerProfile: { userId: string } | null;
+}): Promise<void> {
+  await notify({
+    userId: order.buyerId,
+    kind: "order_status",
+    title: `Заказ ${order.number} оплачен`,
+    body: "Банк подтвердил оплату. Продавец приступит к сборке.",
+    url: `/orders/${order.id}`,
+  });
+  if (order.sellerProfile?.userId) {
+    await notify({
+      userId: order.sellerProfile.userId,
+      kind: "order_status",
+      title: `Новый оплаченный заказ ${order.number}`,
+      body: "Покупатель оплатил заказ. Подтвердите его и передайте в доставку.",
+      url: `/seller/orders`,
+    });
+  }
 }
 
 // =============================================================================
