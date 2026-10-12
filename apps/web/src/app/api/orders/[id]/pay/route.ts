@@ -1,7 +1,7 @@
 import { apiRoute, readIdempotencyKey, rateLimit, tooManyRequests } from "@/lib/api-helpers";
 import { requireBuyer } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { capturePayment, getPaymentProvider } from "@/lib/domains/payments";
+import { capturePayment, getPaymentProvider, type PaymentMethod } from "@/lib/domains/payments";
 import { notify } from "@/lib/domains/notifications";
 
 export const dynamic = "force-dynamic";
@@ -12,12 +12,16 @@ export const dynamic = "force-dynamic";
  * status without a second charge. Audit fix: the provider is called only for
  * orders that are actually awaiting payment.
  *
- * ЮKassa: ответ содержит confirmationUrl — покупатель платит на странице ЮKassa, заказ
- * становится оплаченным по уведомлению /api/webhooks/yookassa.
+ * Тело (необязательно): { method: "card" | "sbp" }. Ответ содержит confirmationUrl —
+ * страницу банка или ссылку СБП. Заказ становится оплаченным по уведомлению банка
+ * (/api/webhooks/yookassa | tbank | sber | alfa) после перезапроса статуса.
  */
 export const POST = apiRoute(async (request, { params }) => {
   const { user } = await requireBuyer(request);
   if (!rateLimit(`pay:${user.id}`, 10, 60_000)) return tooManyRequests();
+
+  const body = (await request.json().catch(() => ({}))) as { method?: unknown } | null;
+  const method: PaymentMethod = body && body.method === "sbp" ? "sbp" : "card";
 
   const order = await prisma.order.findUniqueOrThrow({
     where: { id: params.id },
@@ -31,7 +35,7 @@ export const POST = apiRoute(async (request, { params }) => {
     return Response.json({ error: "Оплата возможна только для заказа, ожидающего оплаты", code: "payment_not_pending" }, { status: 409 });
   }
 
-  const result = await capturePayment(order.id);
+  const result = await capturePayment(order.id, method);
   const provider = getPaymentProvider();
 
   if (result.status === "SUCCEEDED") {
@@ -53,7 +57,8 @@ export const POST = apiRoute(async (request, { params }) => {
     providerRef: result.providerRef,
     providerLabel: result.sandbox ? "sandbox" : "partner",
     providerKey: provider.key,
-    // Ссылка на страницу оплаты ЮKassa (только https-адрес партнёра).
+    method,
+    // Страница оплаты банка или ссылка СБП (только https-адрес партнёра).
     confirmationUrl: result.confirmationUrl && /^https:\/\//.test(result.confirmationUrl) ? result.confirmationUrl : null,
     idempotencyKey: readIdempotencyKey(request),
   });
