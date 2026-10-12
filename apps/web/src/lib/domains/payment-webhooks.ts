@@ -8,11 +8,11 @@
  * Покупатель мог открыть оплату несколько раз (каждая попытка — свой платёж
  * в банке). Если оплачена не последняя попытка, заказ всё равно становится
  * оплаченным по ней; если заказ уже оплачен другой попыткой — это двойная
- * оплата: ничего не меняем и пишем в аудит для возврата.
+ * оплата: заказ не меняем, лишние деньги сразу возвращаем через банк.
  */
 import { prisma } from "../prisma";
 import { audit } from "./audit";
-import { markOrderPaid } from "./payments";
+import { markOrderPaid, getPaymentProviderByKey } from "./payments";
 import { canTransition } from "./orders";
 import { notify } from "./notifications";
 import { YooKassaPaymentProvider, mapYooStatus, valueToKopecks } from "./yookassa";
@@ -95,6 +95,15 @@ export async function applyVerifiedPayment(input: {
         targetId: order.id,
         after: { provider: input.providerKey, extraProviderRef: input.providerRef, paidProviderRef: payment.providerRef, amountKopecks: input.amountKopecks },
       }).catch(() => undefined);
+      // Заказ уже оплачен другой попыткой — лишние деньги сразу возвращаем.
+      await refundStrayPayment({
+        providerKey: input.providerKey,
+        providerRef: input.providerRef,
+        amountKopecks: input.amountKopecks,
+        order,
+        paymentId: null,
+        reason: "Двойная оплата заказа",
+      });
       return "ignored";
     }
     await prisma.payment.update({
@@ -105,7 +114,7 @@ export async function applyVerifiedPayment(input: {
       await markOrderPaid(order.id, false);
       await notifyOrderPaid(order).catch(() => undefined);
     } else if (order.status === "CANCELLED") {
-      // Банк подтвердил оплату уже отменённого заказа — деньги нужно вернуть.
+      // Банк подтвердил оплату уже отменённого заказа — деньги возвращаем.
       await audit({
         actorRole: "system",
         action: "payment.webhook.paid_after_cancel",
@@ -113,6 +122,14 @@ export async function applyVerifiedPayment(input: {
         targetId: order.id,
         after: { provider: input.providerKey, providerRef: input.providerRef, amountKopecks: input.amountKopecks },
       }).catch(() => undefined);
+      await refundStrayPayment({
+        providerKey: input.providerKey,
+        providerRef: input.providerRef,
+        amountKopecks: input.amountKopecks,
+        order,
+        paymentId: payment.id,
+        reason: "Оплата отменённого заказа",
+      });
     }
     await audit({
       actorRole: "system",
@@ -131,6 +148,85 @@ export async function applyVerifiedPayment(input: {
     });
   }
   return "applied";
+}
+
+/**
+ * Автовозврат «лишних» денег: двойная оплата или оплата уже отменённого заказа.
+ * Возврат через тот же банк, ключ идемпотентности привязан к платежу, поэтому
+ * повтор не вернёт деньги дважды (а само событие уже защищено от повтора выше).
+ * Если вернуть не получилось — запись в аудит «нужен ручной возврат», ничего не теряется.
+ */
+async function refundStrayPayment(input: {
+  providerKey: string;
+  providerRef: string;
+  amountKopecks: number | null;
+  order: { id: string; number: string; buyerId: string };
+  /** Для отменённого заказа фиксируем возврат в Refund; для двойной оплаты — только аудит. */
+  paymentId: string | null;
+  reason: string;
+}): Promise<void> {
+  const provider = getPaymentProviderByKey(input.providerKey);
+  const amount = input.amountKopecks ?? 0;
+  if (!provider || provider.sandbox || amount <= 0) {
+    await audit({
+      actorRole: "system",
+      action: "payment.refund.manual_required",
+      targetType: "Order",
+      targetId: input.order.id,
+      after: { provider: input.providerKey, providerRef: input.providerRef, amountKopecks: input.amountKopecks, reason: input.reason },
+    }).catch(() => undefined);
+    return;
+  }
+  try {
+    const r = await provider.refund({
+      paymentProviderRef: input.providerRef,
+      amountKopecks: amount,
+      reason: input.reason,
+      idempotencyKey: `stray-${input.providerKey}-${input.providerRef}`.slice(0, 64),
+    });
+    if (input.paymentId) {
+      await prisma.refund.create({
+        data: {
+          paymentId: input.paymentId,
+          orderId: input.order.id,
+          amountKopecks: amount,
+          reason: input.reason,
+          status: r.status === "SUCCEEDED" ? "SUCCEEDED" : r.status === "FAILED" ? "FAILED" : "PROCESSING",
+          providerRef: r.providerRef,
+        },
+      }).catch(() => undefined); // деньги уже возвращены банком; запись — вторична, аудит ниже
+    }
+    await audit({
+      actorRole: "system",
+      action: r.status === "FAILED" ? "payment.refund.auto_failed" : "payment.refund.auto",
+      targetType: "Order",
+      targetId: input.order.id,
+      after: { provider: input.providerKey, providerRef: input.providerRef, refundRef: r.providerRef, status: r.status, amountKopecks: amount, reason: input.reason },
+    }).catch(() => undefined);
+    if (r.status !== "FAILED") {
+      await notify({
+        userId: input.order.buyerId,
+        kind: "order_status",
+        title: `Возврат по заказу ${input.order.number}`,
+        body: `${input.reason}: мы вернули ${(amount / 100).toFixed(2)} ₽ на ваш счёт. Обычно деньги приходят за 1–7 дней, через СБП — быстрее.`,
+        url: `/orders/${input.order.id}`,
+      }).catch(() => undefined);
+    }
+  } catch (error) {
+    await audit({
+      actorRole: "system",
+      action: "payment.refund.manual_required",
+      targetType: "Order",
+      targetId: input.order.id,
+      after: {
+        provider: input.providerKey,
+        providerRef: input.providerRef,
+        amountKopecks: amount,
+        reason: input.reason,
+        error: error instanceof Error ? error.message.slice(0, 200) : "unknown",
+      },
+    }).catch(() => undefined);
+  }
 }
 
 /** Покупателю — «оплачен», продавцу — «новый оплаченный заказ, соберите». */
