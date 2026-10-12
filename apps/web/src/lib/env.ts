@@ -108,6 +108,11 @@ export const env = {
     .map((s) => s.trim())
     .filter(Boolean),
 
+  // --- Единая Светлана на своём сервере (профиль aiko, server-side only) ------
+  // URL — https://мир-самозанятых.рф (punycode), KEY — ASSISTANT_KEY_AIKO с сервера Светланы.
+  svetlanaCoreUrl: optional("SVETLANA_CORE_URL"),
+  svetlanaCoreKey: optional("SVETLANA_CORE_KEY"),
+
   // --- Payment / delivery partners ----------------------------------------
   paymentProviderBaseUrl: optional("PAYMENT_PROVIDER_BASE_URL"),
   paymentProviderApiKey: optional("PAYMENT_PROVIDER_API_KEY"),
