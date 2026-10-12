@@ -5,14 +5,38 @@
  * credential lives server-side only. The frontend only ever receives
  * processed results.
  */
-import { config } from "dotenv";
+import { existsSync, readFileSync } from "node:fs";
 
-// `override: true` is deliberate. Some runtime containers export placeholder
-// values (e.g. AI_GATEWAY_BASE_URL=https://api.example.com/v1) that predate the
-// real configuration; dotenv without override silently keeps those stale
-// shadows and the AI gateway then points at a dead endpoint. On Vercel there is
-// no .env file at all, so this flag has no effect there — platform env wins.
-config({ path: ".env", override: true });
+/**
+ * Minimal .env loader (replaces the `dotenv` package, which is declared only in
+ * the monorepo root and is not installed when Vercel builds apps/web).
+ * Supports KEY=value, `export KEY=value`, single/double quotes, `\n` inside
+ * double quotes and trailing ` # comments`.
+ *
+ * Values from .env override ambient ones on purpose: some runtime containers
+ * export placeholder values (e.g. AI_GATEWAY_BASE_URL=https://api.example.com/v1)
+ * that predate the real configuration. On Vercel there is no .env file at all,
+ * so this has no effect there — platform env wins.
+ */
+export function loadDotEnv(path = ".env"): void {
+  if (!existsSync(path)) return;
+  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_.]*)\s*=\s*(.*)$/);
+    if (!match) continue;
+    let value = match[2].trim();
+    const quote = value[0];
+    if ((quote === '"' || quote === "'") && value.length >= 2 && value.endsWith(quote)) {
+      value = value.slice(1, -1);
+      if (quote === '"') value = value.replace(/\\n/g, "\n");
+    } else {
+      const comment = value.search(/\s#/);
+      if (comment >= 0) value = value.slice(0, comment).trim();
+    }
+    process.env[match[1]] = value;
+  }
+}
+
+loadDotEnv();
 
 function required(name: string, fallback?: string): string {
   const value = process.env[name] ?? fallback;
@@ -59,11 +83,11 @@ function booleanFlag(name: string, def = true): boolean {
 /**
  * Test isolation escape hatch (spec §47). `tests/setup.ts` points the suite at
  * an isolated per-worker SQLite file by setting SVETLANA_TEST_DB to an absolute
- * path. It must win over .env's DATABASE_URL: `config({ override: true })`
- * below reloads .env at import time and would otherwise re-target the suite at
- * the development database — silently polluting dev data AND making test
- * results depend on leftovers of previous runs (the payout idempotency,
- * audit-log and traceId assertions all become non-reproducible).
+ * path. It must win over .env's DATABASE_URL: `loadDotEnv()` above reloads
+ * .env at import time and would otherwise re-target the suite at the
+ * development database — silently polluting dev data AND making test results
+ * depend on leftovers of previous runs (the payout idempotency, audit-log and
+ * traceId assertions all become non-reproducible).
  *
  * The marker is set only by the test bootstrap; in production (Vercel) it is
  * absent and DATABASE_URL (Postgres) is used as-is.
