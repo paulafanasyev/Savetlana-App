@@ -1,12 +1,13 @@
 import { apiRoute, jsonBody, readIdempotencyKey, tooManyRequests } from "@/lib/api-helpers";
 import { requireBuyer } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { createOrdersFromCart } from "@/lib/domains/orders";
+import { createOrdersFromCart, type DeliveryChoice } from "@/lib/domains/orders";
 import { getCartView } from "@/lib/domains/cart";
 import { evaluateOrderRisk } from "@/lib/domains/risk";
 import { notify } from "@/lib/domains/notifications";
 import { rateLimit } from "@/lib/api-helpers";
 import { generateOrderNumber } from "@/lib/utils";
+import { isDeliveryMethod } from "@/lib/delivery-options";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export const POST = apiRoute(async (request) => {
     zip?: string;
     recipientName?: string;
     phone?: string;
+    deliveryBySeller?: Record<string, { method?: string }>;
   }>(request);
 
   const clientKey = body.idempotencyKey ?? readIdempotencyKey(request);
@@ -30,8 +32,7 @@ export const POST = apiRoute(async (request) => {
     return Response.json({ error: "Некорректный ключ идемпотентности", code: "bad_idempotency_key" }, { status: 400 });
   }
   if (clientKey) {
-    // Audit fix: an idempotency key is scoped to its buyer. A replay of someone
-    // else's key must never return their order group (IDOR via replay).
+    // Audit fix: an idempotency key is scoped to its buyer (IDOR via replay).
     const existing = await prisma.orderGroup.findUnique({
       where: { idempotencyKey: clientKey },
       select: { buyerId: true },
@@ -49,6 +50,21 @@ export const POST = apiRoute(async (request) => {
     return Response.json({ error: "Корзина пуста", code: "empty_cart" }, { status: 400 });
   }
 
+  // Доставка по каждому продавцу. Цену клиенту не доверяем: сервер берёт её из тарифа.
+  const sellerIds = new Set(view.lines.map((l) => l.sellerId));
+  const deliveryBySeller: Record<string, DeliveryChoice> = {};
+  for (const [sellerId, choice] of Object.entries(body.deliveryBySeller ?? {})) {
+    if (!sellerIds.has(sellerId)) continue;
+    if (!isDeliveryMethod(choice?.method)) {
+      return Response.json({ error: "Выбранный способ доставки недоступен", code: "bad_delivery" }, { status: 400 });
+    }
+    deliveryBySeller[sellerId] = { method: choice.method };
+  }
+  const needsAddress = Object.values(deliveryBySeller).some((c) => c.method === "SELLER");
+  if (needsAddress && (!body.city?.trim() || !body.street?.trim() || !body.house?.trim())) {
+    return Response.json({ error: "Для доставки укажите город, улицу и дом", code: "address_required" }, { status: 400 });
+  }
+
   const idempotencyKey = clientKey ?? generateOrderNumber();
   const created = await createOrdersFromCart({
     buyerId: user.id,
@@ -62,6 +78,7 @@ export const POST = apiRoute(async (request) => {
       recipientName: body.recipientName,
       phone: body.phone,
     },
+    deliveryBySeller,
   });
 
   // Risk screen runs after creation, before any money moves (spec §27).
@@ -83,11 +100,11 @@ export const POST = apiRoute(async (request) => {
       number: o.number,
       sellerId: o.sellerId,
       totalKopecks: o.totalKopecks,
+      deliveryKopecks: o.deliveryKopecks ?? 0,
       itemsCount: o.itemsCount,
       status: "PAYMENT_PENDING",
     })),
-    // Every line whose price moved since it was added is reported by name, so
-    // the UI can tell the buyer before payment rather than after (P0 fix).
+    // Every line whose price moved since it was added is reported by name (P0 fix).
     priceChanges: view.lines
       .filter((l) => l.priceChanged)
       .map((l) => ({
