@@ -22,20 +22,26 @@ const STATE_CHANGING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /**
  * CSP: allow same-origin everything; allow https images/media/styles
- * (product photos live on seller/CDN hosts); inline styles only (Next needs
- * them); nothing else. connect-src restricted to self so a XSS cannot exfiltrate
- * the session token to a third party.
+ * (product photos live on seller/CDN hosts); nothing from third-party script
+ * hosts. connect-src restricted to self so a XSS cannot exfiltrate the
+ * session token to a third party.
+ *
+ * script-src must allow inline scripts: Next.js App Router streams the page
+ * data as inline <script> tags. Without them React cannot hydrate, throws away
+ * the server HTML and the page turns blank right after loading.
  */
 const CSP = [
   "default-src 'self'",
-  "img-src 'self' https: data:",
-  "media-src 'self' https:",
+  "script-src 'self' 'unsafe-inline'",
+  "img-src 'self' https: data: blob:",
+  "media-src 'self' https: blob:",
   "style-src 'self' 'unsafe-inline'",
-  "font-src 'self'",
+  "font-src 'self' data:",
   "connect-src 'self'",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
+  "object-src 'none'",
 ].join("; ");
 
 function hostOf(url: string | null): string | null {
@@ -54,13 +60,6 @@ export function middleware(request: NextRequest): NextResponse {
   const traceId =
     request.headers.get("x-trace-id") ??
     `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
-  const response = NextResponse.next();
-  response.headers.set("Content-Security-Policy", CSP);
-  response.headers.set("x-trace-id", traceId);
-  // Make the trace id visible to route handlers without mutating the request
-  // body — a plain header set on `request` is not forwarded, so we clone the
-  // headers into the forward path.
-  request.headers.set("x-trace-id", traceId);
 
   const method = request.method.toUpperCase();
 
@@ -83,6 +82,12 @@ export function middleware(request: NextRequest): NextResponse {
     }
   }
 
+  // Forward the trace id to route handlers through the request headers.
+  const forwarded = new Headers(request.headers);
+  forwarded.set("x-trace-id", traceId);
+  const response = NextResponse.next({ request: { headers: forwarded } });
+  response.headers.set("Content-Security-Policy", CSP);
+  response.headers.set("x-trace-id", traceId);
   return response;
 }
 
