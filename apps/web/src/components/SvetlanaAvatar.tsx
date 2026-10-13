@@ -8,6 +8,9 @@ const sizes = {
   lg: "h-40 w-40",
 } as const;
 
+/** Фото Светланы из этого репо (копия из Svetlana-2.0, байт в байт). */
+export const SVETLANA_PHOTO_SRC = "/images/avatar/svetlana-master.jpg";
+
 export interface SvetlanaAvatarProps {
   size?: keyof typeof sizes;
   phase?: AvatarPhase;
@@ -47,7 +50,7 @@ export function SvetlanaAvatar({
       }`}>
         <div className="relative h-full w-full overflow-hidden rounded-full border-2 border-svetlana-200 bg-gradient-to-br from-svetlana-100 via-white to-svetlana-200 shadow-card">
           <img
-            src="/images/svetlana.jpg"
+            src={SVETLANA_PHOTO_SRC}
             alt="Аватар Светланы"
             className={`h-full w-full object-cover transition-[filter] duration-300 ${emotionClass}`}
             onError={(event) => {
