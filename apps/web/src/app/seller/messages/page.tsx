@@ -18,7 +18,14 @@ export default async function SellerMessagesPage() {
         </p>
       </div>
       {threads.length === 0 ? (
-        <p className="text-ink-faint">Сообщений пока нет. Покупатели пишут со страницы товара, кнопкой «Задать вопрос продавцу».</p>
+        <div className="card p-6">
+          <div className="text-lg font-semibold text-ink">Сообщений пока нет</div>
+          <p className="mt-2 text-sm text-ink-soft">Покупатели пишут со страницы товара, кнопкой «Задать вопрос продавцу». Когда вопрос придёт, вы получите уведомление. А первым написать можно тем, кто уже покупал у вас.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/seller/customers" className="btn btn-primary">Покупатели</Link>
+            <Link href="/seller/products" className="btn btn-ghost">Мои товары</Link>
+          </div>
+        </div>
       ) : (
         <ul className="space-y-3">
           {threads.map((t) => (

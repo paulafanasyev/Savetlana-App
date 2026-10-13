@@ -27,12 +27,19 @@ export default async function SellerProductsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Товары</h1>
         <div className="flex flex-wrap gap-2">
+          {products.length > 0 && <Link href="/seller/products/new" className="btn btn-primary">Добавить товар</Link>}
           {products.length > 0 && <Link href="/seller/products/bulk" className="btn btn-ghost">Массовое редактирование</Link>}
           <Link href="/seller/products" className="btn btn-ghost">Обновить</Link>
         </div>
       </div>
+      {products.length === 0 && (
+        <div className="rounded-xl border border-svetlana-200 bg-svetlana-50 p-5 text-sm text-ink-soft">
+          <div className="text-base font-semibold text-ink">Добавьте первый товар</div>
+          <p className="mt-1">Заполните форму ниже: название, описание, цену и фото. Светлана создаст черновик, вы проверите его и опубликуете. Можно и проще: напишите Светлане «создай карточку чайник за 1990».</p>
+        </div>
+      )}
       <ProductDraftAssistant categories={categories} />
-      <div className="card overflow-x-auto">
+      {products.length > 0 && <div className="card overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b">
@@ -45,8 +52,8 @@ export default async function SellerProductsPage() {
               const confirmed = Boolean(product.inventory?.confirmedBySeller && product.inventory.saleUntil && product.inventory.saleUntil > now);
               return (
                 <tr key={product.id} className="border-b">
-                  <td className="p-3">{product.images[0] ? <img src={product.images[0].url} alt={product.title} className="h-14 w-14 rounded object-cover" /> : "—"}</td>
-                  <td className="p-3 font-medium">{product.title}<div className="text-xs text-ink-faint">Код: {product.sku}</div></td>
+                  <td className="p-3"><Link href={`/seller/products/${product.id}/edit`} aria-label={`Изменить «${product.title}»`}>{product.images[0] ? <img src={product.images[0].url} alt="" className="h-14 w-14 rounded object-cover" /> : <span className="flex h-14 w-14 items-center justify-center rounded bg-surface-muted text-xs text-ink-faint">нет фото</span>}</Link></td>
+                  <td className="p-3 font-medium"><Link href={`/seller/products/${product.id}/edit`} className="hover:text-svetlana-700">{product.title}</Link><div className="text-xs text-ink-faint">Код: {product.sku}</div></td>
                   <td className="p-3">{product.category?.name ?? "—"}</td>
                   <td className="p-3">{rub(product.priceKopecks)}</td>
                   <td className="p-3">{product.inventory?.quantity ?? 0}</td>
@@ -62,8 +69,7 @@ export default async function SellerProductsPage() {
             })}
           </tbody>
         </table>
-        {products.length === 0 && <p className="p-6 text-ink-faint">У вас пока нет товаров. Добавьте первый товар формой выше.</p>}
-      </div>
+      </div>}
     </main>
   );
 }
