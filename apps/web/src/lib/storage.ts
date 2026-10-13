@@ -37,7 +37,7 @@ export async function verifyUpload(params: { bucket: string; filename: string; b
   if (!params.bytes.length) return fail("Пустой файл");
   if (params.bytes.length > limit) return fail(`Файл превышает лимит ${Math.round(limit / 1024 / 1024)} МБ`);
   if (!allowed.has(sniffedMimeType)) return fail(`Неподдерживаемый тип файла: ${sniffedMimeType}`);
-  if (params.declaredMimeType && params.declaredMimeType !== sniffedMimeType) return fail("Тип файла не соответствует содержимому");
+  if (params.declaredMimeType && params.declaredMimeType !== sniffedMimeType) return fail("Содержимое файла не соответствует заявленному типу");
   if (params.storageClass === "public" && !isProduct && /^(private|documents|evidence)(\/|$)/.test(params.bucket)) return { ...fail("Приватный контент не может быть публичным"), storageClass: "private" };
   return { allowed: true, sha256: sha256Hex(params.bytes), sizeBytes: params.bytes.length, sniffedMimeType, storageClass: params.storageClass };
 }
