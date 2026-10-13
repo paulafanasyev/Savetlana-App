@@ -20,7 +20,10 @@ export type NotificationKind =
   | "review_reply"
   | "reminder"
   | "listing_expiring"
-  | "ai_note";
+  | "ai_note"
+  // Переписка покупателя и продавца (см. seller-messages.ts)
+  | "seller_message"
+  | "buyer_message";
 
 export interface NotificationInput {
   userId: string;

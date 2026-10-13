@@ -14,6 +14,7 @@ const PRIMARY = [
 const USER_MENU: [string, string][] = [
   ["/profile", "Мой профиль"],
   ["/orders", "Мои заказы"],
+  ["/messages", "Сообщения"],
   ["/disputes", "Возвраты и споры"],
   ["/favorites", "Избранное"],
   ["/gifts", "Подарки"],
