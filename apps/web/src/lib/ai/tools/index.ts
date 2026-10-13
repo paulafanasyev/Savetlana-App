@@ -10,6 +10,7 @@ import type { ToolDefinition, ToolContext, ToolResult } from "./registry";
 import { prisma } from "../../prisma";
 import { publishProblems, publishProblemsMessage } from "../../domains/publish-check";
 import { getSellerOnboardingGate } from "../../domains/seller-onboarding";
+import { searchProducts } from "../../domains/catalog";
 
 import {
   searchProductsTool,
@@ -83,10 +84,113 @@ const guardedPublishProductTool: ToolDefinition = {
   },
 };
 
+/**
+ * В кабинете продавца «заказы» означают заказы его покупателей, а не его
+ * собственные покупки. Покупателю инструмент отвечает как раньше.
+ */
+const sellerAwareGetOrderTool: ToolDefinition = {
+  ...getOrderTool,
+  description: "Заказы: покупателю его покупки, продавцу заказы его покупателей. Реальные статусы, без выдумок.",
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const sellerId = ctx.sellerProfileId;
+    const wantsSellerView = Boolean(sellerId) && ctx.role === "seller" && args.scope !== "buyer" && typeof args.orderId !== "string";
+    if (!sellerId || !wantsSellerView) return getOrderTool.execute(ctx, args);
+    const orders = await prisma.order.findMany({
+      where: { sellerId },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        totalKopecks: true,
+        items: { select: { titleSnapshot: true, quantity: true } },
+      },
+    });
+    if (orders.length === 0) {
+      return {
+        ok: true,
+        data: { items: [] },
+        summary: "Заказов от покупателей пока нет. Как только кто-то купит ваш товар, заказ появится в разделе «Заказы» кабинета.",
+        verification: "VERIFIED",
+      };
+    }
+    const toShip = orders.filter((o) => ["PAID", "CONFIRMED", "PROCESSING", "READY"].includes(o.status)).length;
+    return {
+      ok: true,
+      data: {
+        items: orders.map((o) => ({
+          orderId: o.id,
+          number: o.number,
+          status: o.status,
+          title: `Заказ ${o.number}: ${o.items.map((i) => `${i.titleSnapshot} × ${i.quantity}`).join(", ")}`,
+          priceKopecks: o.totalKopecks,
+        })),
+      },
+      summary:
+        `Последних заказов покупателей: ${orders.length}.` +
+        (toShip > 0 ? ` Ждут вашей отправки: ${toShip}.` : " Отправки сейчас никто не ждёт.") +
+        " Все заказы в разделе «Заказы» кабинета.",
+      verification: "VERIFIED",
+    };
+  },
+};
+
+/** «Какую цену поставить?» без указания товара: берём самый просматриваемый товар продавца. */
+const sellerAwareAdvisePriceTool: ToolDefinition = {
+  ...advisePriceTool,
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    if (typeof args.productId === "string" && args.productId) return advisePriceTool.execute(ctx, args);
+    if (!ctx.sellerProfileId) return { ok: false, error: "совет по цене доступен в кабинете продавца", verification: "NOT_PROVEN" };
+    const product = await prisma.product.findFirst({
+      where: { sellerId: ctx.sellerProfileId, status: { in: ["ACTIVE", "DRAFT"] } },
+      orderBy: [{ views: "desc" }, { updatedAt: "desc" }],
+      select: { id: true, title: true },
+    });
+    if (!product) {
+      return {
+        ok: false,
+        error: "у вас пока нет товаров. Добавьте товар (или напишите «создай карточку товара чайник за 1990»), и я посоветую цену",
+        verification: "NOT_PROVEN",
+      };
+    }
+    const result = await advisePriceTool.execute(ctx, { ...args, productId: product.id });
+    return result.ok ? { ...result, summary: `Товар «${product.title}». ${result.summary ?? ""}`.trim() } : result;
+  },
+};
+
+/** «Наушники дешевле 5000»: поиск по запросу от дешёвых к дорогим, а не случайные дешёвые товары. */
+const queryAwareSearchCheaperTool: ToolDefinition = {
+  ...searchCheaperTool,
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const query = typeof args.query === "string" ? args.query.trim() : "";
+    if (!query || typeof args.productId === "string") return searchCheaperTool.execute(ctx, args);
+    const maxPrice = Number(args.maxPrice);
+    const { results } = await searchProducts(
+      { query, maxPrice: Number.isFinite(maxPrice) && maxPrice > 0 ? maxPrice : undefined, sort: "price_asc", limit: 12 },
+      ctx.traceId
+    );
+    return {
+      ok: true,
+      data: results.map((r) => ({
+        productId: r.product.id,
+        title: r.product.title,
+        priceKopecks: r.product.priceKopecks,
+        rating: r.product.rating,
+        seller: r.product.sellerProfile.displayName,
+      })),
+      summary: results.length > 0
+        ? `Нашла ${results.length} вариантов «${query}», от самого доступного:`
+        : `Подешевле «${query}» ничего не нашлось. Попробуйте поднять бюджет или изменить запрос.`,
+      verification: "VERIFIED",
+    };
+  },
+};
+
 const ALL_TOOLS: ToolDefinition[] = [
   // Catalog
   searchProductsTool,
-  searchCheaperTool,
+  queryAwareSearchCheaperTool,
   compareProductsTool,
   getProductTool,
   visionSearchTool,
@@ -95,7 +199,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   searchClassifiedsTool,
   vinCheckTool,
   // Commerce
-  getOrderTool,
+  sellerAwareGetOrderTool,
   cartAddTool,
   createOrderTool,
   cancelOrderTool,
@@ -112,7 +216,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   createProductDraftTool,
   guardedPublishProductTool,
   changePriceTool,
-  advisePriceTool,
+  sellerAwareAdvisePriceTool,
   priceHistoryTool,
   findCompetitorsTool,
   scanGlobalCompetitorsTool,
