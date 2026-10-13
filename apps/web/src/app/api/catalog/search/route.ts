@@ -2,6 +2,7 @@ import { apiRoute } from "@/lib/api-helpers";
 import { searchProducts, type SearchFilters } from "@/lib/domains/catalog";
 import { recordEvent } from "@/lib/domains/events";
 import { newTraceId } from "@/lib/ai/gateway";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,12 @@ export const GET = apiRoute(async (request) => {
     payload: { query: filters.query, mode, count: results.length },
     anonymous: true,
   });
+  const ids = results.map((r) => r.product.id);
+  const images = ids.length
+    ? await prisma.productImage.findMany({ where: { productId: { in: ids } }, orderBy: [{ position: "asc" }, { createdAt: "asc" }], select: { productId: true, url: true } })
+    : [];
+  const firstImage = new Map<string, string>();
+  for (const image of images) if (!firstImage.has(image.productId)) firstImage.set(image.productId, image.url);
   return Response.json({
     total,
     mode,
@@ -41,7 +48,7 @@ export const GET = apiRoute(async (request) => {
       reviewsCount: r.product.reviewsCount,
       seller: { id: r.product.sellerProfile.id, name: r.product.sellerProfile.displayName },
       availability: r.product.inventory?.availability ?? "UNKNOWN",
-      imageUrl: null,
+      imageUrl: firstImage.get(r.product.id) ?? null,
       signals: r.signals,
     })),
   });
