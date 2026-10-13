@@ -4,6 +4,9 @@
  * One cart may hold products from several sellers. On checkout the cart is
  * split into one order per seller: delivery, payouts and statuses are then
  * tracked per seller while the buyer sees one simple picture.
+ *
+ * Stock is kept per product: all variants of a product share one inventory,
+ * so availability is checked against the sum of every cart line of the product.
  */
 import { prisma } from "../prisma";
 import { toKopecks, fromKopecks } from "../utils";
@@ -20,7 +23,7 @@ export interface CartLine {
   sellerId: string;
   sellerName: string;
   available: boolean;
-  /** Сколько штук сейчас есть у продавца. */
+  /** Сколько штук сейчас есть у продавца (общий остаток товара). */
   stock: number;
   lineTotalKopecks: number;
   /** True when the live price differs from the price-at-add snapshot. */
@@ -66,6 +69,10 @@ export async function getCartView(userId: string): Promise<CartView> {
     },
   });
 
+  // Сколько штук каждого товара в корзине с учётом всех вариантов.
+  const wantedByProduct = new Map<string, number>();
+  for (const item of cart.items) wantedByProduct.set(item.productId, (wantedByProduct.get(item.productId) ?? 0) + item.quantity);
+
   const lines: CartLine[] = cart.items.map((item) => {
     const stock = item.product.inventory?.quantity ?? 0;
     const variant = item.variantId ? item.product.variants.find((v) => v.id === item.variantId) ?? null : null;
@@ -88,7 +95,7 @@ export async function getCartView(userId: string): Promise<CartView> {
       sellerName: item.product.sellerProfile.displayName,
       available:
         item.product.status === "ACTIVE" &&
-        stock >= item.quantity &&
+        stock >= (wantedByProduct.get(item.productId) ?? item.quantity) &&
         (!item.variantId || Boolean(variant)) &&
         (item.product.inventory?.availability ?? "UNKNOWN") !== "OUT_OF_STOCK",
       stock,
@@ -131,11 +138,11 @@ export async function addToCart(
     throw new Error("товар закончился");
   }
   const q = Math.max(1, Math.min(quantity, 99));
-  const existing = await prisma.cartItem.findFirst({
-    where: { cartId, productId, variantId: variant?.id ?? null },
-  });
+  const sameProduct = await prisma.cartItem.findMany({ where: { cartId, productId }, select: { id: true, variantId: true, quantity: true } });
+  const existing = sameProduct.find((row) => row.variantId === (variant?.id ?? null)) ?? null;
+  const alreadyInCart = sameProduct.reduce((sum, row) => sum + row.quantity, 0);
   const wanted = Math.min(99, (existing?.quantity ?? 0) + q);
-  if (stock !== null && wanted > stock) {
+  if (stock !== null && alreadyInCart + q > stock) {
     throw new Error(`в наличии только ${stock} шт.`);
   }
   if (existing) {

@@ -293,6 +293,8 @@ export interface TransitionInput {
   actingUserId?: string;
   /** For seller/admin transitions, which seller profile is authorised. */
   actingSellerId?: string;
+  /** Разрешённые исходные статусы, проверяются внутри транзакции (защита от гонки). */
+  onlyFrom?: string[];
 }
 
 export async function transitionOrder(
@@ -328,11 +330,15 @@ export async function transitionOrder(
     if (orderMeta.status === to) {
       return { ok: true, from: orderMeta.status, to, note: "already in state", order: { id: orderMeta.id, number: orderMeta.number, status: orderMeta.status } };
     }
+    if (input.onlyFrom && !input.onlyFrom.includes(orderMeta.status)) {
+      throw new Error(`переход недоступен из статуса ${orderMeta.status}`);
+    }
     if (!canTransition(orderMeta.status, to)) {
       throw new Error(`недопустимый переход статуса заказа: ${orderMeta.status} → ${to}`);
     }
-    const updated = await tx.order.update({
-      where: { id: input.orderId },
+    // Условное обновление: если статус успел измениться (например, пришла оплата), ничего не пишем.
+    const guarded = await tx.order.updateMany({
+      where: { id: input.orderId, status: orderMeta.status },
       data: {
         status: to,
         cancelledAt: to === "CANCELLED" ? new Date() : undefined,
@@ -342,8 +348,11 @@ export async function transitionOrder(
         // order terminates without fulfilment (P0 overselling fix).
         stockReleased: to === "CANCELLED" || to === "REFUNDED" ? true : undefined,
       },
-      select: { id: true, number: true, status: true },
     });
+    if (guarded.count !== 1) {
+      throw new Error("статус заказа уже изменился, обновите страницу");
+    }
+    const updated = { id: orderMeta.id, number: orderMeta.number, status: to as string };
     if ((to === "CANCELLED" || to === "REFUNDED") && !orderMeta.stockReleased) {
       await releaseStockForOrder(tx, order);
     }
