@@ -49,7 +49,7 @@ export type RiskLevel =
 
 export interface ToolContext {
   userId: string;
-  /** buyer | seller | specialist | admin */
+  /** buyer | seller | specialist | admin | guest */
   role: string;
   /** Present when the user acting is a seller (own profile). */
   sellerProfileId?: string;
@@ -89,8 +89,10 @@ export interface ToolDefinition {
 /**
  * Role → permission set. This is the authorization boundary for AI actions:
  * a buyer-side agent can never publish a product, no matter how it is asked.
+ * A guest (not signed in) may only read the public catalog.
  */
 const ROLE_PERMISSIONS: Record<string, ToolPermission[]> = {
+  guest: ["READ_PRODUCTS", "READ_REVIEWS", "READ_SELLERS"],
   buyer: [
     "READ_PRODUCTS",
     "READ_REVIEWS",
