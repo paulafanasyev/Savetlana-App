@@ -300,6 +300,17 @@ export async function serverRequest(): Promise<Request> {
   return request;
 }
 
+/**
+ * Страница входа с возвратом туда, куда человек шёл (путь передаёт middleware).
+ * Принимаем только внутренние пути, чтобы нельзя было увести на чужой сайт.
+ */
+async function loginPath(): Promise<string> {
+  const headerList = await headers();
+  const path = headerList.get("x-forwarded-path");
+  if (!path || !path.startsWith("/") || path.startsWith("//") || path.startsWith("/login")) return "/login";
+  return `/login?next=${encodeURIComponent(path)}`;
+}
+
 export async function requireUserServer(): Promise<AuthContext> {
   // Inside a React Server Component an thrown ApiError renders as a 500 page.
   // The idiomatic App Router behaviour for an unauthenticated page request is
@@ -307,7 +318,7 @@ export async function requireUserServer(): Promise<AuthContext> {
   try {
     return await requireUser(await serverRequest());
   } catch (e) {
-    if (e instanceof ApiError && e.statusCode === 401) redirect("/login");
+    if (e instanceof ApiError && e.statusCode === 401) redirect(await loginPath());
     throw e;
   }
 }
@@ -316,7 +327,7 @@ export async function requireSellerServer(): Promise<AuthContext & { sellerId: s
   try {
     return await requireSeller(await serverRequest());
   } catch (e) {
-    if (e instanceof ApiError && e.statusCode === 401) redirect("/login");
+    if (e instanceof ApiError && e.statusCode === 401) redirect(await loginPath());
     throw e;
   }
 }
@@ -325,7 +336,7 @@ export async function requireAdminServer(): Promise<AuthContext> {
   try {
     return await requireAdmin(await serverRequest());
   } catch (e) {
-    if (e instanceof ApiError && e.statusCode === 401) redirect("/login");
+    if (e instanceof ApiError && e.statusCode === 401) redirect(await loginPath());
     throw e;
   }
 }
