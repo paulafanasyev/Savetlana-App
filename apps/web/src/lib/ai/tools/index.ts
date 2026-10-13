@@ -5,12 +5,13 @@
  * the registry (never the domain layer directly), so authorization,
  * confirmation gating and audit logging are uniformly enforced (spec §44).
  */
-import { toolRegistry } from "./registry";
+import { toolRegistry, looseObjectSchema } from "./registry";
 import type { ToolDefinition, ToolContext, ToolResult } from "./registry";
 import { prisma } from "../../prisma";
 import { publishProblems, publishProblemsMessage } from "../../domains/publish-check";
 import { getSellerOnboardingGate } from "../../domains/seller-onboarding";
 import { searchProducts } from "../../domains/catalog";
+import { sellerCustomerReport, SEGMENT_LABELS } from "../../domains/seller-crm";
 
 import {
   searchProductsTool,
@@ -136,7 +137,7 @@ const sellerAwareGetOrderTool: ToolDefinition = {
   },
 };
 
-/** «Какую цену поставить?» без указания товара: берём самый просматриваемый товар продавца. */
+/** «Какую цену поставить?» без указания товара: берём самый просматриваемый активный товар продавца. */
 const sellerAwareAdvisePriceTool: ToolDefinition = {
   ...advisePriceTool,
   async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
@@ -187,6 +188,44 @@ const queryAwareSearchCheaperTool: ToolDefinition = {
   },
 };
 
+/** CRM: покупатели магазина, сегменты и советы, по оплаченным заказам. */
+const sellerCustomersTool: ToolDefinition = {
+  name: "seller_customers",
+  description: "CRM продавца: покупатели магазина, кто возвращается, VIP, новые и давно не покупавшие, средний чек и советы, как вернуть покупателей.",
+  permission: "READ_ANALYTICS",
+  riskLevel: "READ",
+  needsConfirmation: false,
+  parameters: looseObjectSchema({}),
+  async execute(ctx: ToolContext): Promise<ToolResult> {
+    if (!ctx.sellerProfileId) return { ok: false, error: "раздел покупателей доступен в кабинете продавца", verification: "NOT_PROVEN" };
+    const report = await sellerCustomerReport(ctx.sellerProfileId);
+    const t = report.totals;
+    if (t.customers === 0) {
+      return { ok: true, data: { items: [] }, summary: report.advice.join(" "), verification: "VERIFIED" };
+    }
+    const segments = (Object.keys(report.segments) as (keyof typeof report.segments)[])
+      .filter((k) => report.segments[k] > 0)
+      .map((k) => `${SEGMENT_LABELS[k]}: ${report.segments[k]}`)
+      .join(", ");
+    return {
+      ok: true,
+      data: {
+        totals: t,
+        segments: report.segments,
+        items: report.customers.slice(0, 5).map((c) => ({
+          title: `${c.name}, ${SEGMENT_LABELS[c.segment].toLowerCase()}, заказов: ${c.ordersCount}`,
+          priceKopecks: c.totalKopecks,
+        })),
+      },
+      summary:
+        `Покупателей: ${t.customers}, возвращаются ${t.repeatRatePercent}%. Средний чек ${Math.round(t.avgCheckKopecks / 100).toLocaleString("ru-RU")} ₽. ${segments}.` +
+        (report.advice.length ? ` ${report.advice.join(" ")}` : "") +
+        " Подробно в разделе «Покупатели». Лучшие по сумме покупок:",
+      verification: "VERIFIED",
+    };
+  },
+};
+
 const ALL_TOOLS: ToolDefinition[] = [
   // Catalog
   searchProductsTool,
@@ -211,6 +250,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   checkInventoryTool,
   // Seller
   analyzeSellerSalesTool,
+  sellerCustomersTool,
   confirmInventoryTool,
   extendListingTool,
   createProductDraftTool,
