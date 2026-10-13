@@ -1,6 +1,7 @@
 import { getAdminOverview } from "@/lib/domains/admin";
 import { rub } from "@/lib/format";
 import { orderStatusLabel } from "@/lib/format";
+import { DemoCatalogPanel } from "@/components/DemoCatalogPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,8 @@ export default async function AdminOverviewPage() {
 
   return (
     <div className="space-y-6">
+      <DemoCatalogPanel />
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Пользователи" value={overview.users.total} hint={`покупателей: ${overview.users.buyers} · продавцов: ${overview.users.sellers}`} />
         <Stat label="Заблокировано" value={overview.users.blocked} />

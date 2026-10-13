@@ -41,11 +41,12 @@ const RULES: RouteRule[] = [
   // Seller-side business questions
   // Global competitor sweep must win over the generic competitor rule so the
   // seller's explicit «глобально / по всему интернету / озон / вб» request
-  // reaches the multi-tier external scan (spec §13, §26).
+  // reaches the multi-tier external scan (spec §13, §26). Sourcing abroad
+  // («в Китае», 1688, оптом, поставщик) goes here too: it needs global_search.
   {
     side: "seller",
     agent: "competitor",
-    pattern: /глобальн|по всему интернет|международн|ozon|озон|wildberries|вб |aliexpress|taobao|amazon|китайск/i,
+    pattern: /глобальн|по всему интернет|международн|ozon|озон|wildberries|вб |aliexpress|taobao|amazon|кита|1688|alibaba|алибаб|таобао|оптом|закуп|поставщик|перепрод/i,
   },
   { side: "seller", agent: "delivery", pattern: /доставк[а|у].*(уровен|тариф|цен|стоим)|сколько стоит доставка|условия доставки|перевозчик|ПВЗ|международная доставка/i },
   { side: "seller", agent: "analytics", pattern: /почему.*(упали|плохо прода|снизил).*продаж|продажи упали|как увеличить продажи|что с продажами/i },
@@ -70,7 +71,7 @@ const RULES: RouteRule[] = [
   { side: "buyer", agent: "memory", pattern: /запомни мои (предпочтени|размер|бюджет)|что ты обо мне знаешь/i },
   { side: "buyer", agent: "review", pattern: /отзывы|что говорят|стоит ли брать|какие плюсы|какие минусы|недостатки/i },
   { side: "buyer", agent: "vision", pattern: /по фот|фотографи|сделал фото|распознай товар/i },
-  { side: "buyer", agent: "search", pattern: /найд[и|ите]|ищу|хочу купить|подбери|выбери|сравни|дешевле|аналог/i },
+  { side: "buyer", agent: "search", pattern: /найд[и|ите]|найти|ищу|хочу купить|подбери|выбери|сравни|дешевле|аналог|подскажи|кита|1688|alibaba|aliexpress|taobao|оптом/i },
 ];
 
 export interface RouteResult {
@@ -106,7 +107,7 @@ export function routeAgent(text: string, side: "buyer" | "seller"): RouteResult 
  */
 export const AGENT_TOOLS: Record<AgentKey, string[]> = {
   buyer: ["search_products", "compare_products", "get_product", "search_sellers", "get_reviews", "check_inventory", "cart_add", "create_order", "get_order", "cancel_order", "get_tracking", "get_payment_status", "request_return", "create_dispute", "wishlist_add", "recall_memory", "remember_preference"],
-  seller: ["analyze_seller_sales", "product_health", "advise_price", "change_price", "confirm_inventory", "extend_listing", "create_product_draft", "publish_product", "find_competitors", "scan_global_competitors", "delivery_quotes", "document_requirements", "create_workflow_rule"],
+  seller: ["analyze_seller_sales", "product_health", "advise_price", "change_price", "confirm_inventory", "extend_listing", "create_product_draft", "publish_product", "find_competitors", "scan_global_competitors", "global_search", "delivery_quotes", "document_requirements", "create_workflow_rule"],
   search: ["search_products", "search_cheaper", "compare_products", "get_product", "search_sellers", "global_search", "search_classifieds", "check_vin"],
   vision: ["vision_search", "search_products", "search_cheaper", "compare_products"],
   recommendation: ["search_products", "recall_memory"],
