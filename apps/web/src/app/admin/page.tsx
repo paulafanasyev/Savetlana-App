@@ -5,8 +5,26 @@ import { DemoCatalogPanel } from "@/components/DemoCatalogPanel";
 
 export const dynamic = "force-dynamic";
 
+type Overview = Awaited<ReturnType<typeof getAdminOverview>>;
+
 export default async function AdminOverviewPage() {
-  const overview = await getAdminOverview();
+  // Сводка не должна ронять всю админку: без неё демо-режим всё равно доступен.
+  let overview: Overview | null = null;
+  try {
+    overview = await getAdminOverview();
+  } catch (error) {
+    console.error("[admin] overview failed", error);
+  }
+
+  if (!overview) {
+    return (
+      <div className="space-y-6">
+        <DemoCatalogPanel />
+        <div className="card p-5 text-sm text-ink-soft">Сводка по площадке сейчас не загрузилась. Остальные разделы админки работают, обновите страницу чуть позже.</div>
+      </div>
+    );
+  }
+
   const orderStatuses = Object.entries(overview.orders.byStatus).sort((a, b) => b[1] - a[1]);
   const riskLevels = Object.entries(overview.risk.byLevel);
 
