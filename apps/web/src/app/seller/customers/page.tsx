@@ -52,6 +52,10 @@ export default async function SellerCustomersPage({ searchParams }: { searchPara
         <section className="card p-5">
           <h2 className="font-semibold">Советы Светланы</h2>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{report.advice.map((a, i) => <li key={i}>{a}</li>)}</ul>
+          <div className="mt-3 flex flex-wrap gap-3 text-sm">
+            <Link href="/seller/promotions" className="text-svetlana-700 hover:underline">Запустить скидку →</Link>
+            <Link href="/seller/messages" className="text-svetlana-700 hover:underline">Сообщения покупателей →</Link>
+          </div>
         </section>
       )}
 
@@ -68,7 +72,7 @@ export default async function SellerCustomersPage({ searchParams }: { searchPara
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-ink-faint">
-              <tr><th className="py-2 pr-4">Покупатель</th><th className="pr-4">Сегмент</th><th className="pr-4">Заказов</th><th className="pr-4">Сумма</th><th className="pr-4">Средний чек</th><th className="pr-4">Последний заказ</th><th>Чаще берёт</th></tr>
+              <tr><th className="py-2 pr-4">Покупатель</th><th className="pr-4">Сегмент</th><th className="pr-4">Заказов</th><th className="pr-4">Сумма</th><th className="pr-4">Средний чек</th><th className="pr-4">Последний заказ</th><th className="pr-4">Чаще берёт</th><th><span className="sr-only">Связь</span></th></tr>
             </thead>
             <tbody>
               {list.map((c) => (
@@ -79,7 +83,8 @@ export default async function SellerCustomersPage({ searchParams }: { searchPara
                   <td className="pr-4">{rub(c.totalKopecks)}</td>
                   <td className="pr-4">{rub(c.avgCheckKopecks)}</td>
                   <td className="pr-4">{timeAgo(c.lastOrderAt)}</td>
-                  <td>{c.favoriteProduct ?? "—"}</td>
+                  <td className="pr-4">{c.favoriteProduct ?? "—"}</td>
+                  <td><Link href={`/seller/messages/${c.buyerId}`} className="text-svetlana-700 hover:underline">Написать</Link></td>
                 </tr>
               ))}
             </tbody>
