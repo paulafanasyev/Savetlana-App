@@ -7,12 +7,14 @@
  *      DELETE carrying a session cookie must prove it originated from this
  *      site: the Origin (or Referer fallback) host must equal the request
  *      Host. A cross-site form forged by attacker.com cannot forge Origin.
+ *      A cookie-carrying mutation with neither Origin nor Referer is rejected
+ *      too (fail-closed): browsers always send Origin on fetch/form POSTs.
  *   2. Content-Security-Policy on every response (audit §24).
+ *   3. Passes the requested path to server components (x-forwarded-path) so
+ *      a login redirect can bring the user back to the same page.
  *
- * The middleware is deliberately conservative: it only rejects when it can
- * prove the request is cross-site AND carries our session cookie. Same-origin
- * browser navigation, OAuth callback redirects (GET) and API clients are
- * untouched.
+ * Requests without our session cookie (public APIs, OAuth start, bearer
+ * clients) are untouched.
  */
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
@@ -71,7 +73,7 @@ export function middleware(request: NextRequest): NextResponse {
     // posts; Referer is the legacy fallback.
     const originHost = hostOf(request.headers.get("origin")) ?? hostOf(request.headers.get("referer"));
 
-    if (expectedHost && originHost && originHost !== expectedHost) {
+    if (expectedHost && originHost !== expectedHost) {
       return NextResponse.json(
         {
           error: "Запрос отклонён: неверный источник. Обновите страницу и попробуйте снова.",
@@ -82,9 +84,10 @@ export function middleware(request: NextRequest): NextResponse {
     }
   }
 
-  // Forward the trace id to route handlers through the request headers.
+  // Forward the trace id and the requested path to route handlers and pages.
   const forwarded = new Headers(request.headers);
   forwarded.set("x-trace-id", traceId);
+  forwarded.set("x-forwarded-path", `${request.nextUrl.pathname}${request.nextUrl.search}`);
   const response = NextResponse.next({ request: { headers: forwarded } });
   response.headers.set("Content-Security-Policy", CSP);
   response.headers.set("x-trace-id", traceId);

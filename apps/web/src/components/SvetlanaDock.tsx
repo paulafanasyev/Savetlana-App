@@ -1,25 +1,37 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 import { SvetlanaAvatar } from "@/components/SvetlanaAvatar";
 
 /** Страницы, где чат со Светланой уже на экране или не нужен. */
 const HIDDEN_ON = new Set(["/", "/svetlana", "/login", "/register"]);
+const CHAT_INPUT = 'input[aria-label="Сообщение для Светланы"]';
 
-/** Светлана в углу любой страницы: фото-кнопка открывает чат. */
+/**
+ * Светлана в углу любой страницы: фото-кнопка открывает чат. Если на странице
+ * уже есть встроенный чат, второй не показываем.
+ */
 export function SvetlanaDock() {
   const pathname = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  if (HIDDEN_ON.has(pathname) || pathname.startsWith("/admin")) return null;
+  const [embedded, setEmbedded] = useState(false);
+
+  useEffect(() => {
+    const inputs = Array.from(document.querySelectorAll(CHAT_INPUT));
+    setEmbedded(inputs.some((el) => !el.closest("[data-svetlana-dock]")));
+    setOpen(false);
+  }, [pathname]);
+
+  if (HIDDEN_ON.has(pathname) || pathname.startsWith("/admin") || embedded) return null;
   const side = pathname.startsWith("/seller") ? "seller" : "buyer";
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-3">
+    <div data-svetlana-dock="" className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-3" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
       {mounted && (
-        <div className={open ? "block" : "hidden"}>
+        <div className={open ? "block max-h-[calc(100dvh-6.5rem)] overflow-y-auto rounded-2xl" : "hidden"}>
           <SvetlanaChat side={side} className="w-[min(92vw,380px)] shadow-float" />
         </div>
       )}

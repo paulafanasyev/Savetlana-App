@@ -22,16 +22,16 @@ function originDecision(input: {
   if (!STATE_CHANGING.has(input.method.toUpperCase())) return "allowed";
   if (!input.hasSession) return "allowed";
   const expectedHost = input.host?.toLowerCase();
-  const originUrl = input.origin ?? input.referer;
-  let originHost: string | null = null;
-  if (originUrl) {
+  const hostOf = (url: string | null): string | null => {
+    if (!url) return null;
     try {
-      originHost = new URL(originUrl).host.toLowerCase();
+      return new URL(url).host.toLowerCase();
     } catch {
-      originHost = null;
+      return null;
     }
-  }
-  if (expectedHost && originHost && originHost !== expectedHost) return "blocked";
+  };
+  const originHost = hostOf(input.origin) ?? hostOf(input.referer);
+  if (expectedHost && originHost !== expectedHost) return "blocked";
   return "allowed";
 }
 
@@ -55,6 +55,18 @@ describe("CSRF / Origin gate (P0-14)", () => {
         hasSession: true,
         origin: null,
         referer: "https://evil.example.com/forged-form",
+        host: "marketplace.ru",
+      }),
+    ).toBe("blocked");
+  });
+
+  it("blocks a cookie-authenticated POST with neither Origin nor Referer (fail-closed)", () => {
+    expect(
+      originDecision({
+        method: "POST",
+        hasSession: true,
+        origin: null,
+        referer: null,
         host: "marketplace.ru",
       }),
     ).toBe("blocked");
