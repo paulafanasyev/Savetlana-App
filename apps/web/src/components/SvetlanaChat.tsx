@@ -25,6 +25,8 @@ interface ChatMessage {
   pending?: PendingConfirmation;
   verification?: string;
   emotion?: Emotion;
+  /** Гостю показываем кнопку входа вместо ошибки. */
+  loginPrompt?: boolean;
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -34,6 +36,7 @@ const TOOL_LABELS: Record<string, string> = {
   confirm_inventory: "Подтверждение наличия", extend_listing: "Продление размещения", create_product_draft: "Черновик карточки",
   publish_product: "Публикация карточки", change_price: "Изменение цены", advise_price: "Совет по цене", find_competitors: "Анализ конкурентов",
   product_health: "Диагностика карточки", upcoming_events: "События", remember_preference: "Память предпочтений", recall_memory: "Воспоминание",
+  get_reviews: "Отзывы", search_sellers: "Поиск продавцов", get_tracking: "Отслеживание", get_payment_status: "Оплата",
 };
 
 interface RecognitionLike {
@@ -111,6 +114,12 @@ function useSpeechSynthesis(onSpeakingChange: (speaking: boolean) => void) {
   return { voices, available, speak, stop };
 }
 
+function loginHref(): string {
+  if (typeof window === "undefined") return "/login";
+  const next = `${window.location.pathname}${window.location.search}`;
+  return `/login?next=${encodeURIComponent(next)}`;
+}
+
 export function SvetlanaChat({ side = "buyer", className = "", title = "Светлана" }: { side?: "buyer" | "seller"; className?: string; title?: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([{ role: "assistant", content: side === "seller" ? "Здравствуйте! Я Светлана. Помогу с продажами: найду причины спада, проверю карточки, подскажу по ценам и конкурентам." : "Здравствуйте! Я Светлана. Помогу найти товар, выбрать подарок, сравнить варианты и оформить заказ. Что вас интересует?", emotion: "happy" }]);
   const [input, setInput] = useState("");
@@ -157,6 +166,14 @@ export function SvetlanaChat({ side = "buyer", className = "", title = "Свет
     setInput("");
     try {
       const response = await fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: trimmed, conversationId: conversationId ?? undefined, side }) });
+      if (response.status === 401) {
+        const content = "Чтобы я могла искать товары и помогать с заказами, войдите в аккаунт. Каталог и поиск работают и без входа.";
+        setMessages((items) => [...items, { role: "assistant", content, emotion: "neutral", loginPrompt: true }]);
+        dispatch({ type: "RESPONSE", emotion: "neutral" });
+        resetEmotionSoon();
+        speakText(content, voiceEnabled);
+        return;
+      }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Ошибка запроса");
       setConversationId(data.conversationId);
@@ -237,10 +254,11 @@ export function SvetlanaChat({ side = "buyer", className = "", title = "Свет
           <div className={message.role === "user" ? "flex justify-end" : "flex justify-start"}><div className={`sv-bubble ${message.role === "user" ? "sv-bubble-user" : "sv-bubble-assistant"}`}>
             {message.role === "assistant" && message.emotion && <span className="mb-1 block text-xs" aria-label={`Эмоция: ${message.emotion}`}>{message.emotion === "happy" ? "😊" : message.emotion === "sad" || message.emotion === "crying" ? "😢" : message.emotion === "laughing" ? "😂" : message.emotion === "surprised" ? "😮" : "😐"}</span>}
             <span className="whitespace-pre-line">{message.content}</span>
+            {message.loginPrompt && <a href={loginHref()} className="btn btn-primary mt-2 inline-flex px-3 py-1.5 text-xs">Войти</a>}
           </div></div>
           {message.steps && message.steps.length > 0 && <div className="prose-steps">{message.steps.map((step, stepIndex) => <div key={stepIndex} className="flex items-center gap-1.5"><span aria-hidden="true">{step.ok ? "✓" : "✕"}</span><span className="font-medium text-ink">{TOOL_LABELS[step.tool] ?? step.tool}</span>{step.summary && <span className="truncate text-ink-faint">· {step.summary}</span>}</div>)}</div>}
           {message.pending && <div className="mt-2 flex flex-wrap items-center gap-2"><button className="btn btn-primary px-3 py-1.5 text-xs" onClick={() => void confirmAction(message.pending!)} disabled={busy}>Подтвердить действие</button><span className="text-xs text-ink-soft">{message.pending.reason}</span></div>}
-          {message.verification && message.verification !== "VERIFIED" && <div className="mt-1 text-[11px] text-ink-faint">статус проверки: {verificationLabel(message.verification)}</div>}
+          {message.verification && verificationLabel(message.verification) && <div className="mt-1 text-[11px] text-ink-faint">{verificationLabel(message.verification)}</div>}
         </div>)}
         {busy && <div className="flex justify-start"><div className="sv-bubble sv-bubble-assistant" aria-live="polite"><span className="inline-flex gap-1"><span className="svetlana-dot" /> <span className="svetlana-dot" /> <span className="svetlana-dot" /></span></div></div>}
         <div ref={endRef} />
@@ -253,12 +271,18 @@ export function SvetlanaChat({ side = "buyer", className = "", title = "Свет
   );
 }
 
-function verificationLabel(value: string): string {
+/**
+ * Подпись под ответом. Ответы встроенного движка (MOCK_VERIFIED) идут по реальным
+ * данным сайта, поэтому подпись нужна только там, где результат не подтверждён.
+ */
+function verificationLabel(value: string): string | null {
   switch (value) {
-    case "MOCK_VERIFIED": return "тестовый режим: внешняя модель пока не подключена";
-    case "NOT_PROVEN": return "результат не подтверждён";
-    case "PENDING_EXTERNAL_ACCESS": return "ожидается внешний доступ";
-    default: return value;
+    case "VERIFIED":
+    case "MOCK_VERIFIED":
+      return null;
+    case "NOT_PROVEN": return "статус проверки: результат не подтверждён";
+    case "PENDING_EXTERNAL_ACCESS": return "статус проверки: ожидается внешний доступ";
+    default: return null;
   }
 }
 
