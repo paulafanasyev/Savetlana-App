@@ -12,7 +12,7 @@
  * outcomes (spec §47, §58, §148).
  */
 import { aiGateway, aiMode, newTraceId } from "../gateway";
-import { toolRegistry } from "../tools";
+import { toolRegistry, confirmPreview } from "../tools";
 import { registerAllTools } from "../tools";
 import { routeAgent, AGENT_TOOLS, type AgentKey } from "./router";
 import { decide, AGENT_LIMITS, PolicyAssertionError } from "./policy";
@@ -301,13 +301,28 @@ export class SvetlanaMasterAgent {
     // (toolName, args) pair on confirm.
     const alreadyConfirmed = ctx.confirm ? await ctx.confirm(name, args) : false;
     if (def.needsConfirmation && !alreadyConfirmed) {
+      // Перед подтверждением показываем, что именно изменится. Если действие
+      // выполнить нельзя, сразу говорим причину вместо кнопки «Подтвердить».
+      const preview = await confirmPreview(name, ctx, args).catch(() => null);
+      if (preview && !preview.ok) {
+        const step: AgentStep = {
+          toolName: name,
+          args,
+          result: { ok: false, error: preview.error, verification: "NOT_PROVEN" },
+          durationMs: Date.now() - started,
+        };
+        await this.logToolCall(conversationId, agentName, name, args, step, "denied");
+        return { kind: "done", step };
+      }
       const pending = await persistPending(ctx, conversationId, name, args, def.riskLevel);
       if (pending) {
         await this.logToolCall(conversationId, agentName, name, args, null, "requires_confirmation");
         return {
           kind: "awaiting_confirmation",
           pending: pending.descriptor,
-          message: `${pending.descriptor.reason}. Подтвердите действие «${name}», и я его выполню.`,
+          message: preview?.ok
+            ? `${preview.text}\nНажмите «Подтвердить действие», и я это сделаю.`
+            : `${pending.descriptor.reason}. Подтвердите действие «${name}», и я его выполню.`,
         };
       }
       const step: AgentStep = {
