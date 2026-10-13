@@ -1,6 +1,7 @@
 import { requireSellerServer } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requirementsForSeller } from "@/lib/domains/documents";
+import { DocumentUploadForm } from "@/components/DocumentUploadForm";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,8 @@ export default async function SellerDocumentsPage() {
         )}
       </section>
 
+      <DocumentUploadForm suggestedKind={requirements.missing[0]} />
+
       <section className="card overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">
           <thead className="border-b border-surface-line bg-surface-muted text-left text-xs uppercase text-ink-faint">
@@ -100,7 +103,7 @@ export default async function SellerDocumentsPage() {
             {documents.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-10 text-center text-ink-soft">
-                  Документы ещё не загружены.
+                  Документы ещё не загружены. Загрузите первый формой выше.
                 </td>
               </tr>
             )}
