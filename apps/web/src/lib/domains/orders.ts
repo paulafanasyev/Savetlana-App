@@ -73,7 +73,7 @@ export interface CreateOrderInput {
   note?: string;
   /** Caller-supplied idempotency key (spec §125). */
   idempotencyKey: string;
-  /** Способ доставки по каждому продавцу. Не указан — самовывоз (0 ₽). */
+  /** Способ доставки по каждому продавцу. Не указан: самовывоз (0 ₽). */
   deliveryBySeller?: Record<string, DeliveryChoice>;
 }
 
@@ -92,7 +92,7 @@ export interface CreatedOrders {
 /**
  * Checkout: splits the cart by seller and creates one order per seller
  * atomically. If the cart is empty or a line went unavailable, nothing is
- * created — the buyer is never charged for something we cannot fulfil.
+ * created: the buyer is never charged for something we cannot fulfil.
  */
 export async function createOrdersFromCart(
   input: CreateOrderInput
@@ -185,6 +185,7 @@ export async function createOrdersFromCart(
         data: lines.map((l) => ({
           orderId: order.id,
           productId: l.productId,
+          variantId: l.variantId ?? null,
           titleSnapshot: l.title,
           priceKopecks: l.priceKopecks,
           quantity: l.quantity,
@@ -243,6 +244,7 @@ async function withCheckoutTransaction<T>(work: () => Promise<T>): Promise<T> {
 /**
  * Claims stock atomically for every cart line with a conditional decrement,
  * so two simultaneous checkouts of the last item cannot both succeed.
+ * Stock is kept per product: all variants share one inventory.
  */
 async function reserveStock(
   tx: TransactionClient,

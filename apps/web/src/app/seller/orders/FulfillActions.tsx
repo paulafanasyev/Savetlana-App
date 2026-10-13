@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 
-// Перевозчики. Самовывоз и своя доставка закрываются кнопкой «Покупатель получил заказ».
+// Тестовый перевозчик только на превью и локально (сервер на боевом его тоже отклоняет).
+const LIVE = process.env.NEXT_PUBLIC_VERCEL_ENV === "production";
 const CARRIERS = [
   { key: "cdek", label: "СДЭК" },
-  { key: "sandbox-carrier", label: "Тестовый перевозчик" },
+  ...(LIVE ? [] : [{ key: "sandbox-carrier", label: "Тестовый перевозчик" }]),
 ];
-const OWN_DELIVERY_KEYS = ["SELLER_OWN_DELIVERY", "PICKUP", "seller_own", "pickup"];
+// Здесь продавец сам отмечает получение: автоматического отслеживания нет.
+const SELF_CONFIRMED_KEYS = ["SELLER_OWN_DELIVERY", "PICKUP", "seller_own", "pickup", "SELLER_DECLARED"];
 const DELIVERABLE = ["CONFIRMED", "PROCESSING", "READY", "HANDED_TO_CARRIER", "IN_TRANSIT"];
 
 export function FulfillActions({ orderId, status, hasShipment, shipmentProvider }: { orderId: string; status: string; hasShipment: boolean; shipmentProvider?: string | null }) {
@@ -36,7 +38,8 @@ export function FulfillActions({ orderId, status, hasShipment, shipmentProvider 
 
   const canConfirm = status === "PAID";
   const canShip = ["CONFIRMED", "PROCESSING", "READY"].includes(status) && !hasShipment;
-  const canDeliver = DELIVERABLE.includes(status) && (!hasShipment || OWN_DELIVERY_KEYS.includes(shipmentProvider ?? ""));
+  const declared = shipmentProvider === "SELLER_DECLARED";
+  const canDeliver = DELIVERABLE.includes(status) && (!hasShipment || SELF_CONFIRMED_KEYS.includes(shipmentProvider ?? ""));
 
   return (
     <div className="space-y-3">
@@ -49,7 +52,7 @@ export function FulfillActions({ orderId, status, hasShipment, shipmentProvider 
               {CARRIERS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
             </select>
           </label>
-          <label className="mt-2 block text-sm">Номер отправления (если уже есть)
+          <label className="mt-2 block text-sm">Трек-номер (если уже сдали посылку)
             <input className="input mt-1 w-full" value={tracking} onChange={(e) => setTracking(e.target.value)} />
           </label>
           <div className="mt-3 flex gap-2">
@@ -60,7 +63,11 @@ export function FulfillActions({ orderId, status, hasShipment, shipmentProvider 
       )}
       {canDeliver && (
         <div className="rounded border border-svetlana-200 p-3">
-          <p className="text-sm text-ink-soft">Самовывоз или своя доставка: нажмите, когда покупатель забрал заказ.</p>
+          <p className="text-sm text-ink-soft">
+            {declared
+              ? "Посылка с вашим трек-номером не отслеживается автоматически: когда перевозчик вручит её, отметьте это здесь."
+              : "Самовывоз или своя доставка: нажмите, когда покупатель забрал заказ."}
+          </p>
           <label className="mt-2 block text-sm">Примечание (необязательно)
             <input className="input mt-1 w-full" value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
           </label>

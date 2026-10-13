@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { payoutIdempotencyKey } from "@/lib/payout-key";
 import { getPayoutProvider, sellerSettlementStatement } from "@/lib/domains/payments";
 import { DELIVERED_ORDER_STATUSES, payoutDeliveredSettlements } from "@/lib/domains/seller-payouts";
+import { isLiveDeployment } from "@/lib/live-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export const POST = apiRoute(async (request) => {
       : Response.json(error ? { error, code } : { code }, { status });
 
   // На боевом сайте без банка-партнёра выплату не изображаем: деньги бы не ушли.
-  if (getPayoutProvider().sandbox && process.env.VERCEL_ENV === "production") {
+  if (getPayoutProvider().sandbox && isLiveDeployment()) {
     return reply("bank_required", 409, "Выплаты включатся после подключения банка-партнёра");
   }
 
