@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { requireSellerServer } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
-const NAV = [["/seller", "Главная"], ["/seller/onboarding", "Проверка продавца"], ["/seller/products", "Товары"], ["/seller/orders", "Заказы"], ["/seller/customers", "Покупатели"], ["/seller/payouts", "Выплаты"], ["/seller/disputes", "Споры"], ["/seller/documents", "Документы"], ["/seller/analytics", "Аналитика"], ["/svetlana", "Светлана"]] as const;
+const NAV = [["/seller", "Главная"], ["/seller/onboarding", "Проверка продавца"], ["/seller/products", "Товары"], ["/seller/orders", "Заказы"], ["/seller/customers", "Покупатели"], ["/seller/messages", "Сообщения"], ["/seller/promotions", "Акции"], ["/seller/payouts", "Выплаты"], ["/seller/disputes", "Споры"], ["/seller/documents", "Документы"], ["/seller/analytics", "Аналитика"], ["/svetlana", "Светлана"]] as const;
 
 export default async function SellerLayout({ children }: { children: ReactNode }) {
   await requireSellerServer();
