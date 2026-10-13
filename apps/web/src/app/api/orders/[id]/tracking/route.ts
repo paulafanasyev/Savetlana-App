@@ -9,6 +9,8 @@ export const dynamic = "force-dynamic";
  * Unified tracking screen (spec §24). The buyer sees the order status, the
  * carrier, the tracking number, ETA and the event timeline. Status always
  * comes from the carrier — the route never invents a status (spec §123).
+ * Also returns the price breakdown and which products the buyer has already
+ * reviewed, so the order page can offer a review form after delivery.
  */
 export const GET = apiRoute(async (request, { params }) => {
   const { user } = await requireBuyer(request);
@@ -22,8 +24,11 @@ export const GET = apiRoute(async (request, { params }) => {
       status: true,
       buyerId: true,
       totalKopecks: true,
+      subtotalKopecks: true,
+      deliveryKopecks: true,
       currency: true,
-      items: { select: { id: true, titleSnapshot: true, quantity: true, priceKopecks: true } },
+      items: { select: { id: true, productId: true, titleSnapshot: true, quantity: true, priceKopecks: true } },
+      payment: { select: { status: true, sandbox: true } },
     },
   });
   if (order.buyerId !== user.id) {
@@ -45,15 +50,24 @@ export const GET = apiRoute(async (request, { params }) => {
     }
   }
 
+  const reviews = await prisma.review.findMany({
+    where: { orderId: order.id, authorId: user.id },
+    select: { productId: true },
+  });
+
   return Response.json({
     order: {
       id: order.id,
       number: order.number,
       status: order.status,
       totalKopecks: order.totalKopecks,
+      subtotalKopecks: order.subtotalKopecks,
+      deliveryKopecks: order.deliveryKopecks,
       currency: order.currency,
       items: order.items,
+      payment: order.payment ?? null,
     },
+    reviewedProductIds: reviews.map((r) => r.productId),
     shipment: shipment
       ? {
           id: shipment.id,

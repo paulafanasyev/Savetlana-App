@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { rub, orderStatusLabel, timeAgo } from "@/lib/format";
 
 interface TrackingResponse {
@@ -13,9 +13,13 @@ interface TrackingResponse {
     number: string;
     status: string;
     totalKopecks: number;
+    subtotalKopecks?: number | null;
+    deliveryKopecks?: number | null;
     currency: string;
-    items: { id: string; titleSnapshot: string; quantity: number; priceKopecks: number }[];
+    items: { id: string; productId: string; titleSnapshot: string; quantity: number; priceKopecks: number }[];
+    payment: { status: string; sandbox: boolean } | null;
   };
+  reviewedProductIds: string[];
   shipment: {
     id: string;
     carrierName: string;
@@ -45,12 +49,16 @@ export default function OrderDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    const res = await fetch(`/api/orders/${orderId}/tracking`);
-    if (!res.ok) {
-      setError("Не удалось загрузить заказ");
-      return;
+    try {
+      const res = await fetch(`/api/orders/${orderId}/tracking`);
+      if (!res.ok) {
+        setError(res.status === 401 ? "Войдите в аккаунт, чтобы посмотреть заказ" : "Не удалось загрузить заказ");
+        return;
+      }
+      setData((await res.json()) as TrackingResponse);
+    } catch {
+      setError("Нет связи с сервером. Обновите страницу.");
     }
-    setData((await res.json()) as TrackingResponse);
   }
 
   useEffect(() => {
@@ -85,6 +93,9 @@ export default function OrderDetailPage() {
 
   const { order, shipment } = data;
   const needsPayment = order.status === "PAYMENT_PENDING" || order.status === "CREATED";
+  const delivered = order.status === "DELIVERED" || order.status === "COMPLETED";
+  const subtotal = order.subtotalKopecks ?? order.items.reduce((sum, item) => sum + item.priceKopecks * item.quantity, 0);
+  const delivery = order.deliveryKopecks ?? Math.max(0, order.totalKopecks - subtotal);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
@@ -115,11 +126,22 @@ export default function OrderDetailPage() {
               </li>
             ))}
           </ul>
+          <dl className="mt-3 space-y-1 border-t border-line pt-2 text-sm">
+            <div className="flex justify-between"><dt className="text-ink-soft">Товары</dt><dd>{rub(subtotal)}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-soft">Доставка</dt><dd>{delivery > 0 ? rub(delivery) : "бесплатно"}</dd></div>
+            <div className="flex justify-between font-bold"><dt>Итого</dt><dd>{rub(order.totalKopecks)}</dd></div>
+          </dl>
         </div>
+
+        {order.payment?.sandbox && (
+          <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+            Тестовая оплата: банк ещё не подключён, деньги не списываются.
+          </p>
+        )}
 
         {needsPayment && <PayButton orderId={order.id} onPaid={load} />}
 
-        {canRequestReturn(order.status) && <ReturnActions orderId={order.id} onChanged={load} />}
+        {delivered && <ReturnActions orderId={order.id} onChanged={load} />}
       </div>
 
       <div className="card mt-3 p-5">
@@ -129,7 +151,7 @@ export default function OrderDetailPage() {
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="chip">{SHIPMENT_STATUS_LABEL[shipment.status] ?? shipment.status}</span>
               {shipment.sandbox && (
-                <span className="chip bg-amber-100 text-amber-800">sandbox</span>
+                <span className="chip bg-amber-100 text-amber-800">тестовая доставка</span>
               )}
             </div>
             <dl className="mt-3 grid gap-2 text-xs text-ink-soft sm:grid-cols-2">
@@ -157,16 +179,90 @@ export default function OrderDetailPage() {
           </div>
         ) : (
           <p className="mt-2 text-sm text-ink-soft">
-            Продавец ещё не передал заказ перевозчику. Отслеживание появится, когда отправление будет создано.
+            Продавец ещё не передал заказ в доставку. Отслеживание появится, когда отправление будет создано.
           </p>
         )}
       </div>
+
+      {delivered && (
+        <section className="card mt-3 p-5">
+          <h2 className="text-lg font-bold text-ink">Отзыв о товаре</h2>
+          <p className="mt-1 text-sm text-ink-soft">Отзыв увидят другие покупатели. Он будет отмечен как «покупка подтверждена».</p>
+          {order.items.map((item) => (
+            <ReviewForm
+              key={item.id}
+              orderId={order.id}
+              productId={item.productId}
+              title={item.titleSnapshot}
+              already={data.reviewedProductIds.includes(item.productId)}
+              onDone={load}
+            />
+          ))}
+        </section>
+      )}
     </div>
   );
 }
 
-function canRequestReturn(status: string): boolean {
-  return status === "DELIVERED" || status === "COMPLETED";
+function ReviewForm({ orderId, productId, title, already, onDone }: { orderId: string; productId: string; title: string; already: boolean; onDone: () => void }) {
+  const [rating, setRating] = useState(5);
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  if (already) {
+    return <div className="mt-4 rounded-lg bg-surface-muted p-3 text-sm text-ink-soft">Отзыв на «{title}» уже оставлен. Спасибо!</div>;
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (body.trim().length < 10) {
+      setMessage("Напишите хотя бы 10 символов");
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, productId, rating, body: body.trim() }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage(json?.error ?? "Не удалось отправить отзыв");
+        return;
+      }
+      setMessage("Спасибо за отзыв!");
+      onDone();
+    } catch {
+      setMessage("Нет связи с сервером");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="mt-4 border-t border-line pt-4" onSubmit={submit}>
+      <div className="text-sm font-medium text-ink">{title}</div>
+      <label className="mt-2 block text-sm">
+        Оценка{" "}
+        <select className="input mt-1" value={rating} onChange={(e) => setRating(Number(e.target.value))}>
+          {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} из 5</option>)}
+        </select>
+      </label>
+      <textarea
+        className="input mt-2 min-h-[90px] w-full"
+        maxLength={4000}
+        placeholder="Что понравилось, что нет? Не меньше 10 символов"
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        aria-label={`Текст отзыва о товаре ${title}`}
+      />
+      <button className="btn btn-primary mt-2" disabled={busy}>{busy ? "Отправляем…" : "Отправить отзыв"}</button>
+      {message && <p className="mt-2 text-sm text-ink-soft" role="status">{message}</p>}
+    </form>
+  );
 }
 
 const RETURN_REASONS: { value: string; label: string }[] = [
@@ -205,7 +301,7 @@ function ReturnActions({ orderId, onChanged }: { orderId: string; onChanged: () 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(kind === "return" ? { reason } : { reason, description }),
       });
-      const body = await res.json();
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setMessage(body?.error ?? "Не удалось отправить запрос");
         return;
@@ -233,6 +329,7 @@ function ReturnActions({ orderId, onChanged }: { orderId: string; onChanged: () 
         <button className="btn btn-ghost px-3 py-2 text-sm" onClick={() => setOpen("dispute")}>
           Открыть спор
         </button>
+        {message && <p className="w-full text-xs text-ink-soft">{message}</p>}
       </div>
     );
   }
@@ -247,11 +344,7 @@ function ReturnActions({ orderId, onChanged }: { orderId: string; onChanged: () 
       <div className="mt-3 space-y-3">
         <label className="block text-xs text-ink-soft">
           Причина
-          <select
-            className="input mt-1 w-full"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          >
+          <select className="input mt-1 w-full" value={reason} onChange={(e) => setReason(e.target.value)}>
             <option value="">Выберите причину…</option>
             {options.map((o) => (
               <option key={o.value} value={o.value}>
@@ -272,18 +365,10 @@ function ReturnActions({ orderId, onChanged }: { orderId: string; onChanged: () 
           </label>
         )}
         <div className="flex gap-2">
-          <button
-            className="btn btn-primary px-4 py-2 text-sm"
-            disabled={busy}
-            onClick={() => void submit(open)}
-          >
+          <button className="btn btn-primary px-4 py-2 text-sm" disabled={busy} onClick={() => void submit(open)}>
             {busy ? "Отправляем…" : "Отправить"}
           </button>
-          <button
-            className="btn btn-ghost px-4 py-2 text-sm"
-            disabled={busy}
-            onClick={() => setOpen("none")}
-          >
+          <button className="btn btn-ghost px-4 py-2 text-sm" disabled={busy} onClick={() => setOpen("none")}>
             Отмена
           </button>
         </div>
@@ -313,7 +398,7 @@ function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ method }),
       });
-      const body = await res.json();
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setState("err");
         setMessage(body?.error ?? "Оплата не удалась");
@@ -334,7 +419,7 @@ function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void })
       setState("ok");
       setMessage(
         body.sandbox
-          ? "Оплата проведена в песочнице (sandbox). Продавец приступит к сборке."
+          ? "Тестовая оплата прошла: деньги не списывались. Продавец получил заказ."
           : "Оплата подтверждена банком."
       );
       onPaid();
