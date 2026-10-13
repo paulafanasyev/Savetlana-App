@@ -43,6 +43,16 @@ const TOOL_LABELS: Record<string, string> = {
   seller_customers: "Покупатели", seller_messages: "Сообщения", start_promotion: "Запуск скидки", end_promotion: "Возврат обычной цены",
 };
 
+/** Подписи настроения для экранного диктора: эмодзи сам по себе ничего не говорит. */
+const EMOTION_LABELS: Record<string, string> = {
+  happy: "Светлана рада", sad: "Светлане грустно", crying: "Светлана расстроена", laughing: "Светлана смеётся",
+  surprised: "Светлана удивлена", neutral: "Светлана спокойна",
+};
+
+function emotionIcon(emotion: string): string {
+  return emotion === "happy" ? "😊" : emotion === "sad" || emotion === "crying" ? "😢" : emotion === "laughing" ? "😂" : emotion === "surprised" ? "😮" : "😐";
+}
+
 interface RecognitionLike {
   lang: string;
   continuous: boolean;
@@ -134,6 +144,8 @@ export function SvetlanaChat({ side = "buyer", className = "", title = "Свет
   const [recognitionAvailable, setRecognitionAvailable] = useState(false);
   const [avatar, dispatch] = useReducer(avatarReducer, { ...initialAvatarState, emotion: "happy" });
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const typedRef = useRef(false);
   const recognitionRef = useRef<RecognitionLike | null>(null);
   const sendRef = useRef<(text: string) => Promise<void>>(async () => undefined);
   const emotionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -197,6 +209,15 @@ export function SvetlanaChat({ side = "buyer", className = "", title = "Свет
     }
   }, [busy, conversationId, resetEmotionSoon, side, speakText, voiceEnabled]);
 
+  // Пока Светлана отвечает, поле ввода выключено и теряет фокус. Возвращаем
+  // фокус, чтобы с клавиатуры можно было сразу писать дальше.
+  useEffect(() => {
+    if (!busy && typedRef.current) {
+      typedRef.current = false;
+      inputRef.current?.focus();
+    }
+  }, [busy]);
+
   useEffect(() => { sendRef.current = send; }, [send]);
 
   const toggleListening = useCallback(() => {
@@ -253,22 +274,23 @@ export function SvetlanaChat({ side = "buyer", className = "", title = "Свет
           {recognitionAvailable && <button type="button" className={`rounded-lg p-2 ${listening ? "bg-bad/10 text-bad" : "text-ink-soft hover:bg-surface-muted"}`} onClick={toggleListening} aria-label={listening ? "Остановить запись голоса" : "Сказать голосом"} title={listening ? "Остановить запись" : "Сказать голосом"}><Icon name={listening ? "micOff" : "mic"} /></button>}
         </div>
       </div>
-      <div className="flex-1 space-y-3 overflow-y-auto p-4" style={{ minHeight: 220, maxHeight: 480 }}>
+      <div className="flex-1 space-y-3 overflow-y-auto p-4" style={{ minHeight: 220, maxHeight: 480 }} role="log" aria-live="polite" aria-relevant="additions" aria-label="Переписка со Светланой">
         {messages.map((message, index) => <div key={index}>
           <div className={message.role === "user" ? "flex justify-end" : "flex justify-start"}><div className={`sv-bubble ${message.role === "user" ? "sv-bubble-user" : "sv-bubble-assistant"}`}>
-            {message.role === "assistant" && message.emotion && <span className="mb-1 block text-xs" aria-label={`Эмоция: ${message.emotion}`}>{message.emotion === "happy" ? "😊" : message.emotion === "sad" || message.emotion === "crying" ? "😢" : message.emotion === "laughing" ? "😂" : message.emotion === "surprised" ? "😮" : "😐"}</span>}
+            {message.role === "assistant" && message.emotion && <span className="mb-1 block text-xs" role="img" aria-label={EMOTION_LABELS[message.emotion] ?? "Светлана"}>{emotionIcon(message.emotion)}</span>}
+            <span className="sr-only">{message.role === "user" ? "Вы: " : "Светлана: "}</span>
             <span className="whitespace-pre-line">{message.content}</span>
             {message.loginPrompt && <a href={loginHref()} className="btn btn-primary mt-2 inline-flex px-3 py-1.5 text-xs">Войти</a>}
           </div></div>
-          {message.steps && message.steps.length > 0 && <div className="prose-steps">{message.steps.map((step, stepIndex) => <div key={stepIndex} className="flex items-center gap-1.5"><span aria-hidden="true">{step.ok ? "✓" : "✕"}</span><span className="font-medium text-ink">{TOOL_LABELS[step.tool] ?? step.tool}</span>{step.summary && <span className="truncate text-ink-faint">· {step.summary}</span>}</div>)}</div>}
+          {message.steps && message.steps.length > 0 && <div className="prose-steps">{message.steps.map((step, stepIndex) => <div key={stepIndex} className="flex items-center gap-1.5"><span aria-hidden="true">{step.ok ? "✓" : "✕"}</span><span className="sr-only">{step.ok ? "Готово: " : "Не получилось: "}</span><span className="font-medium text-ink">{TOOL_LABELS[step.tool] ?? step.tool}</span>{step.summary && <span className="truncate text-ink-faint">· {step.summary}</span>}</div>)}</div>}
           {message.pending && <div className="mt-2 flex flex-wrap items-center gap-2"><button className="btn btn-primary px-3 py-1.5 text-xs" onClick={() => void confirmAction(message.pending!)} disabled={busy}>Подтвердить действие</button><span className="text-xs text-ink-soft">{message.pending.reason}</span></div>}
           {message.verification && verificationLabel(message.verification) && <div className="mt-1 text-[11px] text-ink-faint">{verificationLabel(message.verification)}</div>}
         </div>)}
-        {busy && <div className="flex justify-start"><div className="sv-bubble sv-bubble-assistant" aria-live="polite"><span className="inline-flex gap-1"><span className="svetlana-dot" /> <span className="svetlana-dot" /> <span className="svetlana-dot" /></span></div></div>}
+        {busy && <div className="flex justify-start"><div className="sv-bubble sv-bubble-assistant" role="status"><span className="sr-only">Светлана печатает ответ</span><span className="inline-flex gap-1" aria-hidden="true"><span className="svetlana-dot" /> <span className="svetlana-dot" /> <span className="svetlana-dot" /></span></div></div>}
         <div ref={endRef} />
       </div>
-      <form className="flex gap-2 border-t border-surface-line p-3" onSubmit={(event) => { event.preventDefault(); void send(input); }}>
-        <input className="input" placeholder={listening ? "Слушаю…" : "Спросите Светлану…"} value={input} onChange={(event) => setInput(event.target.value)} disabled={busy || listening} aria-label="Сообщение для Светланы" />
+      <form className="flex gap-2 border-t border-surface-line p-3" onSubmit={(event) => { event.preventDefault(); typedRef.current = true; void send(input); }}>
+        <input ref={inputRef} className="input" placeholder={listening ? "Слушаю…" : "Спросите Светлану…"} value={input} onChange={(event) => setInput(event.target.value)} disabled={busy || listening} aria-label="Сообщение для Светланы" />
         <button className="btn btn-primary shrink-0" type="submit" disabled={busy || listening || !input.trim()} aria-label="Отправить сообщение"><Icon name="send" /><span className="sr-only">Отправить</span></button>
       </form>
     </div>
