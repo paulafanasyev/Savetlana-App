@@ -25,10 +25,12 @@ export const POST = apiRoute(async (request) => {
   await promoteConfiguredAdmin(created.id, email);
   const user = await prisma.user.findUniqueOrThrow({ where: { id: created.id } });
   await prisma.profile.create({ data: { userId: user.id } });
-  if (user.role === "SELLER") await prisma.sellerProfile.create({ data: { userId: user.id, displayName: name, slug: `seller-${user.id.slice(-8)}` } });
+  // Кабинет продавца создаём по выбору человека, а не по итоговой роли: администратор
+  // из ADMIN_EMAILS, выбравший «Я продавец», тоже должен получить кабинет.
+  if (requestedRole === "SELLER") await prisma.sellerProfile.create({ data: { userId: user.id, displayName: name, slug: `seller-${user.id.slice(-8)}` } });
   const token = await createToken({ sub: user.id, role: user.role });
   await prisma.session.create({ data: { userId: user.id, token, expiresAt: new Date(Date.now() + 7 * 864e5) } });
-  await audit({ actorId: user.id, actorRole: user.role.toLowerCase(), action: "auth.register", targetType: "user", targetId: user.id, after: { role: user.role } });
+  await audit({ actorId: user.id, actorRole: user.role.toLowerCase(), action: "auth.register", targetType: "user", targetId: user.id, after: { role: user.role, seller: requestedRole === "SELLER" } });
   let verificationSecret: string | undefined;
   try { verificationSecret = (await requestEmailVerification(user.id)).secret; } catch { verificationSecret = undefined; }
   const response = Response.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role }, verificationSecret: env.nodeEnv !== "production" ? verificationSecret : undefined });
