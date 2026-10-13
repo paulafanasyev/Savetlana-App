@@ -14,6 +14,7 @@
 import { aiGateway, aiMode, newTraceId } from "../gateway";
 import { toolRegistry, confirmPreview } from "../tools";
 import { registerAllTools } from "../tools";
+import { permissionsForRole } from "../tools/registry";
 import { routeAgent, AGENT_TOOLS, type AgentKey } from "./router";
 import { decide, AGENT_LIMITS, PolicyAssertionError } from "./policy";
 import { prisma } from "../../prisma";
@@ -28,10 +29,19 @@ registerAllTools();
 /** Пометка, когда внешняя модель настроена, но не ответила и ответил встроенный движок. */
 export const FALLBACK_NOTE = "(Внешний ИИ сейчас не ответил, поэтому отвечает встроенная Светлана.)";
 
+/**
+ * Гость (без входа): переписка не сохраняется, доступны только поиск,
+ * сравнение и отзывы. Заказы, корзина и любые изменения требуют входа.
+ */
+export const GUEST_CONVERSATION = "guest";
+const GUEST_BLOCKED_TOOLS = new Set(["check_vin"]);
+const GUEST_LOGIN_TEXT =
+  "это доступно после входа в аккаунт (кнопка «Войти» вверху страницы). Без входа я могу искать товары, сравнивать их и показывать отзывы";
+
 export interface MasterAgentInput {
   userId: string;
   message: string;
-  role: "buyer" | "seller" | "specialist" | "admin";
+  role: "buyer" | "seller" | "specialist" | "admin" | "guest";
   sellerProfileId?: string;
   conversationId?: string;
   /** UI-supplied confirmations for pending sensitive actions. */
@@ -94,7 +104,8 @@ function buildToolSchemas(names: string[]): AiToolDefinition[] {
 export class SvetlanaMasterAgent {
   async run(input: MasterAgentInput): Promise<MasterAgentResult> {
     const traceId = newTraceId("sv");
-    const conversationId = input.conversationId ?? (await this.createConversation(input));
+    const guest = input.role === "guest";
+    const conversationId = guest ? GUEST_CONVERSATION : input.conversationId ?? (await this.createConversation(input));
     const routing = routeAgent(input.message, input.role === "seller" ? "seller" : "buyer");
     const ctx: ToolContext = {
       userId: input.userId,
@@ -233,6 +244,7 @@ export class SvetlanaMasterAgent {
   }
 
   private async loadHistory(conversationId: string): Promise<AiMessage[]> {
+    if (conversationId === GUEST_CONVERSATION) return [];
     const rows = await prisma.aiMessage.findMany({
       where: { conversationId },
       orderBy: { createdAt: "asc" },
@@ -254,6 +266,7 @@ export class SvetlanaMasterAgent {
     content: string,
     trace: Record<string, unknown>
   ): Promise<void> {
+    if (conversationId === GUEST_CONVERSATION) return;
     try {
       await prisma.aiMessage.create({
         data: {
@@ -292,6 +305,22 @@ export class SvetlanaMasterAgent {
       };
       await this.logToolCall(conversationId, agentName, name, args, step, "denied");
       return { kind: "done", step };
+    }
+
+    // Гостю доступно только чтение каталога; всё остальное вежливо предлагаем сделать после входа.
+    if (
+      ctx.role === "guest" &&
+      (def.needsConfirmation || GUEST_BLOCKED_TOOLS.has(name) || !permissionsForRole("guest").includes(def.permission))
+    ) {
+      return {
+        kind: "done",
+        step: {
+          toolName: name,
+          args,
+          result: { ok: false, error: GUEST_LOGIN_TEXT, verification: "NOT_PROVEN" },
+          durationMs: Date.now() - started,
+        },
+      };
     }
 
     // A confirmation-gated tool that the user has not confirmed becomes a
@@ -404,6 +433,7 @@ export class SvetlanaMasterAgent {
     step: AgentStep | null,
     status: string
   ): Promise<void> {
+    if (conversationId === GUEST_CONVERSATION) return;
     try {
       const def = toolRegistry.get(toolName);
       await prisma.aiToolCall.create({
