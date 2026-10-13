@@ -17,6 +17,7 @@ interface CatalogItem {
   availability: string;
   seller: { id: string; name: string };
   signals: string[];
+  imageUrl?: string | null;
 }
 
 function CatalogInner() {
@@ -55,7 +56,7 @@ function CatalogInner() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       <h1 className="mb-4 text-2xl font-bold text-ink">
-        Каталог{category ? ` · ${category}` : ""}
+        {query ? `Поиск: ${query}` : "Каталог"}
       </h1>
 
       <form
@@ -90,6 +91,7 @@ function CatalogInner() {
             availability: c.availability,
             seller: { id: "", name: c.sellerName },
             signals: [`совпадение: ${c.match}`, `схожесть: ${Math.round(c.similarity * 100)}%`],
+            imageUrl: null,
           })));
         }} />
       </form>
@@ -136,6 +138,14 @@ function CatalogInner() {
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 {items.map((item) => (
                   <Link key={item.id} href={`/product/${item.id}`} className="card overflow-hidden transition-shadow hover:shadow-float">
+                    <div className="aspect-square bg-surface-muted">
+                      {item.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.imageUrl} alt={item.title} loading="lazy" className="h-full w-full object-contain" />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-4xl" aria-hidden>📦</div>
+                      )}
+                    </div>
                     <div className="space-y-1.5 p-3">
                       <div className="line-clamp-2 min-h-[2.5rem] text-sm font-medium text-ink">
                         {item.title}
@@ -192,7 +202,7 @@ interface VisionResult {
 
 /**
  * Photo search entry point (spec §6). Uploads an image to the vision pipeline
- * and surfaces the result, including the honest sandbox warning when the
+ * and surfaces the result, including the honest test-mode warning when the
  * recognition is not from a real model.
  */
 function PhotoSearch({ onResult }: { onResult: (d: VisionResult) => void }) {
