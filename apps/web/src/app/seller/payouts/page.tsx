@@ -1,30 +1,46 @@
 import { requireSellerServer } from "@/lib/auth";
-import { sellerSettlementStatement } from "@/lib/domains/payments";
+import { getPayoutProvider, sellerSettlementStatement } from "@/lib/domains/payments";
+import { availablePayoutKopecks } from "@/lib/domains/seller-payouts";
 import { rub, timeAgo } from "@/lib/format";
 import { settlementStatusLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
 const RESULT_TEXT: Record<string, string> = {
-  delivery_required: "Выплата будет доступна, когда все оплаченные заказы будут доставлены покупателям.",
+  delivery_required: "Выплата станет доступна, когда заказ будет доставлен покупателю.",
   nothing_to_payout: "Сейчас нечего выплачивать.",
+  bank_required: "Выплаты включатся после подключения банка-партнёра. Деньги не пропадут: они числятся за вами.",
+  succeeded: "Выплата отправлена.",
+  in_progress: "Выплата в обработке у банка.",
 };
 
-export default async function SellerPayoutsPage({ searchParams }: { searchParams?: Promise<{ payout?: string }> }) {
+export default async function SellerPayoutsPage({ searchParams }: { searchParams?: Promise<{ payout?: string; test?: string }> }) {
   const { sellerId } = await requireSellerServer();
-  const statement = await sellerSettlementStatement(sellerId);
-  const result = (await searchParams)?.payout;
+  const [statement, available] = await Promise.all([sellerSettlementStatement(sellerId), availablePayoutKopecks(sellerId)]);
+  const params = (await searchParams) ?? {};
+  const result = params.payout;
+  const sandbox = getPayoutProvider().sandbox;
+  const waiting = Math.max(0, statement.totals.pendingKopecks - available);
   return (
     <main className="space-y-5 p-6">
       <h1 className="text-2xl font-semibold">Выплаты</h1>
-      {result && <p className="rounded-lg bg-surface-muted p-3 text-sm" role="status">{RESULT_TEXT[result] ?? "Запрос на выплату принят."}</p>}
-      <div className="grid gap-3 sm:grid-cols-3">
+      {sandbox && (
+        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Банк для выплат пока не подключён. Расчёты видны, но деньги на счёт не переводятся.</p>
+      )}
+      {result && (
+        <p className="rounded-lg bg-surface-muted p-3 text-sm" role="status">
+          {RESULT_TEXT[result] ?? "Запрос на выплату принят."}
+          {params.test === "1" && " Тестовый режим: деньги не переводились."}
+        </p>
+      )}
+      <div className="grid gap-3 sm:grid-cols-4">
         <Stat label="Оборот" value={rub(statement.totals.grossKopecks)} />
         <Stat label="Комиссия площадки" value={rub(statement.totals.platformFeeKopecks)} />
-        <Stat label="К выплате" value={rub(statement.totals.pendingKopecks)} />
+        <Stat label="Доступно к выплате" value={rub(available)} />
+        <Stat label="Ждёт доставки" value={rub(waiting)} />
       </div>
       <form method="post" action="/api/seller/payouts">
-        <button className="btn btn-primary" type="submit" disabled={!statement.totals.pendingKopecks}>Запросить выплату {rub(statement.totals.pendingKopecks)}</button>
+        <button className="btn btn-primary" type="submit" disabled={!available}>Запросить выплату {rub(available)}</button>
       </form>
       <div className="card overflow-x-auto">
         <h2 className="p-4 text-lg font-semibold">История расчётов</h2>
@@ -44,7 +60,7 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
         </table>
         {statement.settlements.length === 0 && <p className="p-4 text-ink-faint">Расчётов пока нет.</p>}
       </div>
-      <p className="text-sm text-ink-faint">Выплата доступна после доставки заказа и выполняется платёжным партнёром.</p>
+      <p className="text-sm text-ink-faint">Выплата доступна по доставленным заказам и выполняется банком-партнёром.</p>
     </main>
   );
 }

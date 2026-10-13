@@ -2,6 +2,7 @@ import { apiRoute, jsonBody, rateLimit, tooManyRequests } from "@/lib/api-helper
 import { requireSeller, requireVerifiedSeller, ApiError } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { computeAvailability } from "@/lib/domains/inventory";
+import { publishProblems, publishProblemsMessage } from "@/lib/domains/publish-check";
 import { toKopecks } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -86,6 +87,9 @@ export const PATCH = apiRoute(async (request, { params }) => {
       if (imageUrls.length) await tx.productImage.createMany({ data: imageUrls.map((url, position) => ({ productId: id, url, isPrimary: position === 0, position })) });
     }
     if (body.publish === true) {
+      // Проверяем уже с учётом изменений в этом же запросе; ошибка откатывает всё.
+      const problems = await publishProblems(tx, id);
+      if (problems.length) throw new ApiError(400, publishProblemsMessage(problems));
       await tx.listing.upsert({ where: { productId: id }, create: { productId: id, publishedAt: new Date(), isLive: true }, update: { publishedAt: new Date(), isLive: true } });
     }
     if (Object.keys(changes).length) {

@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 
+// Перевозчики. Самовывоз и своя доставка закрываются кнопкой «Покупатель получил заказ».
 const CARRIERS = [
-  { key: "SELLER_OWN_DELIVERY", label: "Своя доставка продавца" },
-  { key: "PICKUP", label: "Самовывоз" },
   { key: "cdek", label: "СДЭК" },
   { key: "sandbox-carrier", label: "Тестовый перевозчик" },
 ];
@@ -15,7 +14,7 @@ export function FulfillActions({ orderId, status, hasShipment, shipmentProvider 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showShip, setShowShip] = useState(false);
-  const [carrier, setCarrier] = useState("SELLER_OWN_DELIVERY");
+  const [carrier, setCarrier] = useState("cdek");
   const [tracking, setTracking] = useState("");
   const [note, setNote] = useState("");
   if (["CANCELLED", "REFUNDED", "COMPLETED", "DELIVERED"].includes(status)) return null;
@@ -37,7 +36,6 @@ export function FulfillActions({ orderId, status, hasShipment, shipmentProvider 
 
   const canConfirm = status === "PAID";
   const canShip = ["CONFIRMED", "PROCESSING", "READY"].includes(status) && !hasShipment;
-  // Самовывоз и своя доставка: продавец сам отмечает получение. Перевозчик обновляет статус сам.
   const canDeliver = DELIVERABLE.includes(status) && (!hasShipment || OWN_DELIVERY_KEYS.includes(shipmentProvider ?? ""));
 
   return (
@@ -46,16 +44,14 @@ export function FulfillActions({ orderId, status, hasShipment, shipmentProvider 
       {canShip && !showShip && <button className="btn btn-ghost" disabled={busy} onClick={() => setShowShip(true)}>Отправить перевозчиком</button>}
       {canShip && showShip && (
         <div className="rounded border p-3">
-          <label className="block text-sm">Способ доставки
+          <label className="block text-sm">Перевозчик
             <select className="input mt-1 w-full" value={carrier} onChange={(e) => setCarrier(e.target.value)}>
               {CARRIERS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
             </select>
           </label>
-          {!OWN_DELIVERY_KEYS.includes(carrier) && (
-            <label className="mt-2 block text-sm">Номер отправления (если уже есть)
-              <input className="input mt-1 w-full" value={tracking} onChange={(e) => setTracking(e.target.value)} />
-            </label>
-          )}
+          <label className="mt-2 block text-sm">Номер отправления (если уже есть)
+            <input className="input mt-1 w-full" value={tracking} onChange={(e) => setTracking(e.target.value)} />
+          </label>
           <div className="mt-3 flex gap-2">
             <button className="btn btn-primary" disabled={busy} onClick={() => call(`/api/seller/orders/${orderId}/ship`, { carrier, trackingNumber: tracking || undefined })}>Создать отправление</button>
             <button className="btn btn-ghost" onClick={() => setShowShip(false)}>Отмена</button>
