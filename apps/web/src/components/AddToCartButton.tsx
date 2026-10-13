@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import { rub } from "@/lib/format";
+import { addGuestItem } from "@/lib/guest-cart";
 
 interface Variant { id: string; name: string; priceKopecks: number }
 
 export function AddToCartButton({ productId, variants = [], outOfStock = false }: { productId: string; variants?: Variant[]; outOfStock?: boolean }) {
-  const [state, setState] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [state, setState] = useState<"idle" | "loading" | "ok" | "guest" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [variantId, setVariantId] = useState<string>(variants[0]?.id ?? "");
 
@@ -25,7 +26,9 @@ export function AddToCartButton({ productId, variants = [], outOfStock = false }
         body: JSON.stringify({ productId, quantity: 1, variantId: variantId || undefined }),
       });
       if (res.status === 401) {
-        location.assign("/login?next=" + encodeURIComponent(location.pathname));
+        // Гость: откладываем товар в браузере, после входа он сам перейдёт в корзину.
+        addGuestItem({ productId, variantId: variantId || undefined, quantity: 1 });
+        setState("guest");
         return;
       }
       const data = await res.json().catch(() => ({}));
@@ -52,9 +55,17 @@ export function AddToCartButton({ productId, variants = [], outOfStock = false }
         </label>
       )}
       <button className="btn btn-accent w-full md:w-auto" disabled={state === "loading"} onClick={() => void add()}>
-        {state === "loading" ? "Добавляем…" : state === "ok" ? "✓ В корзине, добавить ещё" : "В корзину"}
+        {state === "loading" ? "Добавляем…" : state === "ok" ? "✓ В корзине, добавить ещё" : state === "guest" ? "✓ Отложено, добавить ещё" : "В корзину"}
       </button>
       {state === "ok" && <Link href="/cart" className="text-sm text-svetlana-700 hover:underline">Перейти в корзину</Link>}
+      {state === "guest" && (
+        <p className="text-sm text-ink-soft" role="status">
+          Товар отложен.{" "}
+          <Link href="/login?next=%2Fcart" className="font-medium text-svetlana-700 hover:underline">Войдите</Link>{" "}
+          или{" "}
+          <Link href="/register" className="font-medium text-svetlana-700 hover:underline">зарегистрируйтесь</Link>, и он сам окажется в корзине.
+        </p>
+      )}
       {message && <p className="text-xs text-bad" role="alert">{message}</p>}
     </div>
   );
