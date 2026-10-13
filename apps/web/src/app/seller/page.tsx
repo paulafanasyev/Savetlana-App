@@ -16,6 +16,6 @@ export default async function SellerDashboard() {
     {report.salesDropCauses?.length > 0 && <section className="rounded-xl border p-5"><h2 className="font-semibold">Диагностика продаж</h2><ul className="mt-2 list-disc pl-5">{report.salesDropCauses.map((cause, index) => <li key={index}>{cause}</li>)}</ul></section>}
     {report.recommendations?.length > 0 && <section className="rounded-xl border p-5"><h2 className="font-semibold">Рекомендации Светланы</h2><ul className="mt-2 space-y-2">{report.recommendations.map((item, index) => <li key={index}>{item.text}<span className="block text-sm text-ink-soft">Основание: {item.evidence}</span></li>)}</ul></section>}
     {report.lowStock?.length > 0 && <section className="rounded-xl border p-5"><h2 className="font-semibold">Заканчивается наличие</h2><ul className="mt-2 space-y-1">{report.lowStock.map((item) => <li key={item.productId}>{item.title}, осталось {item.quantity}</li>)}</ul></section>}
-    <SvetlanaChat />
+    <SvetlanaChat side="seller" />
   </main>;
 }
