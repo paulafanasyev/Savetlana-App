@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { requireUserServer } from "@/lib/auth";
 import { searchGlobally } from "@/lib/domains/external-search";
 import { getMarketplaceAvailability, tierLabel } from "@/lib/marketplaces";
@@ -10,22 +11,28 @@ export const dynamic = "force-dynamic";
 
 const TIER_SELECT: Record<number, string> = { 1: "🇷🇺 Россия", 2: "🌍 Весь мир" };
 
+function catalogUrl(q: string): string {
+  return q ? `/catalog?q=${encodeURIComponent(q)}` : "/catalog";
+}
+
 /**
  * Рыночная аналитика для продавца: сравнение своих цен с другими площадками.
- * Покупатель сюда не попадает: АИКО не отправляет покупателей на чужие маркетплейсы,
- * поэтому его запрос уходит в каталог платформы.
+ * Гости и покупатели сразу попадают в каталог АИКО с тем же запросом, без входа.
  */
 export default async function GlobalSearchPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string; tier?: string }>;
 }) {
-  const { user } = await requireUserServer();
-
   const query = await resolveSearchParams(searchParams);
   const q = query.q?.trim() ?? "";
+  const cookieStore = await cookies();
+  if (!cookieStore.get("svetlana_session")?.value) {
+    redirect(catalogUrl(q));
+  }
+  const { user } = await requireUserServer();
   if (user.role !== "SELLER" && user.role !== "ADMIN") {
-    redirect(q ? `/catalog?q=${encodeURIComponent(q)}` : "/catalog");
+    redirect(catalogUrl(q));
   }
   const tier = query.tier === "2" ? 2 : 1;
   const availability = await getMarketplaceAvailability();
@@ -53,9 +60,9 @@ export default async function GlobalSearchPage({
             placeholder="Например: наушники, куртка, смартфон…"
             className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
           />
-          <select name="tier" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm">
+          <select name="tier" defaultValue={String(tier)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm">
             {Object.entries(TIER_SELECT).map(([k, v]) => (
-              <option key={k} value={k} selected={Number(k) === tier}>
+              <option key={k} value={k}>
                 {v}
               </option>
             ))}
@@ -109,7 +116,7 @@ export default async function GlobalSearchPage({
 
       {!report ? (
         <div className="rounded-xl border border-dashed border-zinc-300 p-12 text-center text-zinc-500">
-          Введите запрос — Светлана покажет цены на АИКО и у конкурентов.
+          Введите запрос, и Светлана покажет цены на АИКО и у конкурентов.
         </div>
       ) : report.hits.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 p-12 text-center text-zinc-500">
