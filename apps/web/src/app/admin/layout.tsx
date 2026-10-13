@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { requireAdminServer } from "@/lib/auth";
+import { requireUserServer } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +18,33 @@ const NAV: { href: string; label: string }[] = [
   { href: "/admin/audit", label: "Аудит" },
 ];
 
+const ROLE_LABEL: Record<string, string> = { BUYER: "покупатель", SELLER: "продавец", ADMIN: "администратор" };
+
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const { user } = await requireAdminServer();
+  const { user } = await requireUserServer();
+
+  // Не администратору объясняем, в чём дело, вместо страницы «Что-то пошло не так».
+  if (user.role !== "ADMIN") {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-10">
+        <div className="card space-y-3 p-6">
+          <h1 className="text-xl font-bold text-ink">Нет прав администратора</h1>
+          <p className="text-sm text-ink-soft">
+            Вы вошли как <b>{user.email}</b>, роль: {ROLE_LABEL[user.role] ?? user.role}.
+          </p>
+          <ol className="list-decimal space-y-1 pl-5 text-sm text-ink-soft">
+            <li>В Vercel добавьте эту почту в переменную ADMIN_EMAILS (несколько почт через запятую).</li>
+            <li>Сделайте Redeploy, иначе сайт не увидит новую переменную.</li>
+            <li>Выйдите и войдите снова: права выдаются при входе.</li>
+          </ol>
+          <div className="flex gap-2 pt-1">
+            <Link href="/login" className="btn btn-primary">Войти заново</Link>
+            <Link href="/" className="btn btn-ghost">На главную</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
