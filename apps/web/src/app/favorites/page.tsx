@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireUserServer } from "@/lib/auth";
 import { listFavorites, getOrCreateWishlist, listWishlistItems } from "@/lib/domains/collections";
 import { rub, availabilityLabel } from "@/lib/format";
+import { AddToCartButton } from "@/components/AddToCartButton";
+import { FavoriteButton } from "@/components/FavoriteButton";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ export default async function FavoritesPage() {
     <div className="mx-auto max-w-5xl px-4 py-6">
       <h1 className="text-2xl font-bold text-ink">Избранное и списки желаний</h1>
       <p className="mt-1 text-sm text-ink-soft">
-        Всё, что вы сохранили. Это используется для рекомендаций — и это можно
+        Всё, что вы сохранили. Это используется для рекомендаций, и это можно
         очистить в любое время в разделе «Конфиденциальность».
       </p>
 
@@ -35,7 +37,7 @@ export default async function FavoritesPage() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {favorites.map((p) => (
-              <ProductCard key={p.id} id={p.id} title={p.title} priceKopecks={p.priceKopecks} availability={p.availability} sellerName={p.sellerName} imageUrl={p.imageUrl} />
+              <ProductCard key={p.id} id={p.id} title={p.title} priceKopecks={p.priceKopecks} availability={p.availability} sellerName={p.sellerName} imageUrl={p.imageUrl} favorite />
             ))}
           </div>
         )}
@@ -68,25 +70,31 @@ function ProductCard(props: {
   availability: string;
   sellerName: string;
   imageUrl: string | null;
+  favorite?: boolean;
 }) {
+  const outOfStock = props.availability === "OUT_OF_STOCK";
   return (
-    <Link href={`/product/${props.id}`} className="card flex gap-3 p-3 transition hover:shadow-md">
-      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
+    <div className="card flex gap-3 p-3">
+      <Link href={`/product/${props.id}`} className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
         {props.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={props.imageUrl} alt={props.title} className="h-full w-full object-contain" />
         ) : (
           <div className="flex h-full items-center justify-center text-2xl">📦</div>
         )}
-      </div>
+      </Link>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-ink">{props.title}</div>
+        <Link href={`/product/${props.id}`} className="block truncate text-sm font-medium text-ink hover:text-svetlana-700">{props.title}</Link>
         <div className="mt-0.5 text-xs text-ink-soft">{props.sellerName}</div>
         <div className="mt-1 flex items-center justify-between">
           <span className="text-sm font-bold text-svetlana-700">{rub(props.priceKopecks)}</span>
           <span className="text-xs text-ink-faint">{availabilityLabel(props.availability)}</span>
         </div>
+        <div className="mt-2 flex flex-wrap items-start gap-2">
+          <AddToCartButton productId={props.id} outOfStock={outOfStock} />
+          {props.favorite && <FavoriteButton productId={props.id} initialFavorite reloadOnChange />}
+        </div>
       </div>
-    </Link>
+    </div>
   );
 }

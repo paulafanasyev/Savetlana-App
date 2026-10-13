@@ -2,17 +2,11 @@
 
 import { useState } from "react";
 
-// Тестовый перевозчик только на превью и локально (сервер на боевом его тоже отклоняет).
-const LIVE = process.env.NEXT_PUBLIC_VERCEL_ENV === "production";
-const CARRIERS = [
-  { key: "cdek", label: "СДЭК" },
-  ...(LIVE ? [] : [{ key: "sandbox-carrier", label: "Тестовый перевозчик" }]),
-];
 // Здесь продавец сам отмечает получение: автоматического отслеживания нет.
 const SELF_CONFIRMED_KEYS = ["SELLER_OWN_DELIVERY", "PICKUP", "seller_own", "pickup", "SELLER_DECLARED"];
 const DELIVERABLE = ["CONFIRMED", "PROCESSING", "READY", "HANDED_TO_CARRIER", "IN_TRANSIT"];
 
-export function FulfillActions({ orderId, status, hasShipment, shipmentProvider }: { orderId: string; status: string; hasShipment: boolean; shipmentProvider?: string | null }) {
+export function FulfillActions({ orderId, status, hasShipment, shipmentProvider, allowTestCarrier = false }: { orderId: string; status: string; hasShipment: boolean; shipmentProvider?: string | null; allowTestCarrier?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showShip, setShowShip] = useState(false);
@@ -20,6 +14,12 @@ export function FulfillActions({ orderId, status, hasShipment, shipmentProvider 
   const [tracking, setTracking] = useState("");
   const [note, setNote] = useState("");
   if (["CANCELLED", "REFUNDED", "COMPLETED", "DELIVERED"].includes(status)) return null;
+
+  // Тестовый перевозчик только вне боевого сайта (решает сервер; он же его и отклоняет).
+  const carriers = [
+    { key: "cdek", label: "СДЭК (с вашим трек-номером)" },
+    ...(allowTestCarrier ? [{ key: "sandbox-carrier", label: "Тестовый перевозчик" }] : []),
+  ];
 
   async function call(url: string, body?: unknown) {
     setBusy(true);
@@ -49,7 +49,7 @@ export function FulfillActions({ orderId, status, hasShipment, shipmentProvider 
         <div className="rounded border p-3">
           <label className="block text-sm">Перевозчик
             <select className="input mt-1 w-full" value={carrier} onChange={(e) => setCarrier(e.target.value)}>
-              {CARRIERS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+              {carriers.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
             </select>
           </label>
           <label className="mt-2 block text-sm">Трек-номер (если уже сдали посылку)
