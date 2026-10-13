@@ -48,6 +48,9 @@ const RULES: RouteRule[] = [
     agent: "competitor",
     pattern: /глобальн|по всему интернет|международн|ozon|озон|wildberries|вб |aliexpress|taobao|amazon|кита|1688|alibaba|алибаб|таобао|оптом|закуп|поставщик|перепрод/i,
   },
+  // Messages from buyers and promotions (CRM).
+  { side: "seller", agent: "notification", pattern: /сообщени|переписк|непрочитанн|кто (мне )?(написал|пишет)|вопрос\S* (от )?покупател|что пишут покупател/i },
+  { side: "seller", agent: "pricing", pattern: /скидк|(^|\s)акци|распродаж|обычн\S* цен/i },
   // CRM: who buys from the seller (before the generic «заказы» rule).
   { side: "seller", agent: "analytics", pattern: /мои покупатели|мои клиенты|моих покупателей|моих клиентов|постоянн.*(покупател|клиент)|лучши.*(покупател|клиент)|база клиентов|crm|срм|повторн.*покуп|кто (у меня )?покупает/i },
   { side: "seller", agent: "delivery", pattern: /доставк[а|у].*(уровен|тариф|цен|стоим)|сколько стоит доставка|условия доставки|перевозчик|ПВЗ|международная доставка/i },
@@ -64,6 +67,7 @@ const RULES: RouteRule[] = [
   { side: "seller", agent: "notification", pattern: /напомни|правил[о|а] автоматиза|если .* сообщи/i },
 
   // Buyer-side intents
+  { side: "buyer", agent: "support", pattern: /сообщени|переписк|ответил.* продав|написал.* продав/i },
   { side: "buyer", agent: "gift", pattern: /подар(ок|ок|ить)|что подарить|день рождения|групповой подарок/i },
   { side: "buyer", agent: "relationship", pattern: /друг|родственник|мама|папа|сестра|брат|коллега|семья|мои связи/i },
   { side: "buyer", agent: "order", pattern: /где мой заказ|статус заказа|мои заказы|отмени заказ|доставк[а|у] заказа/i },
@@ -108,8 +112,8 @@ export function routeAgent(text: string, side: "buyer" | "seller"): RouteResult 
  * role-level permissions via the registry; this just shapes the prompt.
  */
 export const AGENT_TOOLS: Record<AgentKey, string[]> = {
-  buyer: ["search_products", "compare_products", "get_product", "search_sellers", "get_reviews", "check_inventory", "cart_add", "create_order", "get_order", "cancel_order", "get_tracking", "get_payment_status", "request_return", "create_dispute", "wishlist_add", "recall_memory", "remember_preference"],
-  seller: ["analyze_seller_sales", "seller_customers", "product_health", "advise_price", "change_price", "confirm_inventory", "extend_listing", "create_product_draft", "publish_product", "find_competitors", "scan_global_competitors", "global_search", "delivery_quotes", "document_requirements", "create_workflow_rule"],
+  buyer: ["search_products", "compare_products", "get_product", "search_sellers", "get_reviews", "check_inventory", "cart_add", "create_order", "get_order", "cancel_order", "get_tracking", "get_payment_status", "request_return", "create_dispute", "wishlist_add", "recall_memory", "remember_preference", "seller_messages"],
+  seller: ["analyze_seller_sales", "seller_customers", "seller_messages", "start_promotion", "end_promotion", "product_health", "advise_price", "change_price", "confirm_inventory", "extend_listing", "create_product_draft", "publish_product", "find_competitors", "scan_global_competitors", "global_search", "delivery_quotes", "document_requirements", "create_workflow_rule"],
   search: ["search_products", "search_cheaper", "compare_products", "get_product", "search_sellers", "global_search", "search_classifieds", "check_vin"],
   vision: ["vision_search", "search_products", "search_cheaper", "compare_products"],
   recommendation: ["search_products", "recall_memory"],
@@ -122,12 +126,12 @@ export const AGENT_TOOLS: Record<AgentKey, string[]> = {
   trust: ["document_requirements", "assess_order_risk"],
   review: ["get_reviews", "get_product"],
   competitor: ["find_competitors", "scan_global_competitors", "global_search", "advise_price"],
-  pricing: ["advise_price", "change_price", "price_history"],
+  pricing: ["advise_price", "change_price", "price_history", "start_promotion", "end_promotion"],
   analytics: ["analyze_seller_sales", "seller_customers", "product_health"],
   product: ["create_product_draft", "publish_product", "product_health", "check_inventory"],
   compliance: ["document_requirements"],
   document: ["document_requirements"],
   memory: ["remember_preference", "recall_memory"],
-  notification: ["create_workflow_rule"],
-  support: ["get_order", "get_product", "get_tracking", "get_payment_status", "request_return", "create_dispute"],
+  notification: ["create_workflow_rule", "seller_messages"],
+  support: ["get_order", "get_product", "get_tracking", "get_payment_status", "request_return", "create_dispute", "seller_messages"],
 };
