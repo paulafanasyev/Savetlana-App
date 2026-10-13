@@ -202,6 +202,14 @@ export interface ApplyPriceInput {
   confirmed: boolean;
 }
 
+/** Цену товара успели изменить параллельно: эту правку не применяем. */
+export class PriceConflictError extends Error {
+  constructor() {
+    super("цена товара только что изменилась, обновите страницу и попробуйте снова");
+    this.name = "PriceConflictError";
+  }
+}
+
 export async function applyPriceChange(input: ApplyPriceInput) {
   if (!input.confirmed) throw new Error("изменение цены требует подтверждения продавца");
   if (!Number.isInteger(input.newPriceKopecks) || input.newPriceKopecks <= 0) {
@@ -215,10 +223,15 @@ export async function applyPriceChange(input: ApplyPriceInput) {
   const oldPrice = product.priceKopecks;
   if (oldPrice === input.newPriceKopecks) return product;
 
-  const updated = await prisma.product.update({
-    where: { id: input.productId },
+  // Меняем цену, только если она всё ещё та, что мы прочитали. Две
+  // одновременные правки (например, двойное нажатие «Запустить скидку») иначе
+  // применили бы скидку дважды и потеряли настоящую прежнюю цену.
+  const claimed = await prisma.product.updateMany({
+    where: { id: input.productId, sellerId: input.sellerId, priceKopecks: oldPrice },
     data: { oldPriceKopecks: oldPrice, priceKopecks: input.newPriceKopecks },
   });
+  if (claimed.count === 0) throw new PriceConflictError();
+  const updated = await prisma.product.findUniqueOrThrow({ where: { id: input.productId } });
   await prisma.listingHistory.create({
     data: {
       productId: input.productId,

@@ -1,26 +1,26 @@
 import { apiRoute, jsonBody, tooManyRequests } from "@/lib/api-helpers";
 import { resolveSession, ApiError } from "@/lib/auth";
 import { masterAgent, GUEST_CONVERSATION } from "@/lib/ai/agents/master";
-import { rateLimit } from "@/lib/api-helpers";
+import { sharedRateLimit } from "@/lib/domains/rate-limits";
+import { requestIp } from "@/lib/client-ip";
+import { numberWordsToDigits } from "@/lib/ai/number-words";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-/** Адрес гостя для ограничения частоты: берём то, что поставил наш прокси, а не браузер. */
-function guestKey(request: Request): string {
-  const real = request.headers.get("x-real-ip")?.trim();
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",").pop()?.trim();
-  return real || forwarded || "unknown";
-}
-
 /**
  * Чат со Светланой. Без входа она ищет, сравнивает и показывает отзывы;
  * заказы, корзина, подарки и всё, что меняет данные, доступно после входа.
+ *
+ * Лимит частоты считается в базе, поэтому он общий для всех копий сервера,
+ * а адрес гостя берётся тот, что поставил наш прокси, а не браузер.
  */
 export const POST = apiRoute(async (request) => {
   const { user } = await resolveSession(request);
   if (user?.isBlocked) throw new ApiError(403, "Аккаунт заблокирован");
-  const allowed = user ? rateLimit(`ai:${user.id}`, 30, 60_000) : rateLimit(`ai:guest:${guestKey(request)}`, 15, 60_000);
+  const allowed = user
+    ? await sharedRateLimit(`ai:${user.id}`, 30, 60_000)
+    : await sharedRateLimit(`ai:guest:${requestIp(request)}`, 15, 60_000);
   if (!allowed) return tooManyRequests();
 
   const body = await jsonBody<{
@@ -30,13 +30,15 @@ export const POST = apiRoute(async (request) => {
     side?: "buyer" | "seller";
   }>(request);
 
-  const message = (body.message ?? "").trim();
-  if (message.length === 0) {
+  const raw = (body.message ?? "").trim();
+  if (raw.length === 0) {
     return Response.json({ error: "Пустое сообщение", code: "empty" }, { status: 400 });
   }
-  if (message.length > 4000) {
+  if (raw.length > 4000) {
     return Response.json({ error: "Сообщение слишком длинное", code: "too_long" }, { status: 400 });
   }
+  // «до пяти тысяч» → «до 5000»: так бюджет понимают и поиск, и Светлана.
+  const message = numberWordsToDigits(raw);
 
   if (!user) {
     const result = await masterAgent.run({ userId: "", message, role: "guest" });

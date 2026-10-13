@@ -164,28 +164,44 @@ export function buildCustomerReport(orders: CrmOrder[], now: Date = new Date()):
   };
 }
 
+/** Сколько заказов читаем за раз и сколько всего (защита от бесконечного отчёта). */
+const CRM_BATCH = 1000;
+const CRM_MAX_ORDERS = 50_000;
+
+/**
+ * Заказы читаем пачками по 1000, а не одним запросом «первые 2000»: у
+ * крупного магазина иначе терялись старые покупатели и выручка.
+ */
 export async function sellerCustomerReport(sellerId: string, now: Date = new Date()): Promise<CrmReport> {
-  const rows = await prisma.order.findMany({
-    where: { sellerId, status: { in: SOLD_STATUSES } },
-    orderBy: { createdAt: "desc" },
-    take: 2000,
-    select: {
-      buyerId: true,
-      totalKopecks: true,
-      createdAt: true,
-      buyer: { select: { name: true, email: true } },
-      items: { select: { titleSnapshot: true, quantity: true } },
-    },
-  });
-  return buildCustomerReport(
-    rows.map((r) => ({
-      buyerId: r.buyerId,
-      buyerName: r.buyer.name,
-      buyerEmail: r.buyer.email,
-      totalKopecks: r.totalKopecks,
-      createdAt: r.createdAt,
-      items: r.items,
-    })),
-    now
-  );
+  const orders: CrmOrder[] = [];
+  let cursor: string | undefined;
+  while (orders.length < CRM_MAX_ORDERS) {
+    const rows = await prisma.order.findMany({
+      where: { sellerId, status: { in: SOLD_STATUSES } },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: CRM_BATCH,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: {
+        id: true,
+        buyerId: true,
+        totalKopecks: true,
+        createdAt: true,
+        buyer: { select: { name: true, email: true } },
+        items: { select: { titleSnapshot: true, quantity: true } },
+      },
+    });
+    for (const r of rows) {
+      orders.push({
+        buyerId: r.buyerId,
+        buyerName: r.buyer.name,
+        buyerEmail: r.buyer.email,
+        totalKopecks: r.totalKopecks,
+        createdAt: r.createdAt,
+        items: r.items,
+      });
+    }
+    if (rows.length < CRM_BATCH) break;
+    cursor = rows[rows.length - 1].id;
+  }
+  return buildCustomerReport(orders, now);
 }

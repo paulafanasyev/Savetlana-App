@@ -18,6 +18,7 @@
  *     it pairs with the CSRF gate and the audit log.
  */
 import { prisma } from "../prisma";
+import { requestIp } from "../client-ip";
 
 export interface RateLimitDecision {
   allowed: boolean;
@@ -28,10 +29,12 @@ export interface RateLimitDecision {
   retryAfterMs: number;
 }
 
+/**
+ * Адрес посетителя. Первое значение X-Forwarded-For присылает сам браузер,
+ * поэтому берём адрес, который дописал наш прокси (см. client-ip.ts).
+ */
 export function clientIp(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]!.trim();
-  return request.headers.get("x-real-ip")?.trim() || "unknown";
+  return requestIp(request);
 }
 
 /**
@@ -84,6 +87,36 @@ export async function consumeRateLimit(
     .catch(() => undefined);
 
   return { allowed: true, count: counted + 1, limit, retryAfterMs: 0 };
+}
+
+/** Запасной счётчик в памяти, если база недоступна. */
+const memoryHits = new Map<string, { count: number; windowStart: number }>();
+
+function memoryRateLimit(key: string, limit: number, windowMs: number): boolean {
+  const now = Date.now();
+  const entry = memoryHits.get(key);
+  if (!entry || now - entry.windowStart > windowMs) {
+    memoryHits.set(key, { count: 1, windowStart: now });
+    return true;
+  }
+  if (entry.count >= limit) return false;
+  entry.count += 1;
+  return true;
+}
+
+/**
+ * Общий для всех копий сервера лимит для дорогих запросов (чат со Светланой):
+ * считаем в базе. Если база недоступна, не роняем запрос, а считаем в памяти.
+ */
+export async function sharedRateLimit(bucket: string, limit: number, windowMs: number): Promise<boolean> {
+  // В тестах каждый файл начинает с чистого счётчика, как и раньше.
+  if (process.env.NODE_ENV === "test") return memoryRateLimit(bucket, limit, windowMs);
+  try {
+    const decision = await consumeRateLimit(bucket, limit, windowMs);
+    return decision.allowed;
+  } catch {
+    return memoryRateLimit(bucket, limit, windowMs);
+  }
 }
 
 /** Marks an auth attempt's outcome so failed-login analytics can use it. */

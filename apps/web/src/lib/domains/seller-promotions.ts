@@ -20,7 +20,7 @@ import {
   PRICE_HISTORY_LOOKBACK_DAYS,
   PROMO_MAX_DAYS,
 } from "./engagement-rules";
-import { applyPriceChange } from "./pricing";
+import { applyPriceChange, PriceConflictError } from "./pricing";
 import { notifyMany, type NotificationInput } from "./notifications";
 
 const MAX_PRODUCTS = 100;
@@ -70,7 +70,13 @@ export async function startPromotion(input: { sellerId: string; actorId: string;
     return [{ id: p.id, title: p.title, fromKopecks: p.priceKopecks, toKopecks: promoPrice(p.priceKopecks, percent) }];
   });
   for (const item of plan) {
-    await applyPriceChange({ productId: item.id, sellerId: input.sellerId, newPriceKopecks: item.toKopecks, actorId: input.actorId, actorRole: "seller", confirmed: true });
+    try {
+      await applyPriceChange({ productId: item.id, sellerId: input.sellerId, newPriceKopecks: item.toKopecks, actorId: input.actorId, actorRole: "seller", confirmed: true });
+    } catch (error) {
+      // Цену успели изменить параллельно (второе нажатие, другая вкладка): этот товар пропускаем.
+      if (error instanceof PriceConflictError) { skipped.push(item.title); continue; }
+      throw error;
+    }
     await markPromotion(item.id, item.fromKopecks, item.toKopecks, percent, endsAt);
     started.push(item);
   }
@@ -115,7 +121,13 @@ export async function endPromotion(input: { sellerId: string; actorId: string; p
   const ended: string[] = [];
   for (const p of products) {
     if (!promoState(p).onPromo || !p.oldPriceKopecks) continue;
-    await applyPriceChange({ productId: p.id, sellerId: input.sellerId, newPriceKopecks: p.oldPriceKopecks, actorId: input.actorId, actorRole: "seller", confirmed: true });
+    try {
+      await applyPriceChange({ productId: p.id, sellerId: input.sellerId, newPriceKopecks: p.oldPriceKopecks, actorId: input.actorId, actorRole: "seller", confirmed: true });
+    } catch (error) {
+      // Акцию уже завершили параллельно (вручную или по сроку).
+      if (error instanceof PriceConflictError) continue;
+      throw error;
+    }
     await prisma.product.update({ where: { id: p.id }, data: { oldPriceKopecks: null } });
     ended.push(p.title);
   }
