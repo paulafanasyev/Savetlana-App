@@ -1,6 +1,7 @@
 import { apiRoute, rateLimit, tooManyRequests } from "@/lib/api-helpers";
 import { requireSeller, requireVerifiedSeller } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { env } from "@/lib/env";
 import { payoutIdempotencyKey } from "@/lib/payout-key";
 import { getPayoutProvider, sellerSettlementStatement } from "@/lib/domains/payments";
 import { DELIVERED_ORDER_STATUSES, payoutDeliveredSettlements } from "@/lib/domains/seller-payouts";
@@ -24,8 +25,11 @@ export const POST = apiRoute(async (request) => {
       ? new Response(null, { status: 303, headers: { Location: `/seller/payouts?payout=${encodeURIComponent(code)}${extra}` } })
       : Response.json(error ? { error, code } : { code }, { status });
 
-  // На боевом сайте без банка-партнёра выплату не изображаем: деньги бы не ушли.
-  if (getPayoutProvider().sandbox && isLiveDeployment()) {
+  // На боевом сайте без полностью подключённого банка (ключ и адрес) выплату не
+  // резервируем: иначе деньги зависнут в очереди или выплата будет только на бумаге.
+  const provider = getPayoutProvider();
+  const bankReady = !provider.sandbox && Boolean(env.paymentProviderBaseUrl);
+  if (!bankReady && isLiveDeployment()) {
     return reply("bank_required", 409, "Выплаты включатся после подключения банка-партнёра");
   }
 
