@@ -171,6 +171,12 @@ export default async function ProductPage({ params }: PageProps) {
               <div>НПД: {statusLabel(product.sellerProfile.npdStatus)}</div>
               <div>На площадке с {new Date(product.sellerProfile.createdAt).getFullYear()}</div>
             </div>
+            <Link
+              href={`/messages/${product.sellerProfile.id}?about=${product.id}`}
+              className="btn btn-ghost mt-3 w-full justify-center text-sm"
+            >
+              Задать вопрос продавцу
+            </Link>
           </div>
         </div>
       </div>
