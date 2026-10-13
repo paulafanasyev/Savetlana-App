@@ -21,11 +21,11 @@ function prettyAttributes(raw: string): string {
 }
 
 export function ProductEditor({ product, categories }: { product: Product; categories: Category[] }) {
+  const onPromo = product.oldPriceKopecks !== null && product.oldPriceKopecks > product.priceKopecks;
   const [form, setForm] = useState({
     title: product.title,
     description: product.description ?? "",
     price: String(product.priceKopecks / 100),
-    oldPrice: product.oldPriceKopecks == null ? "" : String(product.oldPriceKopecks / 100),
     stock: String(product.inventory?.quantity ?? 0),
     categoryId: product.categoryId ?? "",
     attributes: prettyAttributes(product.attributes),
@@ -48,7 +48,7 @@ export function ProductEditor({ product, categories }: { product: Product; categ
       const response = await fetch(`/api/seller/products/${product.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: form.title, description: form.description, priceRub: price, oldPriceRub: form.oldPrice ? Number(form.oldPrice) : null, stockQuantity: stock, categorySlug: category?.slug ?? null, attributes }),
+        body: JSON.stringify({ title: form.title, description: form.description, ...(onPromo ? {} : { priceRub: price }), stockQuantity: stock, categorySlug: category?.slug ?? null, attributes }),
       });
       const json = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(json?.error ?? "Не удалось сохранить карточку");
@@ -102,8 +102,14 @@ export function ProductEditor({ product, categories }: { product: Product; categ
       <label className="block"><span className="mb-1 block text-sm">Название</span><input className="input w-full" maxLength={200} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
       <label className="block"><span className="mb-1 block text-sm">Описание</span><textarea className="input w-full" rows={6} maxLength={4000} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
       <div className="grid gap-3 md:grid-cols-3">
-        <label><span className="mb-1 block text-sm">Цена, ₽</span><input className="input w-full" type="number" min="1" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></label>
-        <label><span className="mb-1 block text-sm">Старая цена, ₽</span><input className="input w-full" type="number" min="0" value={form.oldPrice} onChange={(e) => setForm({ ...form, oldPrice: e.target.value })} /></label>
+        <label><span className="mb-1 block text-sm">Цена, ₽</span><input className="input w-full" type="number" min="1" value={form.price} disabled={onPromo} onChange={(e) => setForm({ ...form, price: e.target.value })} /></label>
+        <div className="rounded-lg bg-surface-muted p-3 text-xs text-ink-soft">
+          {onPromo ? (
+            <>Идёт скидка: было {(product.oldPriceKopecks ?? 0) / 100} ₽. Цену можно поменять после того, как вернёте обычную цену в <a className="text-svetlana-700 underline" href="/seller/promotions">«Акциях»</a>.</>
+          ) : (
+            <>Зачёркнутая цена ставится только через <a className="text-svetlana-700 underline" href="/seller/promotions">«Акции»</a>: так покупатель видит честную скидку от настоящей прежней цены.</>
+          )}
+        </div>
         <label><span className="mb-1 block text-sm">Остаток, шт.</span><input className="input w-full" type="number" min="0" step="1" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} /></label>
       </div>
       <label className="block"><span className="mb-1 block text-sm">Категория</span>
@@ -119,6 +125,7 @@ export function ProductEditor({ product, categories }: { product: Product; categ
       <div className="flex flex-wrap gap-2">
         <button className="btn btn-primary" type="button" onClick={save} disabled={busy}>{busy ? "Сохраняю…" : "Сохранить"}</button>
         <button className="btn btn-ghost" type="button" onClick={togglePublication} disabled={busy}>{product.status === "ACTIVE" ? "Снять с продажи" : "Опубликовать товар"}</button>
+        <a className="btn btn-ghost" href="/seller/products/bulk">Массовое редактирование</a>
       </div>
     </div>
   );

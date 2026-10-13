@@ -24,9 +24,12 @@ export default async function SellerProductsPage() {
   const now = new Date();
   return (
     <main className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Товары</h1>
-        <Link href="/seller/products" className="btn btn-ghost">Обновить</Link>
+        <div className="flex flex-wrap gap-2">
+          {products.length > 0 && <Link href="/seller/products/bulk" className="btn btn-ghost">Массовое редактирование</Link>}
+          <Link href="/seller/products" className="btn btn-ghost">Обновить</Link>
+        </div>
       </div>
       <ProductDraftAssistant categories={categories} />
       <div className="card overflow-x-auto">
