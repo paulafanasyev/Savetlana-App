@@ -36,12 +36,15 @@ const nextConfig = {
     ];
   },
   async headers() {
+    // Next.js App Router передаёт данные страницы встроенными <script>. Если их
+    // запретить, страница видна при загрузке и сразу пропадает (пустой экран).
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval'",
+      "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https:",
-      "font-src 'self'",
+      "img-src 'self' data: blob: https:",
+      "media-src 'self' blob: https:",
+      "font-src 'self' data:",
       "connect-src 'self'",
       "frame-ancestors 'none'",
       "form-action 'self'",
