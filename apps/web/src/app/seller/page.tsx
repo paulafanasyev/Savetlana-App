@@ -1,101 +1,21 @@
 import Link from "next/link";
 import { requireSellerServer } from "@/lib/auth";
 import { sellerReport } from "@/lib/domains/seller-analytics";
-import { rub } from "@/lib/format";
+import { getSellerVerificationStatus } from "@/lib/domains/seller-verification";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 
 export const dynamic = "force-dynamic";
 
 export default async function SellerDashboard() {
   const { sellerId, user } = await requireSellerServer();
-  const report = await sellerReport(sellerId);
-
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">Кабинет продавца</h1>
-          <p className="text-sm text-ink-soft">{user.name} · управление магазином</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/seller/products" className="btn btn-ghost">Товары</Link>
-          <Link href="/seller/orders" className="btn btn-ghost">Заказы</Link>
-          <Link href="/seller/analytics" className="btn btn-ghost">Аналитика</Link>
-          <Link href="/seller/pricing" className="btn btn-ghost">Цены и конкуренты</Link>
-          <Link href="/seller/competitors" className="btn btn-ghost">Глобальный анализ</Link>
-          <Link href="/seller/payouts" className="btn btn-ghost">Выплаты</Link>
-          <Link href="/seller/disputes" className="btn btn-ghost">Споры</Link>
-          <Link href="/seller/documents" className="btn btn-ghost">Документы</Link>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Товаров" value={report.totals.products} hint={`активных: ${report.totals.active}`} />
-        <Stat label="Заказов" value={report.totals.orders} />
-        <Stat label="Выручка" value={rub(report.totals.revenueKopecks)} />
-        <Stat
-          label="Конверсия"
-          value={(report.totals.avgConversion * 100).toFixed(1) + "%"}
-          hint="заказы / просмотры"
-        />
-      </div>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
-        <div className="space-y-4">
-          {report.salesDropCauses.length > 0 && (
-            <div className="card p-5">
-              <h2 className="text-base font-bold text-ink">Диагностика продаж</h2>
-              <ul className="mt-3 space-y-2 text-sm text-ink-soft">
-                {report.salesDropCauses.map((c, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span className="text-svetlana-600">•</span>
-                    <span>{c}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {report.recommendations.length > 0 && (
-            <div className="card p-5">
-              <h2 className="text-base font-bold text-ink">Рекомендации Светланы</h2>
-              <ul className="mt-3 space-y-3 text-sm">
-                {report.recommendations.map((r, i) => (
-                  <li key={i} className="border-l-2 border-svetlana-300 pl-3">
-                    <div className="font-medium text-ink">{r.text}</div>
-                    <div className="mt-0.5 text-xs text-ink-faint">Основание: {r.evidence}</div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {report.lowStock.length > 0 && (
-            <div className="card p-5">
-              <h2 className="text-base font-bold text-ink">Заканчивается наличие</h2>
-              <ul className="mt-3 space-y-2 text-sm text-ink-soft">
-                {report.lowStock.map((p) => (
-                  <li key={p.productId} className="flex justify-between">
-                    <span className="truncate">{p.title}</span>
-                    <span className="font-medium text-amber-700">осталось {p.quantity}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-        <SvetlanaChat side="seller" title="Светлана для бизнеса" />
-      </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
-  return (
-    <div className="card p-4">
-      <div className="text-xs font-medium uppercase tracking-wide text-ink-faint">{label}</div>
-      <div className="mt-1 text-2xl font-bold text-ink">{value}</div>
-      {hint && <div className="mt-0.5 text-xs text-ink-soft">{hint}</div>}
-    </div>
-  );
+  const [report, verification] = await Promise.all([sellerReport(sellerId), getSellerVerificationStatus(sellerId)]);
+  const active = verification.status === "APPROVED";
+  return <main className="space-y-6 px-6 py-8"><div><h1 className="text-2xl font-semibold">Кабинет продавца</h1><p className="text-ink-soft">{user.name ?? "Продавец"} · управление магазином</p></div>
+    {!active && <Link href="/seller/onboarding" className="block rounded-xl border-2 border-amber-300 bg-amber-50 p-5 text-amber-950"><strong>Завершите оформление продавца</strong><span className="mt-1 block">{verification.status === "REJECTED" ? "Заявка отклонена — исправьте данные и отправьте её снова." : verification.status === "PENDING" ? "Заявка на проверке." : "Заполните реквизиты, чтобы публиковать товары."}</span></Link>}
+    <nav className="flex flex-wrap gap-3">{[["/seller/products", "Товары"], ["/seller/orders", "Заказы"], ["/seller/analytics", "Аналитика"], ["/seller/payouts", "Выплаты"], ["/seller/disputes", "Споры"], ["/seller/documents", "Документы"]].map(([href, label]) => <Link className="rounded border px-4 py-2" href={href} key={href}>{label}</Link>)}</nav>
+    {report.salesDropCauses?.length > 0 && <section className="rounded-xl border p-5"><h2 className="font-semibold">Диагностика продаж</h2><ul className="mt-2 list-disc pl-5">{report.salesDropCauses.map((cause, index) => <li key={index}>{cause}</li>)}</ul></section>}
+    {report.recommendations?.length > 0 && <section className="rounded-xl border p-5"><h2 className="font-semibold">Рекомендации Светланы</h2><ul className="mt-2 space-y-2">{report.recommendations.map((item, index) => <li key={index}>{item.text}<span className="block text-sm text-ink-soft">Основание: {item.evidence}</span></li>)}</ul></section>}
+    {report.lowStock?.length > 0 && <section className="rounded-xl border p-5"><h2 className="font-semibold">Заканчивается наличие</h2><ul className="mt-2 space-y-1">{report.lowStock.map((item) => <li key={item.id}>{item.title} — осталось {item.quantity}</li>)}</ul></section>}
+    <SvetlanaChat />
+  </main>;
 }

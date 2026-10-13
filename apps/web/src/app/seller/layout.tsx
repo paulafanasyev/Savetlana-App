@@ -3,32 +3,9 @@ import type { ReactNode } from "react";
 import { requireSellerServer } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
-
-const NAV: { href: string; label: string }[] = [
-  { href: "/seller", label: "Главная" },
-  { href: "/seller/products", label: "Товары" },
-  { href: "/seller/orders", label: "Заказы" },
-  { href: "/seller/payouts", label: "Выплаты" },
-  { href: "/seller/disputes", label: "Споры" },
-  { href: "/seller/documents", label: "Документы" },
-  { href: "/seller/analytics", label: "Аналитика" },
-  { href: "/svetlana", label: "Светлана" },
-];
+const NAV = [["/seller", "Главная"], ["/seller/onboarding", "Проверка продавца"], ["/seller/products", "Товары"], ["/seller/orders", "Заказы"], ["/seller/payouts", "Выплаты"], ["/seller/disputes", "Споры"], ["/seller/documents", "Документы"], ["/seller/analytics", "Аналитика"], ["/svetlana", "Светлана"]] as const;
 
 export default async function SellerLayout({ children }: { children: ReactNode }) {
-  // Every seller page requires an activated seller profile.
   await requireSellerServer();
-
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <nav className="mb-6 flex flex-wrap gap-2" aria-label="Кабинет продавца">
-        {NAV.map((item) => (
-          <Link key={item.href} href={item.href} className="btn btn-ghost text-sm">
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-      {children}
-    </div>
-  );
+  return <div className="min-h-screen"><nav className="flex flex-wrap gap-3 border-b px-6 py-4">{NAV.map(([href, label]) => <Link href={href} key={href} className="text-sm">{label}</Link>)}</nav>{children}</div>;
 }
