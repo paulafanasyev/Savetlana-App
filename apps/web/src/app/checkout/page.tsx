@@ -189,7 +189,7 @@ export default function CheckoutPage() {
           {loadState === "loading" && <div className="h-16 animate-pulse rounded-xl bg-surface-muted" />}
           {loadState === "error" && <p className="text-sm text-bad">Не удалось загрузить корзину. Обновите страницу.</p>}
           {(sellers ?? []).map((s) => (
-            <fieldset key={s.sellerId} className="mb-3 rounded-xl border border-line p-3">
+            <fieldset key={s.sellerId} className="mb-3 rounded-xl border border-surface-line p-3">
               <legend className="px-1 text-sm font-medium">{s.sellerName} · товаров: {s.itemsCount} · {rub(s.subtotalKopecks)}</legend>
               {DELIVERY_OPTIONS.map((o) => (
                 <label key={o.method} className="flex cursor-pointer items-start gap-2 py-1 text-sm">
