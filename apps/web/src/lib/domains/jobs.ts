@@ -12,6 +12,7 @@
  *   4. Сверка зависших платежей — если уведомление банка потерялось.
  *   5. Автоотмена заказов, не оплаченных за 24 часа (товар возвращается в продажу).
  *   6. Конец акций по сроку — обычная цена возвращается сама.
+ *   7. Предупреждения продавцу, что товар заканчивается.
  *
  * This module exposes a single `runJobs()` entry point that performs one
  * bounded slice of every category, so it can be driven by Vercel Cron
@@ -32,6 +33,7 @@ import { sweepExpiredDocuments } from "./documents";
 import { syncTracking } from "./delivery";
 import { checkSlaBreaches } from "./disputes";
 import { expirePromotions } from "./seller-promotions";
+import { sendLowStockAlerts } from "./stock-alerts";
 import { retryFailedDeliveries } from "../notification-delivery";
 import { ShipmentStatus_VALUES } from "../db/enums";
 
@@ -82,6 +84,7 @@ export async function runJobs(): Promise<JobRunResult> {
     timed("dispute_sla", () => checkSlaBreaches(), (n) => `${n} breached`),
     timed("delivery_retry", () => retryFailedDeliveries(), (n) => `${n} retried`),
     timed("promo_expiry", () => expirePromotions(), (n) => `${n} promotions ended`),
+    timed("low_stock_alerts", () => sendLowStockAlerts(), (n) => `${n} alerts sent`),
   ]);
 
   return {

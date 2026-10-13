@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { requireSellerServer } from "@/lib/auth";
 import { sellerReport } from "@/lib/domains/seller-analytics";
 import { rub } from "@/lib/format";
+import { ruText } from "@/lib/ai/ru-text";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +31,7 @@ export default async function SellerAnalyticsPage() {
           <div className="text-xl font-bold text-ink">{report.totals.products}</div>
         </div>
         <div className="card p-4">
-          <div className="text-xs text-ink-faint">Активных</div>
+          <div className="text-xs text-ink-faint">В продаже</div>
           <div className="text-xl font-bold text-ink">{report.totals.active}</div>
         </div>
         <div className="card p-4">
@@ -37,16 +39,16 @@ export default async function SellerAnalyticsPage() {
           <div className="text-xl font-bold text-ink">{report.totals.orders}</div>
         </div>
         <div className="card p-4">
-          <div className="text-xs text-ink-faint">Выручка</div>
+          <div className="text-xs text-ink-faint">Выручка (доставленные)</div>
           <div className="text-xl font-bold text-ink">{rub(report.totals.revenueKopecks)}</div>
         </div>
         <div className="card p-4">
-          <div className="text-xs text-ink-faint">Конверсия</div>
+          <div className="text-xs text-ink-faint">Из просмотра в заказ</div>
           <div className="text-xl font-bold text-ink">{(report.totals.avgConversion * 100).toFixed(1)}%</div>
         </div>
         <div className="card p-4">
           <div className="text-xs text-ink-faint">Рейтинг</div>
-          <div className="text-xl font-bold text-ink">{report.totals.rating.toFixed(1)}</div>
+          <div className="text-xl font-bold text-ink">{report.totals.rating > 0 ? report.totals.rating.toFixed(1) : "нет оценок"}</div>
         </div>
       </section>
 
@@ -55,7 +57,7 @@ export default async function SellerAnalyticsPage() {
           <h2 className="mb-3 text-lg font-semibold text-ink">Почему могли упасть продажи</h2>
           <ul className="list-inside list-disc space-y-1 text-sm text-ink-soft">
             {report.salesDropCauses.map((cause) => (
-              <li key={cause}>{cause}</li>
+              <li key={cause}>{ruText(cause)}</li>
             ))}
           </ul>
         </section>
@@ -64,7 +66,7 @@ export default async function SellerAnalyticsPage() {
       <section className="card p-5">
         <h2 className="mb-3 text-lg font-semibold text-ink">Рекомендации Светланы</h2>
         {report.recommendations.length === 0 ? (
-          <p className="text-sm text-ink-soft">Сейчас рекомендаций нет — карточки в порядке.</p>
+          <p className="text-sm text-ink-soft">Сейчас рекомендаций нет: карточки в порядке.</p>
         ) : (
           <ul className="space-y-3">
             {report.recommendations.map((rec) => (
@@ -74,8 +76,8 @@ export default async function SellerAnalyticsPage() {
                     {PRIORITY_LABEL[rec.priority]}
                   </span>
                 </div>
-                <div className="text-sm font-medium text-ink">{rec.text}</div>
-                <div className="mt-1 text-xs text-ink-faint">На основании: {rec.evidence}</div>
+                <div className="text-sm font-medium text-ink">{ruText(rec.text)}</div>
+                <div className="mt-1 text-xs text-ink-faint">На основании: {ruText(rec.evidence)}</div>
               </li>
             ))}
           </ul>
@@ -83,7 +85,8 @@ export default async function SellerAnalyticsPage() {
       </section>
 
       <section className="card p-5">
-        <h2 className="mb-3 text-lg font-semibold text-ink">Здоровье карточек</h2>
+        <h2 className="mb-1 text-lg font-semibold text-ink">Качество карточек</h2>
+        <p className="mb-3 text-xs text-ink-faint">Оценка от 0 до 100: фото, описание, характеристики, ключевые слова, наличие и продажи. Чем выше, тем лучше карточку находят и покупают.</p>
         {report.health.length === 0 ? (
           <p className="text-sm text-ink-soft">Нет товаров для анализа.</p>
         ) : (
@@ -92,17 +95,17 @@ export default async function SellerAnalyticsPage() {
               <thead className="border-b border-surface-line text-left text-xs uppercase text-ink-faint">
                 <tr>
                   <th className="px-3 py-2">Товар</th>
-                  <th className="px-3 py-2">Health</th>
-                  <th className="px-3 py-2">Проблемы</th>
+                  <th className="px-3 py-2">Оценка</th>
+                  <th className="px-3 py-2">Что улучшить</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-line">
                 {report.health.map((h) => (
                   <tr key={h.productId}>
                     <td className="px-3 py-2">
-                      <a href={`/product/${h.productId}`} className="font-medium text-ink hover:text-svetlana-700">
+                      <Link href={`/seller/products/${h.productId}/edit`} className="font-medium text-ink hover:text-svetlana-700">
                         {h.title}
-                      </a>
+                      </Link>
                     </td>
                     <td className="px-3 py-2">
                       <span
@@ -118,7 +121,7 @@ export default async function SellerAnalyticsPage() {
                       </span>
                     </td>
                     <td className="px-3 py-2 text-xs text-ink-soft">
-                      {h.issues.length === 0 ? "всё хорошо" : h.issues.join("; ")}
+                      {h.issues.length === 0 ? "всё хорошо" : h.issues.map((issue) => ruText(issue)).join("; ")}
                     </td>
                   </tr>
                 ))}
@@ -130,7 +133,10 @@ export default async function SellerAnalyticsPage() {
 
       <section className="grid gap-4 md:grid-cols-2">
         <div className="card p-5">
-          <h2 className="mb-3 text-lg font-semibold text-ink">Заканчивается остаток</h2>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold text-ink">Заканчивается остаток</h2>
+            {report.lowStock.length > 0 && <Link href="/seller/products/bulk" className="text-sm text-svetlana-700 hover:underline">Пополнить</Link>}
+          </div>
           {report.lowStock.length === 0 ? (
             <p className="text-sm text-ink-soft">Все остатки в норме.</p>
           ) : (
@@ -138,22 +144,22 @@ export default async function SellerAnalyticsPage() {
               {report.lowStock.map((item) => (
                 <li key={item.productId} className="flex justify-between text-ink">
                   <span>{item.title}</span>
-                  <span className="font-mono text-xs text-ink-soft">{item.quantity} шт.</span>
+                  <span className={`font-mono text-xs ${item.quantity === 0 ? "text-red-700" : "text-ink-soft"}`}>{item.quantity === 0 ? "закончился" : `${item.quantity} шт.`}</span>
                 </li>
               ))}
             </ul>
           )}
         </div>
         <div className="card p-5">
-          <h2 className="mb-3 text-lg font-semibold text-ink">Залежавшиеся размещения</h2>
+          <h2 className="mb-3 text-lg font-semibold text-ink">Не показываются покупателям</h2>
           {report.stale.length === 0 ? (
-            <p className="text-sm text-ink-soft">Нет просроченных подтверждений наличия.</p>
+            <p className="text-sm text-ink-soft">Все опубликованные товары видны покупателям.</p>
           ) : (
             <ul className="space-y-1 text-sm">
               {report.stale.map((item) => (
                 <li key={item.productId} className="flex justify-between text-ink">
                   <span>{item.title}</span>
-                  <span className="font-mono text-xs text-ink-soft">{item.days} дн.</span>
+                  <span className="font-mono text-xs text-ink-soft">{item.days > 0 ? `${item.days} дн. без продления` : "нужно подтвердить наличие"}</span>
                 </li>
               ))}
             </ul>

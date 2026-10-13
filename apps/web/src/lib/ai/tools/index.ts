@@ -14,6 +14,7 @@ import { searchProducts } from "../../domains/catalog";
 import { sellerCustomerReport, SEGMENT_LABELS } from "../../domains/seller-crm";
 import { startPromotionTool, endPromotionTool, sellerMessagesTool } from "./engagement";
 import { promoState } from "../../domains/engagement-rules";
+import { ruText } from "../ru-text";
 
 import {
   searchProductsTool,
@@ -340,12 +341,23 @@ const ALL_TOOLS: ToolDefinition[] = [
   assessOrderRiskTool,
 ];
 
+/** Ответы инструментов видит человек: служебные коды заменяем русскими словами. */
+function localized(tool: ToolDefinition): ToolDefinition {
+  return {
+    ...tool,
+    async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+      const result = await tool.execute(ctx, args);
+      return { ...result, summary: ruText(result.summary), error: ruText(result.error) };
+    },
+  };
+}
+
 let bootstrapped = false;
 
 export function registerAllTools(): void {
   if (bootstrapped) return;
   for (const tool of ALL_TOOLS) {
-    toolRegistry.register(tool);
+    toolRegistry.register(localized(tool));
   }
   bootstrapped = true;
 }
