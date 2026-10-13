@@ -12,6 +12,7 @@ import { publishProblems, publishProblemsMessage } from "../../domains/publish-c
 import { getSellerOnboardingGate } from "../../domains/seller-onboarding";
 import { searchProducts } from "../../domains/catalog";
 import { sellerCustomerReport, SEGMENT_LABELS } from "../../domains/seller-crm";
+import { startPromotionTool, endPromotionTool, sellerMessagesTool } from "./engagement";
 
 import {
   searchProductsTool,
@@ -251,6 +252,9 @@ const ALL_TOOLS: ToolDefinition[] = [
   // Seller
   analyzeSellerSalesTool,
   sellerCustomersTool,
+  sellerMessagesTool,
+  startPromotionTool,
+  endPromotionTool,
   confirmInventoryTool,
   extendListingTool,
   createProductDraftTool,
@@ -293,3 +297,4 @@ export function registerAllTools(): void {
 registerAllTools();
 
 export { toolRegistry };
+export { confirmPreview } from "./engagement";

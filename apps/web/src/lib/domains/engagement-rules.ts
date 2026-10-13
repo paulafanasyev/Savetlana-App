@@ -81,3 +81,24 @@ export function promoState(p: { priceKopecks: number; oldPriceKopecks: number | 
   if (!p.oldPriceKopecks || p.oldPriceKopecks <= p.priceKopecks) return { onPromo: false, percent: 0 };
   return { onPromo: true, percent: Math.round(((p.oldPriceKopecks - p.priceKopecks) / p.oldPriceKopecks) * 100) };
 }
+
+const ALL_WORDS = new Set(["все", "всё", "весь", "всю", "товары", "товар", "товаров", "мои", "моих", "мой", "ассортимент", "магазин", "каталог", "позиции"]);
+
+/**
+ * Какие товары продавца имеет в виду фраза: «кроссовки Nike», «все товары».
+ * Слова сравниваются по основе (без двух последних букв), чтобы «кроссовок»
+ * находило «Кроссовки». Пустой запрос или «все товары» означает весь ассортимент.
+ */
+export function matchProducts<T extends { title: string }>(products: T[], query: string | undefined | null): T[] {
+  const words = (query ?? "")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .split(/[^a-zа-я0-9]+/)
+    .filter((w) => w.length >= 3 && !ALL_WORDS.has(w));
+  if (words.length === 0) return products;
+  const stems = words.map((w) => (w.length > 5 ? w.slice(0, w.length - 2) : w));
+  return products.filter((p) => {
+    const title = p.title.toLowerCase().replace(/ё/g, "е");
+    return stems.every((s) => title.includes(s));
+  });
+}
