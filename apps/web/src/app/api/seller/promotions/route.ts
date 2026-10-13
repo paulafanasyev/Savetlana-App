@@ -9,6 +9,7 @@ interface Body {
   action?: "start" | "end";
   productIds?: unknown;
   percent?: unknown;
+  days?: unknown;
 }
 
 /** Запуск и завершение скидки на выбранные товары продавца. */
@@ -18,7 +19,7 @@ export const POST = apiRoute(async (request) => {
   const body = await jsonBody<Body>(request).catch(() => ({} as Body));
   try {
     if (body.action === "start") {
-      const result = await startPromotion({ sellerId, actorId: user.id, productIds: body.productIds, percent: body.percent });
+      const result = await startPromotion({ sellerId, actorId: user.id, productIds: body.productIds, percent: body.percent, days: body.days });
       return Response.json({ ok: true, ...result });
     }
     if (body.action === "end") {

@@ -143,3 +143,78 @@ export function raisedRecently(
   }
   return raised;
 }
+
+export const PROMO_MAX_DAYS = 30;
+
+/** Когда закончится акция на `days` дней. Без срока: null. */
+export function promoEndsAt(days: unknown, now: Date = new Date()): Date | null {
+  if (days === undefined || days === null || days === "" || days === 0 || days === "0") return null;
+  const n = Number(days);
+  if (!Number.isInteger(n) || n < 1 || n > PROMO_MAX_DAYS) {
+    throw new UserFacingError(`Срок акции: от 1 до ${PROMO_MAX_DAYS} дней`);
+  }
+  return new Date(now.getTime() + n * 86_400_000);
+}
+
+/** «20 октября»: дата окончания акции для людей (по Москве). */
+export function promoDateText(date: Date): string {
+  return date.toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "Europe/Moscow" });
+}
+
+const DURATION_DAYS = /(?:^|\s)(?:на\s+)?(\d{1,2})\s*(?:дн\S*|день|сут\S*)(?=\s|$)/i;
+const DURATION_WORDS = /(?:^|\s)(?:на\s+)?(неделю|две недели|месяц)(?=\s|$)/i;
+
+/**
+ * Срок акции из фразы продавца: «кроссовки на 3 дня» → { rest: "кроссовки", days: 3 }.
+ * Без срока возвращает исходный текст.
+ */
+export function extractPromoDuration(text: string): { rest: string; days?: number } {
+  const clean = (s: string) => s.replace(/\s+/g, " ").trim().replace(/^на\s+/i, "");
+  const d = DURATION_DAYS.exec(text);
+  if (d) return { rest: clean(text.replace(d[0], " ")), days: Number(d[1]) };
+  const w = DURATION_WORDS.exec(text);
+  if (w) {
+    const word = w[1].toLowerCase();
+    return { rest: clean(text.replace(w[0], " ")), days: word === "неделю" ? 7 : word === "две недели" ? 14 : 30 };
+  }
+  return { rest: clean(text) };
+}
+
+export interface PromoHistoryRow {
+  productId: string;
+  sellerId: string;
+  actorId: string | null;
+  change: string | null;
+  createdAt: Date;
+}
+
+/** Запуск акции, записанный в журнале цен: какая цена стала и до какого числа. */
+export function promoMark(row: { change: string | null }): { priceTo: number; endsAt: Date | null } | null {
+  try {
+    const d = JSON.parse(row.change ?? "{}") as { priceTo?: unknown; promoPercent?: unknown; promoEndsAt?: unknown };
+    if (typeof d.priceTo !== "number" || typeof d.promoPercent !== "number") return null;
+    const endsAt = typeof d.promoEndsAt === "string" ? new Date(d.promoEndsAt) : null;
+    return { priceTo: d.priceTo, endsAt: endsAt && !Number.isNaN(endsAt.getTime()) ? endsAt : null };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Акции, у которых вышел срок: берём последнюю запись запуска по каждому
+ * товару и сравниваем дату окончания с текущим временем.
+ */
+export function duePromotions(rows: PromoHistoryRow[], now: Date = new Date()): (PromoHistoryRow & { priceTo: number })[] {
+  const latest = new Map<string, PromoHistoryRow>();
+  for (const row of rows) {
+    if (!promoMark(row)) continue;
+    const prev = latest.get(row.productId);
+    if (!prev || row.createdAt > prev.createdAt) latest.set(row.productId, row);
+  }
+  const due: (PromoHistoryRow & { priceTo: number })[] = [];
+  for (const row of latest.values()) {
+    const mark = promoMark(row);
+    if (mark?.endsAt && mark.endsAt.getTime() <= now.getTime()) due.push({ ...row, priceTo: mark.priceTo });
+  }
+  return due;
+}
