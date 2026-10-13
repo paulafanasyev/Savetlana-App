@@ -24,7 +24,9 @@ export default function RegisterPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Ошибка регистрации");
-      router.push(form.role === "SELLER" ? "/seller" : "/");
+      // Администратор (почта из ADMIN_EMAILS) сразу попадает в админку.
+      const role = data?.user?.role;
+      router.push(role === "ADMIN" ? "/admin" : form.role === "SELLER" ? "/seller" : "/");
     } catch (e2) {
       setError(e2 instanceof Error ? e2.message : "Ошибка регистрации");
     } finally {
