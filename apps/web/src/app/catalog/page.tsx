@@ -126,12 +126,30 @@ function CatalogInner() {
               </button>
             </div>
           ) : items.length === 0 ? (
-            <div className="card p-8 text-center">
-              <div className="text-lg font-semibold text-ink">Ничего не нашлось</div>
-              <p className="mt-2 text-sm text-ink-soft">
-                Переформулируйте запрос или спросите Светлану: она подберёт альтернативы.
-              </p>
-            </div>
+            query || category || photo ? (
+              <div className="card p-8 text-center">
+                <div className="text-lg font-semibold text-ink">Ничего не нашлось</div>
+                <p className="mt-2 text-sm text-ink-soft">
+                  Попробуйте написать короче или другими словами, например «чайник» вместо «электрический чайник из стекла».
+                  Или спросите Светлану справа: она подберёт альтернативы.
+                </p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <Link href="/catalog" className="btn btn-primary">Весь каталог</Link>
+                  <Link href="/gifts" className="btn btn-ghost">Подобрать подарок</Link>
+                </div>
+              </div>
+            ) : (
+              <div className="card p-8 text-center">
+                <div className="text-lg font-semibold text-ink">В каталоге пока нет товаров</div>
+                <p className="mt-2 text-sm text-ink-soft">
+                  Продавцы ещё не выставили товары. Загляните чуть позже или станьте первым продавцом: карточку товара можно создать за пару минут вместе со Светланой.
+                </p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <Link href="/seller" className="btn btn-primary">Начать продавать</Link>
+                  <Link href="/" className="btn btn-ghost">На главную</Link>
+                </div>
+              </div>
+            )
           ) : (
             <>
               <div className="mb-3 text-sm text-ink-soft">Найдено: {items.length}</div>
@@ -153,9 +171,15 @@ function CatalogInner() {
                       <div className="text-base font-bold text-svetlana-700">{rub(item.priceKopecks)}</div>
                       <div className="text-xs text-ink-soft">{item.seller.name}</div>
                       <div className="flex items-center gap-1 text-xs text-ink-faint">
-                        <span>★ {item.rating.toFixed(1)}</span>
-                        <span>·</span>
-                        <span>{item.reviewsCount} отз.</span>
+                        {item.reviewsCount > 0 ? (
+                          <>
+                            <span>★ {item.rating.toFixed(1)}</span>
+                            <span>·</span>
+                            <span>{item.reviewsCount} отз.</span>
+                          </>
+                        ) : (
+                          <span>пока без отзывов</span>
+                        )}
                       </div>
                       <div className="text-xs">{availabilityLabel(item.availability)}</div>
                       {item.signals[0] && (
