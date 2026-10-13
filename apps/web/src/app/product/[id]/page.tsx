@@ -6,7 +6,7 @@ import { AddToCartButton } from "@/components/AddToCartButton";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 import { summarizeReviews, listReviews } from "@/lib/domains/reviews";
-import { readParam, resolveParams } from "@/lib/page-params";
+import { resolveParams } from "@/lib/page-params";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export default async function ProductPage({ params }: PageProps) {
     where: { id, status: "ACTIVE" },
     include: {
       images: { orderBy: { position: "asc" } },
-      variants: true,
+      variants: { orderBy: { createdAt: "asc" } },
       inventory: true,
       listing: true,
       category: true,
@@ -43,6 +43,8 @@ export default async function ProductPage({ params }: PageProps) {
   const reviewSummary = await summarizeReviews(product.id);
   const recentReviews = await listReviews(product.id, 6);
   const attrs = safeJson(product.attributes);
+  const outOfStock = !product.inventory || product.inventory.quantity <= 0 || product.inventory.availability === "OUT_OF_STOCK";
+  const variants = product.variants.map((v) => ({ id: v.id, name: v.name, priceKopecks: product.priceKopecks + v.priceDelta }));
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
@@ -105,7 +107,7 @@ export default async function ProductPage({ params }: PageProps) {
 
           <div className="card p-4 text-sm">
             <div className="flex items-center justify-between">
-              <span className="font-medium text-ink">{availabilityLabel(product.inventory?.availability)}</span>
+              <span className="font-medium text-ink">{outOfStock ? "Нет в наличии" : availabilityLabel(product.inventory?.availability)}</span>
               {product.inventory?.confirmedBySeller ? (
                 <span className="chip">подтверждено продавцом</span>
               ) : (
@@ -122,8 +124,8 @@ export default async function ProductPage({ params }: PageProps) {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <AddToCartButton productId={product.id} />
+          <div className="flex flex-wrap items-start gap-3">
+            <AddToCartButton productId={product.id} variants={variants} outOfStock={outOfStock} />
             <FavoriteButton productId={product.id} />
           </div>
 
@@ -147,19 +149,6 @@ export default async function ProductPage({ params }: PageProps) {
               </dl>
             </div>
           )}
-
-          {product.variants.length > 0 && (
-            <div>
-              <h2 className="mb-2 text-lg font-bold text-ink">Варианты</h2>
-              <div className="flex flex-wrap gap-2">
-                {product.variants.map((v) => (
-                  <span key={v.id} className="chip">
-                    {v.name} {v.priceDelta ? `· ${rub(product.priceKopecks + v.priceDelta)}` : ""}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Svetlana + seller */}
@@ -180,7 +169,7 @@ export default async function ProductPage({ params }: PageProps) {
               <div>Личность: {statusLabel(product.sellerProfile.identityStatus)}</div>
               <div>Бизнес: {statusLabel(product.sellerProfile.businessStatus)}</div>
               <div>НПД: {statusLabel(product.sellerProfile.npdStatus)}</div>
-              <div>На платформе с {new Date(product.sellerProfile.createdAt).getFullYear()}</div>
+              <div>На площадке с {new Date(product.sellerProfile.createdAt).getFullYear()}</div>
             </div>
           </div>
         </div>
@@ -212,7 +201,7 @@ export default async function ProductPage({ params }: PageProps) {
               ))}
             </div>
             <p className="mt-3 text-xs text-ink-faint">
-              Оценка тональности: {reviewSummary.sentimentBasis === "live-model" ? " live-моделью" : reviewSummary.sentimentBasis === "rating-derived" ? "по распределению оценок" : "недостаточно данных (NOT_PROVEN)"}
+              Общее впечатление: {reviewSummary.sentimentBasis === "live-model" ? "по текстам отзывов" : reviewSummary.sentimentBasis === "rating-derived" ? "по оценкам покупателей" : "пока мало отзывов для вывода"}
             </p>
           </div>
         )}
@@ -229,7 +218,7 @@ export default async function ProductPage({ params }: PageProps) {
                 </div>
                 <div className="mt-1 text-xs text-ink-faint">
                   {"★".repeat(r.rating)}
-                  <span className="text-ink-faint">{"★".repeat(5 - r.rating)}</span>
+                  <span className="text-ink-faint">{"☆".repeat(5 - r.rating)}</span>
                   {" · "}
                   {new Date(r.createdAt).toLocaleDateString("ru-RU")}
                 </div>
