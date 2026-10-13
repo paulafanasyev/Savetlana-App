@@ -56,6 +56,23 @@ function stripBudget(text: string): string {
     .trim();
 }
 
+const FILLER_WORDS = new Set([
+  "мне", "пожалуйста", "please", "с", "со", "и", "или", "в", "на", "для", "по", "из", "у", "о", "об",
+  "самой", "самый", "самая", "самое", "самым", "самую", "лучшим", "лучший", "лучшая", "лучшую", "лучше",
+  "дешёвой", "дешевой", "дешёвый", "дешевый", "недорогой", "недорогие", "стоимостью", "ценой", "цене",
+  "рейтингом", "рейтинг", "магазина", "магазин", "какой-нибудь", "какие-нибудь", "нужен", "нужна", "нужны",
+  "хороший", "хорошие", "хорошую", "качественный", "качественные",
+]);
+
+/** Оставляет в запросе только суть: «кроссовки Nike с самой дешёвой стоимостью» → «кроссовки Nike». */
+function coreQuery(text: string): string {
+  const words = stripBudget(text)
+    .replace(/[«»"'!?.,;:()]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w && !FILLER_WORDS.has(w.toLowerCase()));
+  return words.slice(0, 4).join(" ");
+}
+
 function rubles(kopecks: number): string {
   return `${Math.round(kopecks / 100).toLocaleString("ru-RU")} ₽`;
 }
@@ -87,7 +104,7 @@ const FAQ_RULES: FaqRule[] = [
         "• подобрать подарок;",
         "• рассказать, где ваш заказ и что с оплатой;",
         "• объяснить доставку, оплату и возврат.",
-        "Продавцам помогаю с карточками, ценами, наличием и разбором продаж.",
+        "Продавцам помогаю с карточками, ценами, наличием, разбором продаж и подскажу, как закупать товар в Китае.",
       ].join("\n"),
   },
   {
@@ -135,6 +152,20 @@ const FAQ_RULES: FaqRule[] = [
 
 const INTENT_RULES: IntentRule[] = [
   {
+    // Закупка за рубежом и перепродажа: ищем по внешним площадкам, а не только в каталоге.
+    id: "global_sourcing",
+    pattern: /(?:в кита|китай|1688|alibaba|алибаб|taobao|таобао|aliexpress|алиэкспресс|оптом|закуп|поставщик|перепрод)/i,
+    tool: "global_search",
+    args: (m) => {
+      const text = String(m.input ?? "");
+      // Сначала отрезаем «в Китае, хочу …», потом берём то, что после глагола поиска.
+      const head = text.replace(/(?:в кита\S*|на 1688|на alibaba|на taobao|на aliexpress|оптом|для перепрод\S*).*$/i, "");
+      const product = /(?:найти|найд(?:и|ите)|ищу|купить)\s+(.*)/i.exec(head)?.[1] ?? head;
+      return { query: coreQuery(product) || text.trim(), tier: 2 };
+    },
+    reply: () => "Ищу предложения на зарубежных площадках и сравниваю цены и рейтинг продавцов.",
+  },
+  {
     id: "seller_search",
     pattern: /(?:найд(?:и|ите)|покаж(?:и|ите)|ищу)\s+(?:продавца|продавцов|магазин|магазины)(.*)?/i,
     tool: "search_sellers",
@@ -143,11 +174,11 @@ const INTENT_RULES: IntentRule[] = [
   },
   {
     id: "product_search",
-    pattern: /(?:найд(?:и|ите)|покаж(?:и|ите)|ищу|хочу купить|хочу|подбер(?:и|ите)|подобрать|выбрать|посоветуй(?:те)?)\s+(.*)/i,
+    pattern: /(?:помоги(?:те)? найти|найти|найд(?:и|ите)|покаж(?:и|ите)|ищу|хочу купить|хочу|подбер(?:и|ите)|подобрать|выбрать|подскаж(?:и|ите)|посоветуй(?:те)?)\s+(.*)/i,
     tool: "search_products",
     args: (m) => {
       const rest = m[1] ?? "";
-      return { query: stripBudget(rest) || rest.trim(), budget: parseBudget(rest) };
+      return { query: coreQuery(rest) || rest.trim(), budget: parseBudget(rest) };
     },
     reply: (m) => `Ищу по запросу «${(m[1] ?? "").trim()}».`,
   },
@@ -280,7 +311,9 @@ function listItems(data: unknown): string | null {
     ? data
     : data && typeof data === "object" && Array.isArray((data as { items?: unknown }).items)
       ? (data as { items: unknown[] }).items
-      : null;
+      : data && typeof data === "object" && Array.isArray((data as { hits?: unknown }).hits)
+        ? (data as { hits: unknown[] }).hits
+        : null;
   if (!raw || raw.length === 0) return null;
   const rows = (raw as ItemLike[])
     .filter((item) => typeof item?.title === "string" && typeof item?.priceKopecks === "number")
@@ -288,6 +321,47 @@ function listItems(data: unknown): string | null {
     .map((item) => `• «${item.title as string}» за ${rubles(item.priceKopecks as number)}${typeof item.seller === "string" ? `, продавец ${item.seller}` : ""}`);
   if (rows.length === 0) return null;
   return rows.join("\n");
+}
+
+interface GlobalSearchData {
+  tier?: number;
+  platformCount?: number;
+  externalCount?: number;
+  liveExternal?: boolean;
+  hits?: unknown[];
+}
+
+/**
+ * Ответ на поиск поставщиков за рубежом. Если зарубежные площадки не
+ * подключены, Светлана честно говорит об этом (цены оттуда не выдумывает),
+ * показывает, что есть на нашей площадке, и даёт план закупки.
+ */
+export function sourcingAnswer(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const d = data as GlobalSearchData;
+  if (typeof d.externalCount !== "number" || typeof d.platformCount !== "number") return null;
+  const items = listItems({ hits: (d.hits ?? []).filter((h) => (h as { source?: string })?.source !== "external") });
+  const external = listItems({ hits: (d.hits ?? []).filter((h) => (h as { source?: string })?.source === "external") });
+  const lines: string[] = [];
+  if (d.liveExternal && external) {
+    lines.push("Вот самые выгодные предложения на зарубежных площадках:", external);
+  } else {
+    lines.push("Прямого подключения к 1688, Taobao и AliExpress у площадки пока нет, поэтому цены и рейтинги оттуда я не выдумываю.");
+  }
+  lines.push(
+    d.platformCount > 0 && items
+      ? `У нас на площадке уже есть похожие предложения (${d.platformCount}), с ними вы будете конкурировать:\n${items}`
+      : "На нашей площадке похожих предложений пока нет, так что ниша свободна."
+  );
+  lines.push(
+    "Как выбрать поставщика в Китае:",
+    "1. Ищите на 1688 или Alibaba с отметкой проверенного поставщика (Verified, Gold Supplier) и стажем от 3 лет, смотрите рейтинг магазина и долю повторных покупок.",
+    "2. Сравните несколько поставщиков, попросите видео товара и закажите образец до партии.",
+    "3. Посчитайте себестоимость: цена + доставка в Россию + пошлина и НДС, затем сравните с ценами здесь. Я помогу с наценкой, когда будете создавать карточку.",
+    "4. Для брендов (Nike, Adidas и других) нужен договор или разрешение правообладателя: товар без этого считается контрафактом, и продавать его здесь нельзя. Обувь также подлежит маркировке «Честный знак».",
+    "Когда выберете товар, напишите «создай карточку товара», и я подготовлю черновик."
+  );
+  return lines.join("\n");
 }
 
 export class MockAiProvider implements AiProvider {
@@ -383,6 +457,8 @@ export class MockAiProvider implements AiProvider {
       if (result.ok === false) {
         return `Не получилось: ${result.error ?? "причина неизвестна"}. Давайте попробуем иначе.`;
       }
+      const sourcing = sourcingAnswer(result.data);
+      if (sourcing) return sourcing;
       const summary = result.summary ?? "Готово, данные получены.";
       const items = listItems(result.data);
       return items ? `${summary}\n${items}` : summary;
