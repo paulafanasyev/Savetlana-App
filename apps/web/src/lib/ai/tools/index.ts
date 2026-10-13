@@ -125,6 +125,27 @@ const promoAwareChangePriceTool: ToolDefinition = verifiedOnly(
 );
 
 /**
+ * Покупатель через Светлану отменяет только неоплаченный заказ, как и кнопкой
+ * на сайте. Оплаченный заказ идёт через возврат или спор, иначе деньги
+ * остались бы списанными, а заказ отменённым.
+ */
+const UNPAID = ["CREATED", "PAYMENT_PENDING"];
+const unpaidOnlyCancelOrderTool: ToolDefinition = {
+  ...cancelOrderTool,
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const orderId = typeof args.orderId === "string" ? args.orderId : "";
+    if (orderId) {
+      const order = await prisma.order.findFirst({ where: { id: orderId, buyerId: ctx.userId }, select: { status: true } });
+      if (!order) return { ok: false, error: "заказ не найден", verification: "NOT_PROVEN" };
+      if (!UNPAID.includes(order.status)) {
+        return { ok: false, error: "оплаченный заказ нельзя просто отменить: оформите возврат или откройте спор на странице заказа, тогда деньги вернутся", verification: "NOT_PROVEN" };
+      }
+    }
+    return cancelOrderTool.execute(ctx, args);
+  },
+};
+
+/**
  * В кабинете продавца «заказы» означают заказы его покупателей, а не его
  * собственные покупки. Покупателю инструмент отвечает как раньше.
  */
@@ -280,7 +301,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   sellerAwareGetOrderTool,
   cartAddTool,
   createOrderTool,
-  cancelOrderTool,
+  unpaidOnlyCancelOrderTool,
   wishlistAddTool,
   requestReturnTool,
   createDisputeTool,

@@ -3,6 +3,7 @@ import { requireSeller, requireVerifiedSeller, ApiError } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { computeAvailability } from "@/lib/domains/inventory";
 import { publishProblems, publishProblemsMessage } from "@/lib/domains/publish-check";
+import { promoState } from "@/lib/domains/engagement-rules";
 import { toKopecks } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ export const PATCH = apiRoute(async (request, { params }) => {
 
   const data: Record<string, unknown> = {};
   const changes: Record<string, unknown> = {};
+  let priceChange: { from: number; to: number } | null = null;
   if (body.title !== undefined) {
     const value = body.title.trim();
     if (value.length < 2) throw new ApiError(400, "Название слишком короткое");
@@ -34,14 +36,24 @@ export const PATCH = apiRoute(async (request, { params }) => {
   if (body.priceRub !== undefined || body.priceKopecks !== undefined) {
     const value = body.priceKopecks ?? toKopecks(Number(body.priceRub));
     if (!Number.isInteger(value) || value < 100) throw new ApiError(400, "Укажите цену от 1 ₽");
-    data.priceKopecks = value;
-    changes.priceKopecks = [current.priceKopecks, value];
+    if (value !== current.priceKopecks) {
+      // Цена во время акции меняется только через её завершение: иначе зачёркнутая цена перестанет быть настоящей.
+      if (promoState(current).onPromo) throw new ApiError(409, "На товар сейчас идёт скидка. Сначала верните обычную цену в разделе «Акции»", "promo_active");
+      if (current.status === "ACTIVE") await requireVerifiedSeller(request, "менять цену опубликованного товара");
+      data.priceKopecks = value;
+      priceChange = { from: current.priceKopecks, to: value };
+    }
   }
   if (body.oldPriceRub !== undefined || body.oldPriceKopecks !== undefined) {
     const raw = body.oldPriceKopecks ?? (body.oldPriceRub == null ? null : toKopecks(Number(body.oldPriceRub)));
-    if (raw !== null && (!Number.isInteger(raw) || raw < 0)) throw new ApiError(400, "Укажите корректную старую цену");
-    data.oldPriceKopecks = raw;
-    changes.oldPriceKopecks = true;
+    // Зачёркнутую цену вручную задать нельзя (только убрать): её ставит раздел «Акции» из настоящей прежней цены.
+    if (raw !== null && raw !== current.oldPriceKopecks) {
+      throw new ApiError(400, "Старую цену нельзя задать вручную. Чтобы показать скидку, запустите её в разделе «Акции»: зачёркнутой станет настоящая прежняя цена.");
+    }
+    if (raw === null && current.oldPriceKopecks !== null) {
+      data.oldPriceKopecks = null;
+      changes.oldPriceKopecks = true;
+    }
   }
   if (body.categorySlug !== undefined) {
     const category = body.categorySlug ? await prisma.category.findUnique({ where: { slug: body.categorySlug }, select: { id: true } }) : null;
@@ -68,7 +80,7 @@ export const PATCH = apiRoute(async (request, { params }) => {
     if (!Array.isArray(imageUrls) || imageUrls.length > 8 || imageUrls.some((url) => typeof url !== "string" || (!url.startsWith("/api/storage/") && !url.startsWith("https://")))) throw new ApiError(400, "Фотографии должны быть загружены через хранилище");
     changes.images = imageUrls.length;
   }
-  if (Object.keys(data).length === 0 && body.stockQuantity === undefined && imageUrls === undefined) throw new ApiError(400, "Нет изменений");
+  if (Object.keys(data).length === 0 && body.stockQuantity === undefined && imageUrls === undefined && Object.keys(changes).length === 0) throw new ApiError(400, "Нет изменений");
 
   const updated = await prisma.$transaction(async (tx) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,9 +109,12 @@ export const PATCH = apiRoute(async (request, { params }) => {
         : imageUrls !== undefined ? "PHOTOS_CHANGED"
         : body.stockQuantity !== undefined ? "INVENTORY_CHANGED"
         : body.attributes !== undefined ? "ATTRIBUTES_CHANGED"
-        : body.priceRub !== undefined || body.priceKopecks !== undefined || body.oldPriceRub !== undefined || body.oldPriceKopecks !== undefined ? "PRICE_CHANGED"
         : "DESCRIPTION_CHANGED";
       await tx.listingHistory.create({ data: { productId: id, sellerId, actorId: user.id, action, change: JSON.stringify(changes) } });
+    }
+    if (priceChange) {
+      // Тот же формат, что у остальных изменений цены: по нему работает правило честных скидок.
+      await tx.listingHistory.create({ data: { productId: id, sellerId, actorId: user.id, action: "PRICE_CHANGED", change: JSON.stringify({ priceFrom: priceChange.from, priceTo: priceChange.to }) } });
     }
     return product;
   });
