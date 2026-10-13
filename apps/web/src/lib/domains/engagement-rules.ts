@@ -102,3 +102,44 @@ export function matchProducts<T extends { title: string }>(products: T[], query:
     return stems.every((s) => title.includes(s));
   });
 }
+
+export const PROMO_FAIR_PRICE_DAYS = 14;
+/** За сколько дней смотрим журнал цен, чтобы отличить возврат цены после акции от повышения. */
+export const PRICE_HISTORY_LOOKBACK_DAYS = 90;
+
+/**
+ * Товары, цену которых повышали за последние `days` дней. От такой цены
+ * скидку запускать нельзя: зачёркнутая цена должна быть настоящей, а не
+ * поднятой перед акцией. Возврат к цене, которая уже была до снижения
+ * (например, конец прошлой акции), повышением не считается.
+ */
+export function raisedRecently(
+  changes: { productId: string; change: string | null; createdAt: Date }[],
+  now: Date = new Date(),
+  days: number = PROMO_FAIR_PRICE_DAYS
+): Set<string> {
+  const since = now.getTime() - days * 86_400_000;
+  const sorted = [...changes].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const baselines = new Map<string, Set<number>>();
+  const raised = new Set<string>();
+  for (const c of sorted) {
+    let from: unknown;
+    let to: unknown;
+    try {
+      const d = JSON.parse(c.change ?? "{}") as { priceFrom?: unknown; priceTo?: unknown };
+      from = d.priceFrom;
+      to = d.priceTo;
+    } catch {
+      continue; // повреждённая запись истории: не гадаем
+    }
+    if (typeof from !== "number" || typeof to !== "number") continue;
+    const known = baselines.get(c.productId) ?? new Set<number>();
+    baselines.set(c.productId, known);
+    if (to < from) {
+      known.add(from);
+    } else if (to > from && !known.has(to) && c.createdAt.getTime() >= since) {
+      raised.add(c.productId);
+    }
+  }
+  return raised;
+}

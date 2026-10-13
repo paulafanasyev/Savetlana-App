@@ -1,6 +1,7 @@
 import { apiRoute, rateLimit, tooManyRequests, jsonBody } from "@/lib/api-helpers";
-import { requireSeller, ApiError } from "@/lib/auth";
+import { requireSeller, requireVerifiedSeller, ApiError } from "@/lib/auth";
 import { adviseOnPrice, applyPriceChange, priceHistory, pricePosition } from "@/lib/domains/pricing";
+import { promoState } from "@/lib/domains/engagement-rules";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -28,11 +29,13 @@ export const GET = apiRoute(async (request) => {
 /**
  * Applies a price change. A substantial commercial action like this is only
  * performed after the seller's explicit confirmation (spec §19, §147) — the AI
- * may advise, never silently apply.
+ * may advise, never silently apply. Only a verified seller may change public
+ * prices, and not while a promotion is running (the real pre-sale price would
+ * be lost).
  */
 export const POST = apiRoute(async (request) => {
   if (!rateLimit("pricing:apply", 10, 60_000)) return tooManyRequests();
-  const ctx = await requireSeller(request);
+  const ctx = await requireVerifiedSeller(request, "менять цены");
   const body = await jsonBody<{
     productId?: string;
     newPriceRubles?: number;
@@ -52,6 +55,9 @@ export const POST = apiRoute(async (request) => {
     where: { id: body.productId, sellerId: ctx.sellerId },
   });
   if (!product) throw new ApiError(404, "Товар не найден в вашем каталоге");
+  if (promoState(product).onPromo) {
+    throw new ApiError(409, "На этот товар сейчас идёт скидка. Сначала верните обычную цену в разделе «Акции»", "promo_active");
+  }
 
   const result = await applyPriceChange({
     productId: body.productId,

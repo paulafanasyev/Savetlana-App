@@ -40,7 +40,21 @@ export function PromotionsForm({ products }: { products: Row[] }) {
     });
   }
 
+  /** Цены меняются для покупателей сразу, поэтому перед запуском показываем итог и просим подтвердить. */
+  function confirmText(action: "start" | "end"): string {
+    const rows = action === "start" ? toStart : toEnd;
+    const lines = rows.slice(0, 8).map((p) =>
+      action === "start"
+        ? `• ${p.title}: ${rub(p.priceKopecks)} → ${rub(preview(p.priceKopecks, percent))}`
+        : `• ${p.title}: ${rub(p.priceKopecks)} → ${rub(p.oldPriceKopecks ?? p.priceKopecks)}`
+    );
+    if (rows.length > 8) lines.push(`• и ещё ${rows.length - 8}`);
+    const head = action === "start" ? `Запустить скидку ${percent}%? Новые цены увидят все покупатели:` : "Вернуть обычную цену?";
+    return [head, ...lines].join("\n");
+  }
+
   async function call(action: "start" | "end", ids: string[]) {
+    if (!window.confirm(confirmText(action))) return;
     setBusy(true);
     setError("");
     setMessage("");
@@ -54,7 +68,7 @@ export function PromotionsForm({ products }: { products: Row[] }) {
       if (!response.ok) throw new Error(json.error ?? "Не удалось выполнить действие");
       if (action === "start") {
         const parts = [`Скидка ${percent}% запущена, товаров: ${json.started?.length ?? 0}.`];
-        if (json.skipped?.length) parts.push(`Уже со скидкой, пропущено: ${json.skipped.length}.`);
+        if (json.skipped?.length) parts.push(`Пропущено: ${json.skipped.length} (уже со скидкой или цену недавно поднимали).`);
         parts.push(json.notified ? `Уведомили покупателей: ${json.notified}.` : "Эти товары пока никто не добавлял в избранное.");
         setMessage(parts.join(" "));
       } else {
@@ -92,6 +106,7 @@ export function PromotionsForm({ products }: { products: Row[] }) {
         </button>
         {!percentOk && <span className="text-sm text-red-600">Скидка от 5 до 70%</span>}
       </div>
+      <p className="text-xs text-ink-faint">Честная скидка: если цену товара поднимали за последние 14 дней, акцию на него запустить нельзя. Пока идёт акция, цену товара не меняют.</p>
       {message && <p className="rounded-lg bg-green-50 p-3 text-sm text-green-900" role="status">{message}</p>}
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
       <div className="overflow-x-auto">

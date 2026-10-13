@@ -13,6 +13,7 @@ import { getSellerOnboardingGate } from "../../domains/seller-onboarding";
 import { searchProducts } from "../../domains/catalog";
 import { sellerCustomerReport, SEGMENT_LABELS } from "../../domains/seller-crm";
 import { startPromotionTool, endPromotionTool, sellerMessagesTool } from "./engagement";
+import { promoState } from "../../domains/engagement-rules";
 
 import {
   searchProductsTool,
@@ -85,6 +86,43 @@ const guardedPublishProductTool: ToolDefinition = {
     return publishProductTool.execute(ctx, args);
   },
 };
+
+/**
+ * Торговые действия через Светлану требуют той же проверки продавца, что и
+ * кнопки кабинета: непроверенный продавец не может выставлять товар покупателям
+ * или менять публичные цены.
+ */
+function verifiedOnly(tool: ToolDefinition, action: string): ToolDefinition {
+  return {
+    ...tool,
+    async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+      if (!ctx.sellerProfileId) return { ok: false, error: "нужен кабинет продавца", verification: "NOT_PROVEN" };
+      const gate = await getSellerOnboardingGate(ctx.sellerProfileId);
+      if (!gate.active) {
+        return { ok: false, error: `нельзя ${action}: ${gate.blockers.join(", ")}. Следующий шаг: ${gate.nextStep ?? "завершите проверку продавца"}`, verification: "NOT_PROVEN" };
+      }
+      return tool.execute(ctx, args);
+    },
+  };
+}
+
+/** Пока идёт акция, цену меняем только через её завершение, иначе потеряется настоящая прежняя цена. */
+const promoAwareChangePriceTool: ToolDefinition = verifiedOnly(
+  {
+    ...changePriceTool,
+    async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+      const productId = typeof args.productId === "string" ? args.productId : "";
+      if (productId && ctx.sellerProfileId) {
+        const product = await prisma.product.findFirst({ where: { id: productId, sellerId: ctx.sellerProfileId }, select: { priceKopecks: true, oldPriceKopecks: true } });
+        if (product && promoState(product).onPromo) {
+          return { ok: false, error: "на этот товар сейчас идёт скидка. Сначала верните обычную цену (раздел «Акции»), потом меняйте цену", verification: "NOT_PROVEN" };
+        }
+      }
+      return changePriceTool.execute(ctx, args);
+    },
+  },
+  "менять цены"
+);
 
 /**
  * В кабинете продавца «заказы» означают заказы его покупателей, а не его
@@ -255,11 +293,11 @@ const ALL_TOOLS: ToolDefinition[] = [
   sellerMessagesTool,
   startPromotionTool,
   endPromotionTool,
-  confirmInventoryTool,
+  verifiedOnly(confirmInventoryTool, "подтверждать наличие и выставлять товар"),
   extendListingTool,
   createProductDraftTool,
   guardedPublishProductTool,
-  changePriceTool,
+  promoAwareChangePriceTool,
   sellerAwareAdvisePriceTool,
   priceHistoryTool,
   findCompetitorsTool,

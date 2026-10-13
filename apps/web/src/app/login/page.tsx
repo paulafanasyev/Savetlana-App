@@ -6,10 +6,16 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
+/** Куда вернуться после входа: только на страницу этого же сайта (защита от open redirect). */
+function safeNext(raw: string | null | undefined): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return "/";
+  return raw;
+}
+
 function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params?.get("next") ?? "/";
+  const next = safeNext(params?.get("next"));
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

@@ -5,7 +5,22 @@ import { prisma } from "@/lib/prisma";
 import { BecomeSellerButton } from "@/components/BecomeSellerButton";
 
 export const dynamic = "force-dynamic";
-const NAV = [["/seller", "Главная"], ["/seller/onboarding", "Проверка продавца"], ["/seller/products", "Товары"], ["/seller/orders", "Заказы"], ["/seller/customers", "Покупатели"], ["/seller/messages", "Сообщения"], ["/seller/promotions", "Акции"], ["/seller/payouts", "Выплаты"], ["/seller/disputes", "Споры"], ["/seller/documents", "Документы"], ["/seller/analytics", "Аналитика"], ["/svetlana", "Светлана"]] as const;
+const NAV = [
+  ["/seller", "Главная"],
+  ["/seller/products", "Товары"],
+  ["/seller/orders", "Заказы"],
+  ["/seller/messages", "Сообщения"],
+  ["/seller/customers", "Покупатели"],
+  ["/seller/promotions", "Акции"],
+  ["/seller/pricing", "Цены"],
+  ["/seller/competitors", "Конкуренты"],
+  ["/seller/analytics", "Аналитика"],
+  ["/seller/payouts", "Выплаты"],
+  ["/seller/disputes", "Споры"],
+  ["/seller/documents", "Документы"],
+  ["/seller/onboarding", "Проверка продавца"],
+  ["/svetlana?side=seller", "Светлана"],
+] as const;
 
 export default async function SellerLayout({ children }: { children: ReactNode }) {
   const { user } = await requireUserServer();
@@ -24,5 +39,19 @@ export default async function SellerLayout({ children }: { children: ReactNode }
       </div>
     );
   }
-  return <div className="min-h-screen"><nav className="flex flex-wrap gap-3 border-b px-6 py-4">{NAV.map(([href, label]) => <Link href={href} key={href} className="text-sm">{label}</Link>)}</nav>{children}</div>;
+  return (
+    <div className="min-h-screen">
+      {/* На телефоне меню листается вбок, а не растягивается на несколько строк. */}
+      <nav aria-label="Кабинет продавца" className="sticky top-[61px] z-30 border-b border-surface-line bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto whitespace-nowrap px-4 py-2">
+          {NAV.map(([href, label]) => (
+            <Link href={href} key={href} className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-ink-soft hover:bg-surface-muted hover:text-ink">
+              {label}
+            </Link>
+          ))}
+        </div>
+      </nav>
+      {children}
+    </div>
+  );
 }

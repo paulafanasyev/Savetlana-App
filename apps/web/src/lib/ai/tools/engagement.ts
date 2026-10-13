@@ -8,8 +8,8 @@
 import { prisma } from "../../prisma";
 import { getSellerOnboardingGate } from "../../domains/seller-onboarding";
 import { sellerInbox, buyerInbox } from "../../domains/seller-messages";
-import { startPromotion, endPromotion } from "../../domains/seller-promotions";
-import { matchProducts, promoPrice, promoState, UserFacingError } from "../../domains/engagement-rules";
+import { startPromotion, endPromotion, recentlyRaisedIds } from "../../domains/seller-promotions";
+import { matchProducts, promoPrice, promoState, UserFacingError, PROMO_FAIR_PRICE_DAYS } from "../../domains/engagement-rules";
 import type { ToolDefinition, ToolContext, ToolResult } from "./registry";
 import { looseObjectSchema } from "./registry";
 
@@ -60,8 +60,11 @@ async function planStart(ctx: ToolContext, args: Record<string, unknown>): Promi
   if (all.length === 0) return { ok: false, error: "у вас нет опубликованных товаров, скидку пока не на что ставить" };
   const matched = matchProducts(all, query);
   if (matched.length === 0) return { ok: false, error: `среди ваших товаров не нашла «${query}». Напишите название точнее или откройте раздел «Акции»` };
-  const rows = matched.filter((p) => !promoState(p).onPromo);
-  if (rows.length === 0) return { ok: false, error: "на эти товары скидка уже идёт. Сначала верните обычную цену, потом запустите новую" };
+  const free = matched.filter((p) => !promoState(p).onPromo);
+  if (free.length === 0) return { ok: false, error: "на эти товары скидка уже идёт. Сначала верните обычную цену, потом запустите новую" };
+  const raised = await recentlyRaisedIds(free.map((p) => p.id));
+  const rows = free.filter((p) => !raised.has(p.id));
+  if (rows.length === 0) return { ok: false, error: `цену этих товаров повышали за последние ${PROMO_FAIR_PRICE_DAYS} дней, а скидку от поднятой цены запускать нельзя` };
   try {
     for (const r of rows) promoPrice(r.priceKopecks, percent);
   } catch (e) {
@@ -156,7 +159,8 @@ export const sellerMessagesTool: ToolDefinition = {
     }
     const unread = threads.reduce((s, t) => s + t.unread, 0);
     const head = unread > 0 ? (asSeller ? `Ждут вашего ответа: ${unread}.` : `Новых сообщений: ${unread}.`) : "Все сообщения прочитаны.";
-    const list = lines(threads.map((t) => `${t.name}: ${t.lastIncoming ? "" : "вы: "}${t.lastBody.replace(/\s+/g, " ").slice(0, 80)}${t.unread > 0 ? " (новое)" : ""}`));
+    // Текст переписки во внешнюю модель не отдаём: только кто написал и сколько новых.
+    const list = lines(threads.map((t) => `${t.name}: ${t.unread > 0 ? `новых сообщений ${t.unread}` : t.lastIncoming ? "прочитано, ждёт ответа" : "вы ответили последним"}`));
     return {
       ok: true,
       data: { threads: threads.map((t) => ({ name: t.name, unread: t.unread, lastAt: t.lastAt })) },
