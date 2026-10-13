@@ -1,6 +1,7 @@
 import { requireSellerServer } from "@/lib/auth";
 import { getOrdersForSeller } from "@/lib/domains/orders";
-import { rub, orderStatusLabel, timeAgo } from "@/lib/format";
+import { rub, timeAgo } from "@/lib/format";
+import { orderStatusLabel, paymentStatusLabel, shipmentStatusLabel } from "@/lib/labels";
 import { FulfillActions } from "./FulfillActions";
 
 export const dynamic = "force-dynamic";
@@ -8,47 +9,35 @@ export const dynamic = "force-dynamic";
 export default async function SellerOrdersPage() {
   const { sellerId } = await requireSellerServer();
   const orders = await getOrdersForSeller(sellerId);
-
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6">
-      <h1 className="mb-4 text-2xl font-bold text-ink">Заказы покупателей</h1>
-      {orders.length === 0 ? (
-        <div className="card p-10 text-center text-ink-soft">Заказов пока нет.</div>
-      ) : (
-        <div className="space-y-3">
-          {orders.map((o) => (
-            <div key={o.id} className="card p-4">
+    <main className="space-y-5 p-6">
+      <h1 className="text-2xl font-semibold">Заказы покупателей</h1>
+      {orders.length === 0 ? <p className="text-ink-faint">Заказов пока нет.</p> : (
+        <div className="space-y-4">
+          {orders.map((order) => (
+            <article className="card space-y-3 p-5" key={order.id}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <div className="font-mono text-sm font-bold text-ink">{o.number}</div>
-                  <div className="text-xs text-ink-soft">{o.buyer.name} · {timeAgo(o.createdAt)}</div>
+                  <b>{order.number}</b>
+                  <div className="text-sm text-ink-faint">{order.buyer.name ?? order.buyer.email} · {timeAgo(order.createdAt)}</div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="chip">{orderStatusLabel(o.status)}</span>
-                  <span className="font-bold text-svetlana-700">{rub(o.totalKopecks)}</span>
+                <div className="text-right">
+                  <div>{orderStatusLabel(order.status)}</div>
+                  <b>{rub(order.totalKopecks)}</b>
                 </div>
               </div>
-              <ul className="mt-3 space-y-1 text-xs text-ink-soft">
-                {o.items.map((i) => (
-                  <li key={i.id}>
-                    {i.titleSnapshot} × {i.quantity} — {rub(i.priceKopecks * i.quantity)}
-                  </li>
-                ))}
+              <ul className="text-sm">
+                {order.items.map((item) => <li key={item.id}>{item.titleSnapshot} × {item.quantity} — {rub(item.priceKopecks * item.quantity)}</li>)}
               </ul>
-              <div className="mt-3 text-xs text-ink-soft">
-                Оплата: {o.payment ? o.payment.status : "нет данных"}
-                {o.shipment ? ` · Доставка: ${o.shipment.carrierName} — ${o.shipment.status}` : ""}
-              </div>
-              {/*
-                Manual fulfillment controls (spec §112: the seller can work
-                fully without AI). Confirm is available once paid; shipping is
-                available once confirmed. Both are explicit human actions.
-              */}
-              <FulfillActions orderId={o.id} status={o.status} hasShipment={Boolean(o.shipment)} />
-            </div>
+              <p className="text-sm text-ink-faint">
+                Оплата: {paymentStatusLabel(order.payment?.status)}
+                {order.shipment ? ` · Доставка: ${order.shipment.carrierName} — ${shipmentStatusLabel(order.shipment.status)}` : " · Доставка ещё не создана"}
+              </p>
+              <FulfillActions orderId={order.id} status={order.status} hasShipment={Boolean(order.shipment)} shipmentProvider={order.shipment?.providerKey} />
+            </article>
           ))}
         </div>
       )}
-    </div>
+    </main>
   );
 }
