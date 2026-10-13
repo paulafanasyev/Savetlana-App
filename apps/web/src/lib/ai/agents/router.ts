@@ -48,6 +48,8 @@ const RULES: RouteRule[] = [
     agent: "competitor",
     pattern: /глобальн|по всему интернет|международн|ozon|озон|wildberries|вб |aliexpress|taobao|amazon|кита|1688|alibaba|алибаб|таобао|оптом|закуп|поставщик|перепрод/i,
   },
+  // CRM: who buys from the seller (before the generic «заказы» rule).
+  { side: "seller", agent: "analytics", pattern: /мои покупатели|мои клиенты|моих покупателей|моих клиентов|постоянн.*(покупател|клиент)|лучши.*(покупател|клиент)|база клиентов|crm|срм|повторн.*покуп|кто (у меня )?покупает/i },
   { side: "seller", agent: "delivery", pattern: /доставк[а|у].*(уровен|тариф|цен|стоим)|сколько стоит доставка|условия доставки|перевозчик|ПВЗ|международная доставка/i },
   { side: "seller", agent: "analytics", pattern: /почему.*(упали|плохо прода|снизил).*продаж|продажи упали|как увеличить продажи|что с продажами/i },
   { side: "seller", agent: "pricing", pattern: /какую цену|цена.*(конкурент|адекват)|стоит ли (снижать|поднимать)|переоцен/i },
@@ -107,7 +109,7 @@ export function routeAgent(text: string, side: "buyer" | "seller"): RouteResult 
  */
 export const AGENT_TOOLS: Record<AgentKey, string[]> = {
   buyer: ["search_products", "compare_products", "get_product", "search_sellers", "get_reviews", "check_inventory", "cart_add", "create_order", "get_order", "cancel_order", "get_tracking", "get_payment_status", "request_return", "create_dispute", "wishlist_add", "recall_memory", "remember_preference"],
-  seller: ["analyze_seller_sales", "product_health", "advise_price", "change_price", "confirm_inventory", "extend_listing", "create_product_draft", "publish_product", "find_competitors", "scan_global_competitors", "global_search", "delivery_quotes", "document_requirements", "create_workflow_rule"],
+  seller: ["analyze_seller_sales", "seller_customers", "product_health", "advise_price", "change_price", "confirm_inventory", "extend_listing", "create_product_draft", "publish_product", "find_competitors", "scan_global_competitors", "global_search", "delivery_quotes", "document_requirements", "create_workflow_rule"],
   search: ["search_products", "search_cheaper", "compare_products", "get_product", "search_sellers", "global_search", "search_classifieds", "check_vin"],
   vision: ["vision_search", "search_products", "search_cheaper", "compare_products"],
   recommendation: ["search_products", "recall_memory"],
@@ -121,7 +123,7 @@ export const AGENT_TOOLS: Record<AgentKey, string[]> = {
   review: ["get_reviews", "get_product"],
   competitor: ["find_competitors", "scan_global_competitors", "global_search", "advise_price"],
   pricing: ["advise_price", "change_price", "price_history"],
-  analytics: ["analyze_seller_sales", "product_health"],
+  analytics: ["analyze_seller_sales", "seller_customers", "product_health"],
   product: ["create_product_draft", "publish_product", "product_health", "check_inventory"],
   compliance: ["document_requirements"],
   document: ["document_requirements"],
