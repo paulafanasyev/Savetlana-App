@@ -3,13 +3,15 @@ import { requireVerifiedSeller } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createShipment } from "@/lib/domains/delivery";
 import { notify } from "@/lib/domains/notifications";
+import { isLiveDeployment } from "@/lib/live-mode";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Seller hands an order to a carrier (spec §24, §33). If no real carrier
  * adapter is available the domain throws and the route reports an honest
- * error instead of fabricating a tracking number (spec §49).
+ * error instead of fabricating a tracking number (spec §49). The test carrier
+ * is refused on the live site: its parcel never arrives.
  */
 export const POST = apiRoute(async (request, { params }) => {
   const { sellerId, user } = await requireVerifiedSeller(request, "отправлять заказы");
@@ -33,10 +35,10 @@ export const POST = apiRoute(async (request, { params }) => {
 
   const carrier = body.carrier ?? body.carrierName;
   if (!carrier) {
-    return Response.json(
-      { error: "Укажите перевозчика (carrier)", code: "carrier_required" },
-      { status: 400 },
-    );
+    return Response.json({ error: "Укажите перевозчика", code: "carrier_required" }, { status: 400 });
+  }
+  if (carrier === "sandbox-carrier" && isLiveDeployment()) {
+    return Response.json({ error: "Тестовый перевозчик недоступен на боевом сайте", code: "carrier_unavailable" }, { status: 400 });
   }
   try {
     const shipment = await createShipment({
@@ -53,8 +55,8 @@ export const POST = apiRoute(async (request, { params }) => {
       kind: "delivery_update",
       title: `Заказ ${order.number} передан в доставку`,
       body: shipment.sandbox
-        ? "Отправление создано в песочнице перевозчика (sandbox). Отслеживание доступно в карточке заказа."
-        : "Перевозчик принял отправление. Отслеживание доступно в карточке заказа.",
+        ? "Тестовая доставка: настоящая посылка не отправлялась. Статус виден в карточке заказа."
+        : "Заказ отправлен. Отслеживание доступно в карточке заказа.",
       url: `/orders/${order.id}`,
     });
 
@@ -65,14 +67,13 @@ export const POST = apiRoute(async (request, { params }) => {
       sandbox: shipment.sandbox,
     });
   } catch (err) {
-    // Audit fix: raw carrier errors stay in server logs; only short Russian
-    // domain messages reach the seller.
+    // Raw carrier errors stay in server logs; only short Russian messages reach the seller.
     console.error("[seller-ship] shipment failed", { orderId: order.id, sellerUserId: user.id, error: err });
     const raw = err instanceof Error ? err.message : "";
     const safe =
       /^[А-Яа-яЁё]/.test(raw) && raw.length <= 200 && !/https?:\/\//i.test(raw)
         ? raw
-        : "перевозчик временно недоступен";
+        : "перевозчик временно недоступен. Если у вас уже есть трек-номер, укажите его";
     return Response.json(
       { error: `Не удалось создать отправление: ${safe}`, code: "carrier_unavailable" },
       { status: 502 }

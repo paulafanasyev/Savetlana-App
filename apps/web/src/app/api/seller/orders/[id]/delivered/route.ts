@@ -6,12 +6,13 @@ import { notify } from "@/lib/domains/notifications";
 
 export const dynamic = "force-dynamic";
 
-const OWN_DELIVERY_KEYS = ["SELLER_OWN_DELIVERY", "PICKUP", "seller_own", "pickup"];
-
 /**
- * Канонический путь до «доставлен» для самовывоза и своей доставки продавца.
- * Каждый шаг проходит через transitionOrder, поэтому история заказа полная.
+ * Продавец сам отмечает получение: самовывоз, своя доставка и отправления с
+ * трек-номером продавца (SELLER_DECLARED), по которым автоматического отслеживания
+ * нет. Иначе такой заказ никогда не станет «доставленным» и выплата зависнет.
  */
+const SELF_CONFIRMED_KEYS = ["SELLER_OWN_DELIVERY", "PICKUP", "seller_own", "pickup", "SELLER_DECLARED"];
+
 const PATH_TO_DELIVERED: Record<string, OrderState[]> = {
   CONFIRMED: ["PROCESSING", "HANDED_TO_CARRIER", "IN_TRANSIT", "DELIVERED"],
   PROCESSING: ["HANDED_TO_CARRIER", "IN_TRANSIT", "DELIVERED"],
@@ -27,8 +28,8 @@ export const POST = apiRoute(async (request, { params }) => {
   const body = await jsonBody<{ note?: string }>(request).catch(() => ({} as { note?: string }));
   const order = await prisma.order.findFirst({ where: { id, sellerId }, include: { shipment: true } });
   if (!order) throw new ApiError(404, "Заказ не найден в вашем кабинете");
-  const ownDelivery = !order.shipment || OWN_DELIVERY_KEYS.includes(order.shipment.providerKey);
-  if (!ownDelivery) throw new ApiError(400, "Этот заказ везёт перевозчик: статус обновится по его данным");
+  const selfConfirmed = !order.shipment || SELF_CONFIRMED_KEYS.includes(order.shipment.providerKey);
+  if (!selfConfirmed) throw new ApiError(400, "Этот заказ везёт перевозчик: статус обновится по его данным");
   const path = PATH_TO_DELIVERED[order.status];
   if (!path) throw new ApiError(409, order.status === "PAID" ? "Сначала подтвердите заказ" : "Этот заказ нельзя отметить доставленным");
   const note = body.note?.trim().slice(0, 500) || "Покупатель получил заказ";
@@ -40,9 +41,9 @@ export const POST = apiRoute(async (request, { params }) => {
   if (order.shipment) {
     await prisma.$transaction([
       prisma.deliveryShipment.update({ where: { id: order.shipment.id }, data: { status: "DELIVERED" } }),
-      prisma.deliveryEvent.create({ data: { shipmentId: order.shipment.id, status: "DELIVERED", description: note } }),
+      prisma.deliveryEvent.create({ data: { shipmentId: order.shipment.id, status: "DELIVERED", description: `${note} (отметил продавец)` } }),
     ]);
   }
-  await notify({ userId: order.buyerId, kind: "delivery_update", title: `Заказ ${order.number} доставлен`, body: `${note}. Теперь можно оставить отзыв.`, url: `/orders/${order.id}` });
+  await notify({ userId: order.buyerId, kind: "delivery_update", title: `Заказ ${order.number} доставлен`, body: `${note}. Теперь можно оставить отзыв. Если вы не получили заказ, откройте спор в карточке заказа.`, url: `/orders/${order.id}` });
   return Response.json({ ok: true, status: result.order.status });
 });
