@@ -23,7 +23,9 @@ export type NotificationKind =
   | "ai_note"
   // Переписка покупателя и продавца (см. seller-messages.ts)
   | "seller_message"
-  | "buyer_message";
+  | "buyer_message"
+  // Продавцу: товар заканчивается или закончился (см. stock-alerts.ts)
+  | "stock_low";
 
 export interface NotificationInput {
   userId: string;
