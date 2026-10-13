@@ -76,7 +76,7 @@ export default async function PrivacyPage() {
               <span
                 className={channel.configured() ? "font-medium text-ok" : "font-medium text-amber-700"}
               >
-                {channel.configured() ? "подключено" : channel.unavailableReason()}
+                {channel.configured() ? "подключено" : "пока не подключено"}
               </span>
             </li>
           ))}
@@ -120,8 +120,8 @@ export default async function PrivacyPage() {
             </li>
           ))}
           <li className="flex justify-between py-2.5">
-            <span className="text-ink">AI-провайдер</span>
-            <span className="font-medium text-ink">{aiMode().mode === "LIVE" ? "внешняя модель" : "песочница"}</span>
+            <span className="text-ink">Помощник Светлана</span>
+            <span className="font-medium text-ink">{aiMode().mode === "LIVE" ? "работает" : "демо-режим"}</span>
           </li>
         </ul>
       </section>
@@ -143,11 +143,13 @@ export default async function PrivacyPage() {
 function integrationLabel(key: string): string {
   const map: Record<string, string> = {
     externalAi: "Внешний AI-провайдер",
-    payment: "Платёжный партнёр",
+    payment: "Оплата картой и СБП",
     delivery: "Службы доставки",
-    vk: "ВКонтакте",
+    vk: "Вход через ВКонтакте",
     esia: "Госуслуги (ЕСИА)",
-    alipay: "Alipay / международные платежи",
+    alipay: "Alipay",
+    internationalPayments: "Международные платежи",
+    storage: "Хранилище фото и документов",
   };
   return map[key] ?? key;
 }
