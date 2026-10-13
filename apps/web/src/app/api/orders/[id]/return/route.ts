@@ -2,13 +2,17 @@ import { apiRoute, jsonBody } from "@/lib/api-helpers";
 import { requireBuyer, ApiError } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { transitionOrder } from "@/lib/domains/orders";
-import { processRefund } from "@/lib/domains/payments";
 import { notify } from "@/lib/domains/notifications";
 
 export const dynamic = "force-dynamic";
 
 const REASONS = ["ITEM_NOT_AS_DESCRIBED", "ITEM_DAMAGED", "WRONG_ITEM", "NO_LONGER_NEEDED"];
 
+/**
+ * Покупатель просит вернуть товар. Деньги возвращаются, когда продавец
+ * получит товар обратно (или по решению площадки в споре), а не в момент
+ * запроса: иначе можно было бы получить деньги и оставить товар себе.
+ */
 export const POST = apiRoute(async (request, { params }) => {
   const { user } = await requireBuyer(request);
   const body = await jsonBody<{ reason?: string; comment?: string }>(request);
@@ -31,42 +35,25 @@ export const POST = apiRoute(async (request, { params }) => {
     );
   }
 
-  const payment = await prisma.payment.findFirst({
-    where: { orderId: params.id, status: "SUCCEEDED" },
-    select: { id: true, amountKopecks: true },
+  const order = await prisma.order.findUnique({
+    where: { id: params.id },
+    select: { sellerProfile: { select: { userId: true } } },
   });
-  if (payment) {
-    // Audit fix: a repeated return request must never create a second refund.
-    const reason = body.reason;
-    const refund = await prisma.$transaction(async (tx) => {
-      const active = await tx.refund.findFirst({
-        where: { orderId: params.id, paymentId: payment.id, status: { in: ["PENDING", "PROCESSING", "SUCCEEDED"] } },
-        orderBy: { createdAt: "asc" },
-      });
-      if (active) return active;
-      const summed = await tx.refund.aggregate({
-        where: { orderId: params.id, paymentId: payment.id, status: { in: ["PENDING", "PROCESSING", "SUCCEEDED"] } },
-        _sum: { amountKopecks: true },
-      });
-      const remaining = payment.amountKopecks - (summed._sum.amountKopecks ?? 0);
-      if (remaining <= 0) return null;
-      return tx.refund.create({
-        data: { paymentId: payment.id, orderId: params.id, amountKopecks: remaining, reason },
-      });
+  if (order?.sellerProfile?.userId) {
+    await notify({
+      userId: order.sellerProfile.userId,
+      kind: "order_status",
+      title: `Покупатель просит возврат по заказу ${result.order.number}`,
+      body: "Откройте заказ в кабинете продавца: примите возврат или объясните, почему он невозможен.",
+      url: "/seller/orders",
     });
-    // Only a still-pending refund is sent to the provider; PROCESSING/SUCCEEDED are never re-submitted.
-    if (refund && refund.status === "PENDING") {
-      await processRefund({ refundId: refund.id, actorId: user.id, actorRole: "buyer" }).catch((error) => {
-        console.error("[return] refund processing failed", error);
-      });
-    }
   }
 
   await notify({
     userId: user.id,
     kind: "order_status",
     title: `Оформлен возврат по заказу ${result.order.number}`,
-    body: "Запрос передан продавцу. Если проблема не решится, можно открыть спор.",
+    body: "Запрос передан продавцу. Когда он примет возврат, отправьте товар обратно: деньги вернутся, как только продавец его получит. Если продавец не отвечает или отказал, откройте спор на странице заказа.",
     url: `/orders/${result.order.id}`,
   });
   return Response.json({ ok: true, status: result.order.status });
