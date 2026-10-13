@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { rub, orderStatusLabel, timeAgo } from "@/lib/format";
 
 interface TrackingResponse {
@@ -13,9 +13,13 @@ interface TrackingResponse {
     number: string;
     status: string;
     totalKopecks: number;
+    subtotalKopecks?: number | null;
+    deliveryKopecks?: number | null;
     currency: string;
-    items: { id: string; titleSnapshot: string; quantity: number; priceKopecks: number }[];
+    items: { id: string; productId: string; titleSnapshot: string; quantity: number; priceKopecks: number }[];
+    payment: { status: string; sandbox: boolean } | null;
   };
+  reviewedProductIds: string[];
   shipment: {
     id: string;
     carrierName: string;
@@ -38,6 +42,9 @@ const SHIPMENT_STATUS_LABEL: Record<string, string> = {
   CANCELLED: "Отменено",
 };
 
+// Оплачен, но ещё не получен: можно открыть спор (например, «товар не получен»).
+const IN_FLIGHT = ["PAID", "CONFIRMED", "PROCESSING", "READY", "HANDED_TO_CARRIER", "IN_TRANSIT"];
+
 export default function OrderDetailPage() {
   const params = useParams<{ id: string }>();
   const orderId = params?.id ?? "";
@@ -45,12 +52,16 @@ export default function OrderDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    const res = await fetch(`/api/orders/${orderId}/tracking`);
-    if (!res.ok) {
-      setError("Не удалось загрузить заказ");
-      return;
+    try {
+      const res = await fetch(`/api/orders/${orderId}/tracking`);
+      if (!res.ok) {
+        setError(res.status === 401 ? "Войдите в аккаунт, чтобы посмотреть заказ" : "Не удалось загрузить заказ");
+        return;
+      }
+      setData((await res.json()) as TrackingResponse);
+    } catch {
+      setError("Нет связи с сервером. Обновите страницу.");
     }
-    setData((await res.json()) as TrackingResponse);
   }
 
   useEffect(() => {
@@ -59,6 +70,7 @@ export default function OrderDetailPage() {
     const onFocus = () => void load();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
 
   if (error) {
@@ -67,9 +79,7 @@ export default function OrderDetailPage() {
         <div className="card p-8 text-center">
           <h1 className="text-xl font-bold text-ink">Заказ не найден</h1>
           <p className="mt-2 text-ink-soft">{error}</p>
-          <Link href="/orders" className="btn btn-primary mt-4 inline-flex">
-            К списку заказов
-          </Link>
+          <Link href="/orders" className="btn btn-primary mt-4 inline-flex">К списку заказов</Link>
         </div>
       </div>
     );
@@ -85,12 +95,14 @@ export default function OrderDetailPage() {
 
   const { order, shipment } = data;
   const needsPayment = order.status === "PAYMENT_PENDING" || order.status === "CREATED";
+  const delivered = order.status === "DELIVERED" || order.status === "COMPLETED";
+  const inFlight = IN_FLIGHT.includes(order.status);
+  const subtotal = order.subtotalKopecks ?? order.items.reduce((sum, item) => sum + item.priceKopecks * item.quantity, 0);
+  const delivery = order.deliveryKopecks ?? Math.max(0, order.totalKopecks - subtotal);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
-      <Link href="/orders" className="text-sm text-svetlana-700 hover:underline">
-        ← Все заказы
-      </Link>
+      <Link href="/orders" className="text-sm text-svetlana-700 hover:underline">← Все заказы</Link>
 
       <div className="card mt-3 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -108,18 +120,27 @@ export default function OrderDetailPage() {
           <ul className="mt-2 space-y-2">
             {order.items.map((item) => (
               <li key={item.id} className="flex items-center justify-between text-sm">
-                <span className="text-ink">
-                  {item.titleSnapshot} × {item.quantity}
-                </span>
+                <span className="text-ink">{item.titleSnapshot} × {item.quantity}</span>
                 <span className="text-ink-soft">{rub(item.priceKopecks * item.quantity)}</span>
               </li>
             ))}
           </ul>
+          <dl className="mt-3 space-y-1 border-t border-line pt-2 text-sm">
+            <div className="flex justify-between"><dt className="text-ink-soft">Товары</dt><dd>{rub(subtotal)}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-soft">Доставка</dt><dd>{delivery > 0 ? rub(delivery) : "бесплатно"}</dd></div>
+            <div className="flex justify-between font-bold"><dt>Итого</dt><dd>{rub(order.totalKopecks)}</dd></div>
+          </dl>
         </div>
 
-        {needsPayment && <PayButton orderId={order.id} onPaid={load} />}
+        {order.payment?.sandbox && (
+          <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Тестовая оплата: банк ещё не подключён, деньги не списываются.</p>
+        )}
 
-        {canRequestReturn(order.status) && <ReturnActions orderId={order.id} onChanged={load} />}
+        {needsPayment && <PayButton orderId={order.id} onPaid={load} />}
+        {needsPayment && <CancelButton orderId={order.id} onDone={load} />}
+
+        {delivered && <ReturnActions orderId={order.id} onChanged={load} mode="full" />}
+        {inFlight && <ReturnActions orderId={order.id} onChanged={load} mode="dispute" />}
       </div>
 
       <div className="card mt-3 p-5">
@@ -127,21 +148,13 @@ export default function OrderDetailPage() {
         {shipment ? (
           <div className="mt-3">
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="chip">{SHIPMENT_STATUS_LABEL[shipment.status] ?? shipment.status}</span>
-              {shipment.sandbox && (
-                <span className="chip bg-amber-100 text-amber-800">sandbox</span>
-              )}
+              <span className="chip">{SHIPMENT_STATUS_LABEL[shipment.status] ?? "В обработке"}</span>
+              {shipment.sandbox && <span className="chip bg-amber-100 text-amber-800">тестовая доставка</span>}
             </div>
             <dl className="mt-3 grid gap-2 text-xs text-ink-soft sm:grid-cols-2">
               <div>Перевозчик: <span className="text-ink">{shipment.carrierName}</span></div>
-              <div>
-                Трек-номер:{" "}
-                <span className="font-mono text-ink">{shipment.trackingNumber || "—"}</span>
-              </div>
-              <div>
-                Ожидаемая доставка:{" "}
-                <span className="text-ink">{shipment.eta ? timeAgo(shipment.eta) : "неизвестно"}</span>
-              </div>
+              <div>Трек-номер: <span className="font-mono text-ink">{shipment.trackingNumber || "пока нет"}</span></div>
+              <div>Ожидаемая доставка: <span className="text-ink">{shipment.eta ? new Date(shipment.eta).toLocaleDateString("ru-RU") : "неизвестно"}</span></div>
             </dl>
             {shipment.events.length > 0 && (
               <ol className="mt-4 space-y-3 border-l-2 border-line pl-4">
@@ -156,17 +169,129 @@ export default function OrderDetailPage() {
             )}
           </div>
         ) : (
-          <p className="mt-2 text-sm text-ink-soft">
-            Продавец ещё не передал заказ перевозчику. Отслеживание появится, когда отправление будет создано.
-          </p>
+          <p className="mt-2 text-sm text-ink-soft">Продавец ещё не передал заказ в доставку. Отслеживание появится, когда отправление будет создано.</p>
         )}
       </div>
+
+      {delivered && (
+        <section className="card mt-3 p-5">
+          <h2 className="text-lg font-bold text-ink">Отзыв о товаре</h2>
+          <p className="mt-1 text-sm text-ink-soft">Отзыв увидят другие покупатели. Он будет отмечен как «покупка подтверждена».</p>
+          {order.items.map((item) => (
+            <ReviewForm
+              key={item.id}
+              orderId={order.id}
+              productId={item.productId}
+              title={item.titleSnapshot}
+              already={data.reviewedProductIds.includes(item.productId)}
+              onDone={load}
+            />
+          ))}
+        </section>
+      )}
     </div>
   );
 }
 
-function canRequestReturn(status: string): boolean {
-  return status === "DELIVERED" || status === "COMPLETED";
+function CancelButton({ orderId, onDone }: { orderId: string; onDone: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function cancel() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage(body?.error ?? "Не удалось отменить заказ");
+        return;
+      }
+      onDone();
+    } catch {
+      setMessage("Нет связи с сервером");
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      {confirming ? (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-ink-soft">Отменить заказ? Товар вернётся продавцу.</span>
+          <button className="btn btn-danger px-3 py-1.5 text-xs" disabled={busy} onClick={() => void cancel()}>{busy ? "Отменяем…" : "Да, отменить"}</button>
+          <button className="btn btn-ghost px-3 py-1.5 text-xs" disabled={busy} onClick={() => setConfirming(false)}>Нет</button>
+        </div>
+      ) : (
+        <button className="text-sm text-bad hover:underline" onClick={() => setConfirming(true)}>Отменить заказ</button>
+      )}
+      {message && <p className="mt-1 text-xs text-bad" role="alert">{message}</p>}
+    </div>
+  );
+}
+
+function ReviewForm({ orderId, productId, title, already, onDone }: { orderId: string; productId: string; title: string; already: boolean; onDone: () => void }) {
+  const [rating, setRating] = useState(5);
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  if (already) {
+    return <div className="mt-4 rounded-lg bg-surface-muted p-3 text-sm text-ink-soft">Отзыв на «{title}» уже оставлен. Спасибо!</div>;
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (body.trim().length < 10) {
+      setMessage("Напишите хотя бы 10 символов");
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, productId, rating, body: body.trim() }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage(json?.error ?? "Не удалось отправить отзыв");
+        return;
+      }
+      setMessage("Спасибо за отзыв!");
+      onDone();
+    } catch {
+      setMessage("Нет связи с сервером");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="mt-4 border-t border-line pt-4" onSubmit={submit}>
+      <div className="text-sm font-medium text-ink">{title}</div>
+      <label className="mt-2 block text-sm">
+        Оценка{" "}
+        <select className="input mt-1" value={rating} onChange={(e) => setRating(Number(e.target.value))}>
+          {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} из 5</option>)}
+        </select>
+      </label>
+      <textarea
+        className="input mt-2 min-h-[90px] w-full"
+        maxLength={4000}
+        placeholder="Что понравилось, что нет? Не меньше 10 символов"
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        aria-label={`Текст отзыва о товаре ${title}`}
+      />
+      <button className="btn btn-primary mt-2" disabled={busy}>{busy ? "Отправляем…" : "Отправить отзыв"}</button>
+      {message && <p className="mt-2 text-sm text-ink-soft" role="status">{message}</p>}
+    </form>
+  );
 }
 
 const RETURN_REASONS: { value: string; label: string }[] = [
@@ -185,7 +310,9 @@ const DISPUTE_REASONS: { value: string; label: string }[] = [
   { value: "DELIVERY_DISPUTE", label: "Спор по доставке" },
 ];
 
-function ReturnActions({ orderId, onChanged }: { orderId: string; onChanged: () => void }) {
+const PRE_DELIVERY_DISPUTE_REASONS = DISPUTE_REASONS.filter((r) => ["ITEM_NOT_RECEIVED", "PAYMENT_DISPUTE", "DELIVERY_DISPUTE"].includes(r.value));
+
+function ReturnActions({ orderId, onChanged, mode }: { orderId: string; onChanged: () => void; mode: "full" | "dispute" }) {
   const [open, setOpen] = useState<"none" | "return" | "dispute">("none");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -197,6 +324,10 @@ function ReturnActions({ orderId, onChanged }: { orderId: string; onChanged: () 
       setMessage("Выберите причину");
       return;
     }
+    if (kind === "dispute" && description.trim().length < 10) {
+      setMessage("Опишите проблему, хотя бы 10 символов");
+      return;
+    }
     setBusy(true);
     setMessage(null);
     try {
@@ -205,16 +336,12 @@ function ReturnActions({ orderId, onChanged }: { orderId: string; onChanged: () 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(kind === "return" ? { reason } : { reason, description }),
       });
-      const body = await res.json();
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setMessage(body?.error ?? "Не удалось отправить запрос");
         return;
       }
-      setMessage(
-        kind === "return"
-          ? "Запрос на возврат оформлен. Продавец получил уведомление."
-          : "Спор открыт. Сбор доказательств начнётся автоматически."
-      );
+      setMessage(kind === "return" ? "Запрос на возврат оформлен. Продавец получил уведомление." : "Спор открыт. Мы соберём данные и свяжемся с вами.");
       setOpen("none");
       onChanged();
     } catch {
@@ -227,65 +354,35 @@ function ReturnActions({ orderId, onChanged }: { orderId: string; onChanged: () 
   if (open === "none") {
     return (
       <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
-        <button className="btn btn-ghost px-3 py-2 text-sm" onClick={() => setOpen("return")}>
-          Оформить возврат
-        </button>
-        <button className="btn btn-ghost px-3 py-2 text-sm" onClick={() => setOpen("dispute")}>
-          Открыть спор
-        </button>
+        {mode === "full" && <button className="btn btn-ghost px-3 py-2 text-sm" onClick={() => { setOpen("return"); setReason(""); }}>Оформить возврат</button>}
+        <button className="btn btn-ghost px-3 py-2 text-sm" onClick={() => { setOpen("dispute"); setReason(""); }}>{mode === "full" ? "Открыть спор" : "Проблема с заказом"}</button>
+        {message && <p className="w-full text-xs text-ink-soft">{message}</p>}
       </div>
     );
   }
 
-  const options = open === "return" ? RETURN_REASONS : DISPUTE_REASONS;
+  const options = open === "return" ? RETURN_REASONS : mode === "dispute" ? PRE_DELIVERY_DISPUTE_REASONS : DISPUTE_REASONS;
 
   return (
     <div className="mt-4 border-t border-line pt-4">
-      <h3 className="text-sm font-bold text-ink">
-        {open === "return" ? "Возврат товара" : "Открытие спора"}
-      </h3>
+      <h3 className="text-sm font-bold text-ink">{open === "return" ? "Возврат товара" : "Открытие спора"}</h3>
       <div className="mt-3 space-y-3">
         <label className="block text-xs text-ink-soft">
           Причина
-          <select
-            className="input mt-1 w-full"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          >
+          <select className="input mt-1 w-full" value={reason} onChange={(e) => setReason(e.target.value)}>
             <option value="">Выберите причину…</option>
-            {options.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
+            {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </label>
         {open === "dispute" && (
           <label className="block text-xs text-ink-soft">
             Опишите проблему
-            <textarea
-              className="input mt-1 min-h-[80px] w-full"
-              placeholder="Минимум 10 символов"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
+            <textarea className="input mt-1 min-h-[80px] w-full" placeholder="Минимум 10 символов" value={description} onChange={(e) => setDescription(e.target.value)} />
           </label>
         )}
         <div className="flex gap-2">
-          <button
-            className="btn btn-primary px-4 py-2 text-sm"
-            disabled={busy}
-            onClick={() => void submit(open)}
-          >
-            {busy ? "Отправляем…" : "Отправить"}
-          </button>
-          <button
-            className="btn btn-ghost px-4 py-2 text-sm"
-            disabled={busy}
-            onClick={() => setOpen("none")}
-          >
-            Отмена
-          </button>
+          <button className="btn btn-primary px-4 py-2 text-sm" disabled={busy} onClick={() => void submit(open)}>{busy ? "Отправляем…" : "Отправить"}</button>
+          <button className="btn btn-ghost px-4 py-2 text-sm" disabled={busy} onClick={() => setOpen("none")}>Отмена</button>
         </div>
         {message && <p className="text-xs text-bad">{message}</p>}
       </div>
@@ -313,14 +410,13 @@ function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ method }),
       });
-      const body = await res.json();
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setState("err");
         setMessage(body?.error ?? "Оплата не удалась");
         return;
       }
       if (body.status !== "SUCCEEDED" && typeof body.confirmationUrl === "string" && body.confirmationUrl.startsWith("https://")) {
-        // Оплата на странице банка или в приложении банка (СБП), потом покупатель вернётся сюда.
         setMessage(method === "sbp" ? "Открываем СБП: выберите свой банк и подтвердите оплату…" : "Переходим на защищённую страницу оплаты…");
         window.location.assign(body.confirmationUrl);
         return;
@@ -332,11 +428,7 @@ function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void })
         return;
       }
       setState("ok");
-      setMessage(
-        body.sandbox
-          ? "Оплата проведена в песочнице (sandbox). Продавец приступит к сборке."
-          : "Оплата подтверждена банком."
-      );
+      setMessage(body.sandbox ? "Тестовая оплата прошла: деньги не списывались. Продавец получил заказ." : "Оплата подтверждена банком.");
       onPaid();
     } catch {
       setState("err");
@@ -351,9 +443,7 @@ function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void })
   return (
     <div className="mt-4 border-t border-line pt-4">
       {state === "ok" ? (
-        <button className="btn btn-primary w-full sm:w-auto" disabled>
-          ✓ Оплачено
-        </button>
+        <button className="btn btn-primary w-full sm:w-auto" disabled>✓ Оплачено</button>
       ) : (
         <div className="flex flex-col gap-2 sm:flex-row">
           <button className="btn btn-primary w-full sm:w-auto" disabled={disabled} onClick={() => void pay("card")}>
@@ -365,9 +455,7 @@ function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void })
         </div>
       )}
       <p className="mt-2 text-xs text-ink-soft">Карты «Мир», Visa, Mastercard, SberPay, T-Pay и СБП. Данные карты вводятся только на странице банка.</p>
-      {message && (
-        <p className={`mt-2 text-xs ${state === "ok" ? "text-good" : state === "wait" || state === "busy" ? "text-ink-soft" : "text-bad"}`}>{message}</p>
-      )}
+      {message && <p className={`mt-2 text-xs ${state === "ok" ? "text-good" : state === "wait" || state === "busy" ? "text-ink-soft" : "text-bad"}`}>{message}</p>}
     </div>
   );
 }

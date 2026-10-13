@@ -4,6 +4,11 @@ const path = require("node:path");
 // Docker/VPS builds set NEXT_OUTPUT=standalone; Vercel builds keep the default.
 const standalone = process.env.NEXT_OUTPUT === "standalone";
 
+// Фото Светланы из Svetlana-2.0, закреплено на конкретном коммите: правки в той ветке
+// не сменят аватар на сайте внезапно. Чтобы обновить фото, поменяйте SHA.
+const SVETLANA_AVATAR_URL =
+  "https://raw.githubusercontent.com/paulafanasyev/Svetlana-2.0/31a51149541a6e49679bf904e5fd509f7e1c4dcc/public/images/avatar/svetlana-master.jpg";
+
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -21,6 +26,14 @@ const nextConfig = {
       { protocol: "https", hostname: "cdn.svetlana.example" },
       { protocol: "https", hostname: "avatars.svetlana.example" },
     ],
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/images/svetlana.jpg",
+        destination: SVETLANA_AVATAR_URL,
+      },
+    ];
   },
   async headers() {
     const csp = [

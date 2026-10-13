@@ -1,54 +1,95 @@
 import { requireSellerServer } from "@/lib/auth";
 import { getOrdersForSeller } from "@/lib/domains/orders";
-import { rub, orderStatusLabel, timeAgo } from "@/lib/format";
+import { rub, timeAgo } from "@/lib/format";
+import { orderStatusLabel, paymentStatusLabel, shipmentStatusLabel } from "@/lib/labels";
+import { deliveryLabel } from "@/lib/delivery-options";
+import { isLiveDeployment } from "@/lib/live-mode";
 import { FulfillActions } from "./FulfillActions";
 
 export const dynamic = "force-dynamic";
 
+// Адрес и телефон покупателя продавец видит только после оплаты заказа.
+const HIDE_CONTACTS = ["CREATED", "PAYMENT_PENDING", "CANCELLED"];
+
+interface DeliveryInfo {
+  deliveryMethod?: string;
+  city?: string;
+  street?: string;
+  house?: string;
+  apartment?: string;
+  zip?: string;
+  recipientName?: string;
+  phone?: string;
+}
+
+function parseDelivery(raw: string | null | undefined): DeliveryInfo {
+  try {
+    const value = JSON.parse(raw ?? "{}");
+    return value && typeof value === "object" ? (value as DeliveryInfo) : {};
+  } catch {
+    return {};
+  }
+}
+
+function addressLine(d: DeliveryInfo): string {
+  return [d.zip, d.city, d.street, d.house ? `д. ${d.house}` : "", d.apartment ? `кв. ${d.apartment}` : ""].filter(Boolean).join(", ");
+}
+
 export default async function SellerOrdersPage() {
   const { sellerId } = await requireSellerServer();
   const orders = await getOrdersForSeller(sellerId);
-
+  const allowTestCarrier = !isLiveDeployment();
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6">
-      <h1 className="mb-4 text-2xl font-bold text-ink">Заказы покупателей</h1>
-      {orders.length === 0 ? (
-        <div className="card p-10 text-center text-ink-soft">Заказов пока нет.</div>
-      ) : (
-        <div className="space-y-3">
-          {orders.map((o) => (
-            <div key={o.id} className="card p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="font-mono text-sm font-bold text-ink">{o.number}</div>
-                  <div className="text-xs text-ink-soft">{o.buyer.name} · {timeAgo(o.createdAt)}</div>
+    <main className="space-y-5 p-6">
+      <h1 className="text-2xl font-semibold">Заказы покупателей</h1>
+      {orders.length === 0 ? <p className="text-ink-faint">Заказов пока нет.</p> : (
+        <div className="space-y-4">
+          {orders.map((order) => {
+            const delivery = parseDelivery(order.deliveryAddress);
+            const method = delivery.deliveryMethod ?? "PICKUP";
+            const showContacts = !HIDE_CONTACTS.includes(order.status);
+            const address = addressLine(delivery);
+            return (
+              <article className="card space-y-3 p-5" key={order.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <b>{order.number}</b>
+                    <div className="text-sm text-ink-faint">{order.buyer.name ?? order.buyer.email} · {timeAgo(order.createdAt)}</div>
+                  </div>
+                  <div className="text-right">
+                    <div>{orderStatusLabel(order.status)}</div>
+                    <b>{rub(order.totalKopecks)}</b>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="chip">{orderStatusLabel(o.status)}</span>
-                  <span className="font-bold text-svetlana-700">{rub(o.totalKopecks)}</span>
+                <ul className="text-sm">
+                  {order.items.map((item) => <li key={item.id}>{item.titleSnapshot} × {item.quantity}: {rub(item.priceKopecks * item.quantity)}</li>)}
+                </ul>
+                <div className="rounded-lg bg-surface-muted p-3 text-sm">
+                  <div className="font-medium">
+                    {deliveryLabel(method)}
+                    {order.deliveryKopecks > 0 ? ` · ${rub(order.deliveryKopecks)} включено в заказ` : ""}
+                  </div>
+                  {showContacts ? (
+                    <div className="mt-1 space-y-0.5 text-ink-soft">
+                      {method === "SELLER" && <div>Адрес: {address || "не указан"}</div>}
+                      {method === "PICKUP" && <div>Напишите покупателю, куда и когда забрать заказ.</div>}
+                      <div>Получатель: {delivery.recipientName || order.buyer.name || "не указан"}</div>
+                      {delivery.phone && <div>Телефон: <a className="underline" href={`tel:${delivery.phone.replace(/[^\d+]/g, "")}`}>{delivery.phone}</a></div>}
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-ink-faint">Адрес и телефон появятся после оплаты.</div>
+                  )}
                 </div>
-              </div>
-              <ul className="mt-3 space-y-1 text-xs text-ink-soft">
-                {o.items.map((i) => (
-                  <li key={i.id}>
-                    {i.titleSnapshot} × {i.quantity} — {rub(i.priceKopecks * i.quantity)}
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-3 text-xs text-ink-soft">
-                Оплата: {o.payment ? o.payment.status : "нет данных"}
-                {o.shipment ? ` · Доставка: ${o.shipment.carrierName} — ${o.shipment.status}` : ""}
-              </div>
-              {/*
-                Manual fulfillment controls (spec §112: the seller can work
-                fully without AI). Confirm is available once paid; shipping is
-                available once confirmed. Both are explicit human actions.
-              */}
-              <FulfillActions orderId={o.id} status={o.status} hasShipment={Boolean(o.shipment)} />
-            </div>
-          ))}
+                <p className="text-sm text-ink-faint">
+                  Оплата: {paymentStatusLabel(order.payment?.status)}
+                  {order.shipment ? ` · Отправление: ${order.shipment.carrierName}, ${shipmentStatusLabel(order.shipment.status)}` : ""}
+                </p>
+                <FulfillActions orderId={order.id} status={order.status} hasShipment={Boolean(order.shipment)} shipmentProvider={order.shipment?.providerKey} allowTestCarrier={allowTestCarrier} />
+              </article>
+            );
+          })}
         </div>
       )}
-    </div>
+    </main>
   );
 }

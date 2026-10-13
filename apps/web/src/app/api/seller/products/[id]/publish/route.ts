@@ -4,6 +4,7 @@ import { requireVerifiedSeller, ApiError } from "@/lib/auth";
 import { toolRegistry } from "@/lib/ai/tools";
 // Importing the tool index also bootstraps the registry (registerAllTools).
 import { prisma } from "@/lib/prisma";
+import { publishProblems, publishProblemsMessage } from "@/lib/domains/publish-check";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,8 @@ export const dynamic = "force-dynamic";
  * Publishes a draft card. Publishing is a legally significant action: the
  * seller must have reviewed the AI-prepared draft, the request carries an
  * explicit confirm flag (spec §12, §147), and the seller must have cleared
- * the verification machine (P0 fix, spec §19/§21).
+ * the verification machine (P0 fix, spec §19/§21). A card without price,
+ * photo or stock is never published.
  */
 export const POST = apiRoute(async (request, routeCtx) => {
   if (!rateLimit("ai:publish", 10, 60_000)) return tooManyRequests();
@@ -30,6 +32,9 @@ export const POST = apiRoute(async (request, routeCtx) => {
   if (body.confirm !== true) {
     throw new ApiError(400, "Публикация требует явного подтверждения продавца");
   }
+
+  const problems = await publishProblems(prisma, productId);
+  if (problems.length) throw new ApiError(400, publishProblemsMessage(problems));
 
   const result = await tool.execute(
     {

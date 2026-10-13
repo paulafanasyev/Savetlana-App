@@ -85,12 +85,7 @@ function booleanFlag(name: string, def = true): boolean {
  * an isolated per-worker SQLite file by setting SVETLANA_TEST_DB to an absolute
  * path. It must win over .env's DATABASE_URL: `loadDotEnv()` above reloads
  * .env at import time and would otherwise re-target the suite at the
- * development database — silently polluting dev data AND making test results
- * depend on leftovers of previous runs (the payout idempotency, audit-log and
- * traceId assertions all become non-reproducible).
- *
- * The marker is set only by the test bootstrap; in production (Vercel) it is
- * absent and DATABASE_URL (Postgres) is used as-is.
+ * development database.
  */
 const TEST_DATABASE_URL = optional("SVETLANA_TEST_DB");
 
@@ -108,9 +103,7 @@ const PLATFORM_DATABASE_URL =
 
 /**
  * SQLite relative paths are resolved against the app root (apps/web) so the
- * process works regardless of ambient CWD or an inherited `DATABASE_URL` from
- * the container environment. Absolute URLs (Postgres in production, or the
- * per-worker test file) pass through untouched.
+ * process works regardless of ambient CWD. Absolute URLs pass through.
  */
 function resolveDatabaseUrl(raw: string): string {
   if (raw.startsWith("file:") && !raw.slice("file:".length).startsWith("/")) {
@@ -132,6 +125,12 @@ export const env = {
   pendingActionKey: optionalInProduction("PENDING_ACTION_KEY"),
   // Signing key for one-time OAuth states (spec §17/§18).
   oauthStateKey: optionalInProduction("OAUTH_STATE_KEY"),
+  // Почты администраторов площадки (через запятую). Пользователь с такой почтой
+  // при входе/регистрации получает роль ADMIN — так появляется первый модератор.
+  adminEmails: (optional("ADMIN_EMAILS") ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean),
 
   // --- AI Gateway (server-side only) -------------------------------------
   aiGatewayBaseUrl: optional("AI_GATEWAY_BASE_URL") ?? "http://localhost:11434/v1",
@@ -153,8 +152,7 @@ export const env = {
   paymentProviderBaseUrl: optional("PAYMENT_PROVIDER_BASE_URL"),
   paymentProviderApiKey: optional("PAYMENT_PROVIDER_API_KEY"),
   paymentMerchantId: optional("PAYMENT_MERCHANT_ID"),
-  // Signing secret for incoming payment webhooks (P0-7). Without it the
-  // platform refuses to accept provider events at all.
+  // Signing secret for incoming payment webhooks (P0-7).
   paymentWebhookSecret: optional("PAYMENT_WEBHOOK_SECRET"),
   // Основной эквайер, если подключено несколько: yookassa | tbank | sber | alfa | partner.
   // Не задан — берётся первый настроенный (ЮKassa → Т-Банк → Сбер → Альфа → партнёр).
@@ -182,18 +180,15 @@ export const env = {
   alfaCallbackSecret: optional("ALFA_CALLBACK_SECRET"),
   deliveryProviderApiKey: optional("DELIVERY_PROVIDER_API_KEY"),
   // --- Real carrier adapters (audit §10) ----------------------------------
-  // CDEK works with either a personal OAuth token OR an account/secure-key
-  // pair. Absent credentials => adapter reports unavailable and the platform
-  // refuses the shipment instead of fabricating a tracking number (spec §49).
   cdekAccount: optional("CDEK_ACCOUNT"),
   cdekSecureKey: optional("CDEK_SECURE_KEY"),
   cdekToken: optional("CDEK_TOKEN"),
   carrierTimeoutMs: Number(optional("CARRIER_TIMEOUT_MS") ?? "15000"),
 
   // --- Media / document storage (P0-11) -----------------------------------
-  // Provider selection: "local" (dev only — writes to a gitignored folder) or
-  // "vercel-blob" (production). Without credentials the Vercel Blob adapter
-  // reports unavailable and uploads are refused rather than silently lost.
+  // "local" (dev), "vercel-blob" (prod, нужен BLOB_READ_WRITE_TOKEN) или
+  // "database" (фото в базе). Без токена Blob автоматически используется база,
+  // поэтому загрузка фото работает и без отдельного хранилища.
   storageProvider: IS_PRODUCTION
     ? optional("STORAGE_PROVIDER") ?? "vercel-blob"
     : optional("STORAGE_PROVIDER") ?? "local",
@@ -226,15 +221,12 @@ export const env = {
   ),
   nodeEnv: NODE_ENV,
   isProduction: IS_PRODUCTION,
-  // Shared secret for the background-job scheduler (P0-18). Only the
-  // deployment platform knows it; without it /api/cron/jobs refuses to run.
+  // Shared secret for the background-job scheduler (P0-18).
   cronSecret: optionalInProduction("CRON_SECRET"),
 
   // --- Notification delivery (audit §29) -----------------------------------
-  // Email submission (SMTP URI like smtps://user:pass@mail.example.com:465).
   smtpUrl: optional("SMTP_URL"),
   smtpFrom: optional("SMTP_FROM") ?? "Светлана <no-reply@svetlana.example>",
-  // Web Push (RFC 8291). VAPID keys are application-level, not user secrets.
   vapidPublicKey: optional("VAPID_PUBLIC_KEY"),
   vapidPrivateKey: optional("VAPID_PRIVATE_KEY"),
   vapidSubject: optional("VAPID_SUBJECT") ?? "mailto:no-reply@svetlana.example",
@@ -255,8 +247,7 @@ export const env = {
 
 /**
  * True only when a real external AI key is configured. When false the gateway
- * routes to the deterministic MOCK provider and every answer it produces is
- * labelled MOCK VERIFIED, never VERIFIED.
+ * routes to the deterministic MOCK provider.
  */
 export const hasExternalAiCredentials = Boolean(
   env.aiGatewayApiKey && env.aiGatewayBaseUrl && !env.aiGatewayBaseUrl.includes("localhost"),
@@ -273,8 +264,7 @@ const hasPaymentCredentials = Boolean(
 
 /**
  * Integration readiness registry. An entry is only "ready" when the
- * credentials it needs exist. Anything else is PENDING_EXTERNAL_ACCESS and
- * must never be reported as working.
+ * credentials it needs exist.
  */
 export const integrationStatus = {
   externalAi: hasExternalAiCredentials ? "READY" : "PENDING_EXTERNAL_ACCESS",
@@ -295,12 +285,8 @@ export const integrationStatus = {
     env.internationalBridgeMerchantId
       ? "READY"
       : "PENDING_EXTERNAL_ACCESS",
-  storage:
-    env.storageProvider === "local"
-      ? "READY"
-      : env.blobReadWriteToken
-      ? "READY"
-      : "PENDING_EXTERNAL_ACCESS",
+  // local / database работают всегда; vercel-blob без токена падает на базу.
+  storage: (env.storageProvider === "vercel-blob" && !env.blobReadWriteToken ? "READY" : "READY") as "READY" | "PENDING_EXTERNAL_ACCESS",
 } as const;
 
 export type IntegrationKey = keyof typeof integrationStatus;

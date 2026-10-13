@@ -2,8 +2,11 @@
  * Cart (spec §37, §38).
  *
  * One cart may hold products from several sellers. On checkout the cart is
- * split into one order per seller — delivery, payouts and statuses are then
+ * split into one order per seller: delivery, payouts and statuses are then
  * tracked per seller while the buyer sees one simple picture.
+ *
+ * Stock is kept per product: all variants of a product share one inventory,
+ * so availability is checked against the sum of every cart line of the product.
  */
 import { prisma } from "../prisma";
 import { toKopecks, fromKopecks } from "../utils";
@@ -11,6 +14,8 @@ import { toKopecks, fromKopecks } from "../utils";
 export interface CartLine {
   id: string;
   productId: string;
+  variantId: string | null;
+  variantName: string | null;
   title: string;
   image: string | null;
   priceKopecks: number;
@@ -18,6 +23,8 @@ export interface CartLine {
   sellerId: string;
   sellerName: string;
   available: boolean;
+  /** Сколько штук сейчас есть у продавца (общий остаток товара). */
+  stock: number;
   lineTotalKopecks: number;
   /** True when the live price differs from the price-at-add snapshot. */
   priceChanged: boolean;
@@ -53,6 +60,7 @@ export async function getCartView(userId: string): Promise<CartView> {
               sellerProfile: { select: { displayName: true } },
               images: { take: 1, orderBy: { position: "asc" } },
               inventory: { select: { quantity: true, availability: true } },
+              variants: { select: { id: true, name: true, priceDelta: true } },
             },
           },
         },
@@ -61,21 +69,25 @@ export async function getCartView(userId: string): Promise<CartView> {
     },
   });
 
+  // Сколько штук каждого товара в корзине с учётом всех вариантов.
+  const wantedByProduct = new Map<string, number>();
+  for (const item of cart.items) wantedByProduct.set(item.productId, (wantedByProduct.get(item.productId) ?? 0) + item.quantity);
+
   const lines: CartLine[] = cart.items.map((item) => {
     const stock = item.product.inventory?.quantity ?? 0;
+    const variant = item.variantId ? item.product.variants.find((v) => v.id === item.variantId) ?? null : null;
     // Price snapshot policy (P0 fix, spec §9): the buyer is charged the price
-    // they saw when the item was added — CartItem.priceKopecks — not whatever
-    // the seller happens to charge at checkout. A seller mid-flow price rise
-    // must never silently increase what the buyer pays. When the live price is
-    // *lower*, the buyer gets the lower price; either way the change is
-    // surfaced so checkout can warn instead of surprising the user.
-    const livePrice = item.product.priceKopecks;
+    // they saw when the item was added, never a silent increase. A lower live
+    // price is passed on; either way the change is surfaced at checkout.
+    const livePrice = item.product.priceKopecks + (variant?.priceDelta ?? 0);
     const snapshotPrice = item.priceKopecks;
     const priceKopecks = Math.min(snapshotPrice, livePrice);
     return {
       id: item.id,
       productId: item.productId,
-      title: item.product.title,
+      variantId: item.variantId,
+      variantName: variant?.name ?? null,
+      title: variant ? `${item.product.title} (${variant.name})` : item.product.title,
       image: item.product.images[0]?.url ?? null,
       priceKopecks,
       quantity: item.quantity,
@@ -83,10 +95,11 @@ export async function getCartView(userId: string): Promise<CartView> {
       sellerName: item.product.sellerProfile.displayName,
       available:
         item.product.status === "ACTIVE" &&
-        stock >= item.quantity &&
+        stock >= (wantedByProduct.get(item.productId) ?? item.quantity) &&
+        (!item.variantId || Boolean(variant)) &&
         (item.product.inventory?.availability ?? "UNKNOWN") !== "OUT_OF_STOCK",
+      stock,
       lineTotalKopecks: priceKopecks * item.quantity,
-      // Honest signal for the UI: the offer moved after the item was added.
       priceChanged: livePrice !== snapshotPrice,
       priceSnapshotKopecks: snapshotPrice,
       priceLiveKopecks: livePrice,
@@ -106,27 +119,40 @@ export async function getCartView(userId: string): Promise<CartView> {
 export async function addToCart(
   userId: string,
   productId: string,
-  quantity = 1
+  quantity = 1,
+  variantId?: string | null
 ): Promise<CartView> {
   const cartId = await getOrCreateCart(userId);
   const product = await prisma.product.findUniqueOrThrow({
     where: { id: productId },
+    include: { inventory: { select: { quantity: true, availability: true } }, variants: { select: { id: true, priceDelta: true } } },
   });
   if (product.status !== "ACTIVE") {
     throw new Error("товар не опубликован");
   }
+  const variant = variantId ? product.variants.find((v) => v.id === variantId) ?? null : null;
+  if (variantId && !variant) throw new Error("такого варианта товара нет");
+  // Не даём положить то, чего нет: иначе покупатель застрянет на оформлении.
+  const stock = product.inventory ? product.inventory.quantity : null;
+  if (product.inventory && (product.inventory.quantity <= 0 || product.inventory.availability === "OUT_OF_STOCK")) {
+    throw new Error("товар закончился");
+  }
   const q = Math.max(1, Math.min(quantity, 99));
-  const existing = await prisma.cartItem.findFirst({
-    where: { cartId, productId, variantId: null },
-  });
+  const sameProduct = await prisma.cartItem.findMany({ where: { cartId, productId }, select: { id: true, variantId: true, quantity: true } });
+  const existing = sameProduct.find((row) => row.variantId === (variant?.id ?? null)) ?? null;
+  const alreadyInCart = sameProduct.reduce((sum, row) => sum + row.quantity, 0);
+  const wanted = Math.min(99, (existing?.quantity ?? 0) + q);
+  if (stock !== null && alreadyInCart + q > stock) {
+    throw new Error(`в наличии только ${stock} шт.`);
+  }
   if (existing) {
     await prisma.cartItem.update({
       where: { id: existing.id },
-      data: { quantity: Math.min(99, existing.quantity + q) },
+      data: { quantity: wanted },
     });
   } else {
     await prisma.cartItem.create({
-      data: { cartId, productId, quantity: q, priceKopecks: product.priceKopecks },
+      data: { cartId, productId, variantId: variant?.id ?? null, quantity: q, priceKopecks: product.priceKopecks + (variant?.priceDelta ?? 0) },
     });
   }
   return getCartView(userId);

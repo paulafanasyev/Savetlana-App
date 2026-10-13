@@ -6,7 +6,10 @@
  * confirmation gating and audit logging are uniformly enforced (spec §44).
  */
 import { toolRegistry } from "./registry";
-import type { ToolDefinition } from "./registry";
+import type { ToolDefinition, ToolContext, ToolResult } from "./registry";
+import { prisma } from "../../prisma";
+import { publishProblems, publishProblemsMessage } from "../../domains/publish-check";
+import { getSellerOnboardingGate } from "../../domains/seller-onboarding";
 
 import {
   searchProductsTool,
@@ -59,6 +62,27 @@ import {
 } from "./social";
 import { assessOrderRiskTool } from "./risk";
 
+/**
+ * Публикация через Светлану проходит ту же проверку, что и кнопки продавца:
+ * без цены, фото и остатка карточка покупателям не попадает. Порядок прежний:
+ * сначала верификация и владелец (их проверяет сам инструмент), потом карточка.
+ */
+const guardedPublishProductTool: ToolDefinition = {
+  ...publishProductTool,
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+    const productId = typeof args.productId === "string" ? args.productId : "";
+    if (productId && ctx.sellerProfileId) {
+      const gate = await getSellerOnboardingGate(ctx.sellerProfileId);
+      const owned = await prisma.product.findFirst({ where: { id: productId, sellerId: ctx.sellerProfileId }, select: { id: true } });
+      if (gate.active && owned) {
+        const problems = await publishProblems(prisma, productId);
+        if (problems.length) return { ok: false, error: publishProblemsMessage(problems), verification: "NOT_PROVEN" };
+      }
+    }
+    return publishProductTool.execute(ctx, args);
+  },
+};
+
 const ALL_TOOLS: ToolDefinition[] = [
   // Catalog
   searchProductsTool,
@@ -86,7 +110,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   confirmInventoryTool,
   extendListingTool,
   createProductDraftTool,
-  publishProductTool,
+  guardedPublishProductTool,
   changePriceTool,
   advisePriceTool,
   priceHistoryTool,

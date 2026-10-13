@@ -1,7 +1,7 @@
 /**
  * AI product creation (spec §12): Svetlana prepares a draft card, the seller
  * reviews it, and publication is an explicitly confirmed action. The draft is
- * never visible to buyers.
+ * never visible to buyers, and a card without photo or stock is not published.
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { prisma } from "../src/lib/prisma";
@@ -150,7 +150,20 @@ describe("AI draft publication (spec §12, §147)", () => {
     draftId = (result.data as { productId: string }).productId;
   });
 
+  it("refuses to publish a card without photo and stock", async () => {
+    const tool = toolRegistry.get("publish_product");
+    const result = await tool!.execute(ctx(), { productId: draftId });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("фото");
+    expect(result.error).toContain("остаток");
+    const product = await prisma.product.findUnique({ where: { id: draftId } });
+    expect(product!.status).toBe("DRAFT");
+  });
+
   it("publishes a reviewed draft and makes it visible to buyers", async () => {
+    await prisma.productImage.create({ data: { productId: draftId, url: "https://example.com/tablet.jpg", isPrimary: true, position: 0 } });
+    await prisma.inventory.upsert({ where: { productId: draftId }, create: { productId: draftId, quantity: 3 }, update: { quantity: 3 } });
+
     const tool = toolRegistry.get("publish_product");
     const result = await tool!.execute(ctx(), { productId: draftId });
     expect(result.ok).toBe(true);

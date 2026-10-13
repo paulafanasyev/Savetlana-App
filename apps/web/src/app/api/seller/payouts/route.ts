@@ -1,56 +1,53 @@
 import { apiRoute, rateLimit, tooManyRequests } from "@/lib/api-helpers";
 import { requireSeller, requireVerifiedSeller } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { env } from "@/lib/env";
 import { payoutIdempotencyKey } from "@/lib/payout-key";
-import {
-  createConsolidatedPayout,
-  sellerSettlementStatement,
-} from "@/lib/domains/payments";
+import { getPayoutProvider, sellerSettlementStatement } from "@/lib/domains/payments";
+import { DELIVERED_ORDER_STATUSES, payoutDeliveredSettlements } from "@/lib/domains/seller-payouts";
+import { isLiveDeployment } from "@/lib/live-mode";
 
 export const dynamic = "force-dynamic";
 
-/** Seller settlement statement (spec §26): gross → fees → payout. */
 export const GET = apiRoute(async (request) => {
   if (!rateLimit("payouts:read", 20, 60_000)) return tooManyRequests();
   const ctx = await requireSeller(request);
-  const statement = await sellerSettlementStatement(ctx.sellerId);
-  return Response.json(statement);
+  return Response.json(await sellerSettlementStatement(ctx.sellerId));
 });
 
-/**
- * Requests a consolidated payout of all completed settlements (spec §26).
- * Audit fix: the idempotency key is derived on the server from the exact set
- * of pending settlements, so double clicks, two tabs or retries with different
- * client keys resolve to the same key and the unique Payout.idempotencyKey lets
- * only one of them reserve the money.
- */
 export const POST = apiRoute(async (request) => {
   if (!rateLimit(`payouts:request:${request.headers.get("x-real-ip") ?? "anon"}`, 5, 60_000)) return tooManyRequests();
   const ctx = await requireVerifiedSeller(request, "запрашивать выплату");
+  const contentType = request.headers.get("content-type") ?? "";
+  const isForm = !contentType.startsWith("application/json");
+  const reply = (code: string, status: number, error?: string, extra = "") =>
+    isForm
+      ? new Response(null, { status: 303, headers: { Location: `/seller/payouts?payout=${encodeURIComponent(code)}${extra}` } })
+      : Response.json(error ? { error, code } : { code }, { status });
+
+  // На боевом сайте без полностью подключённого банка (ключ и адрес) выплату не
+  // резервируем: иначе деньги зависнут в очереди или выплата будет только на бумаге.
+  const provider = getPayoutProvider();
+  const bankReady = !provider.sandbox && Boolean(env.paymentProviderBaseUrl);
+  if (!bankReady && isLiveDeployment()) {
+    return reply("bank_required", 409, "Выплаты включатся после подключения банка-партнёра");
+  }
 
   const pending = await prisma.settlement.findMany({
     where: { sellerId: ctx.sellerId, status: "PENDING", payoutId: null },
-    select: { id: true },
+    select: { id: true, order: { select: { status: true } } },
   });
-  const idempotencyKey = payoutIdempotencyKey(ctx.sellerId, pending.map((s) => s.id));
-
-  const result = await createConsolidatedPayout({
+  const ready = pending.filter((row) => DELIVERED_ORDER_STATUSES.includes(row.order.status));
+  if (ready.length === 0) {
+    return pending.length
+      ? reply("delivery_required", 409, "Выплата станет доступна после доставки заказа")
+      : reply("nothing_to_payout", 200);
+  }
+  const result = await payoutDeliveredSettlements({
     sellerId: ctx.sellerId,
     actorId: ctx.user.id,
-    idempotencyKey,
+    idempotencyKey: payoutIdempotencyKey(ctx.sellerId, ready.map((row) => row.id)),
   });
-
-  // HTML form submissions go back to the statement page instead of raw JSON.
-  const contentType = request.headers.get("content-type") ?? "";
-  const isForm =
-    contentType.startsWith("application/x-www-form-urlencoded") ||
-    contentType.startsWith("multipart/form-data");
-  if (isForm) {
-    const flag = result.status === "NOTHING_TO_PAYOUT" ? "nothing" : result.status.toLowerCase();
-    return new Response(null, { status: 303, headers: { Location: `/seller/payouts?payout=${encodeURIComponent(flag)}` } });
-  }
-
-  return Response.json(result, {
-    status: result.status === "NOTHING_TO_PAYOUT" ? 200 : 201,
-  });
+  if (isForm) return reply(result.status.toLowerCase(), 201, undefined, result.sandbox ? "&test=1" : "");
+  return Response.json(result, { status: result.status === "NOTHING_TO_PAYOUT" ? 200 : 201 });
 });

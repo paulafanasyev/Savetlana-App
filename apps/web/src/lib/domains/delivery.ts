@@ -10,10 +10,14 @@
  *
  * No carrier integration is claimed unless a real adapter is configured
  * (spec §49, §58). The sandbox carrier is explicitly marked.
+ *
+ * Money rule: the delivery price is chosen and paid at checkout. Creating a
+ * shipment after payment never changes what the buyer owes.
  */
 import { prisma } from "../prisma";
 import { env } from "../env";
 import { CdekCarrierAdapter } from "./carriers/cdek";
+import { canTransition } from "./orders";
 
 export interface ShipmentParams {
   orderId: string;
@@ -69,23 +73,24 @@ export class SandboxCarrierAdapter implements DeliveryProviderAdapter {
     return { ok: true };
   }
   async getTracking(trackingNumber: string) {
+    void trackingNumber;
     const created = new Date(Date.now() - 24 * 60 * 60 * 1000);
     return {
       status: "IN_TRANSIT",
       events: [
         {
           status: "CREATED",
-          description: "Отправление создано (sandbox)",
+          description: "Отправление создано (тестовая доставка)",
           occurredAt: created,
         },
         {
           status: "HANDED_OVER",
-          description: "Передано перевозчику (sandbox)",
+          description: "Передано перевозчику (тестовая доставка)",
           occurredAt: new Date(created.getTime() + 3 * 60 * 60 * 1000),
         },
         {
           status: "IN_TRANSIT",
-          description: "В пути (sandbox)",
+          description: "В пути (тестовая доставка)",
           occurredAt: new Date(),
         },
       ],
@@ -136,18 +141,13 @@ export class SellerOwnDeliveryAdapter implements DeliveryProviderAdapter {
 }
 
 /**
- * Resolves the carrier adapter for a key. Real carriers plug in here.
- *
- * Honest resolution (spec §49): an unknown carrier is NOT silently treated as
- * the sandbox. Returns `null` so callers must decide — either fail loudly or
- * record a seller-declared shipment that never fabricates carrier data.
+ * Resolves the carrier adapter for a key. An unknown carrier is NOT silently
+ * treated as the sandbox (spec §49): returns `null` so callers must decide.
  */
 export function getDeliveryProvider(key: string): DeliveryProviderAdapter | null {
   if (key === "SELLER_OWN_DELIVERY") return new SellerOwnDeliveryAdapter();
   if (key === "sandbox-carrier") return new SandboxCarrierAdapter();
-  // Real carriers (audit §10). Resolved regardless of credentials so that the
-  // platform can report *which* credential is missing instead of pretending
-  // the carrier does not exist. `available === false` makes createShipment
+  // Real carriers (audit §10). `available === false` makes createShipment
   // fail loudly with PENDING_EXTERNAL_ACCESS rather than fabricate a number.
   const cdek = new CdekCarrierAdapter();
   if (key === "cdek" || key === "CDEK") return cdek;
@@ -181,23 +181,55 @@ export function canTransitionShipment(from: string, to: string): boolean {
   return (SHIPMENT_TRANSITIONS[from] ?? []).includes(to);
 }
 
+/** Нормальный путь отправления и соответствующие статусы заказа. */
+const SHIPMENT_PATH = ["CREATED", "HANDED_OVER", "IN_TRANSIT", "DELIVERED"];
+const ORDER_PATH = ["PROCESSING", "HANDED_TO_CARRIER", "IN_TRANSIT", "DELIVERED"];
+const SHIPMENT_TO_ORDER_STATUS: Record<string, string> = {
+  HANDED_OVER: "HANDED_TO_CARRIER",
+  IN_TRANSIT: "IN_TRANSIT",
+  DELIVERED: "DELIVERED",
+};
+
 /**
- * Creates a shipment and advances the order to HANDED_TO_CARRIER. Carrier
+ * Куда можно продвинуть отправление по данным перевозчика. Перевозчик может
+ * сообщить сразу «в пути», минуя «передано»: движение вперёд по нормальному пути
+ * разрешено, назад — никогда.
+ */
+export function nextShipmentStatus(current: string, reported: string): string {
+  const from = SHIPMENT_PATH.indexOf(current);
+  const to = SHIPMENT_PATH.indexOf(reported);
+  if (from >= 0 && to > from) return reported;
+  if (canTransitionShipment(current, reported)) return reported;
+  return current;
+}
+
+/** Продвигает заказ по шагам машины состояний до статуса, соответствующего отправлению. */
+export function orderStepsForShipment(orderStatus: string, shipmentStatus: string): string[] {
+  const goal = SHIPMENT_TO_ORDER_STATUS[shipmentStatus];
+  if (!goal) return [];
+  const goalIndex = ORDER_PATH.indexOf(goal);
+  let current = orderStatus;
+  let index = current === "READY" ? 0 : ORDER_PATH.indexOf(current);
+  const steps: string[] = [];
+  while (index >= 0 && index < goalIndex && canTransition(current, ORDER_PATH[index + 1])) {
+    current = ORDER_PATH[index + 1];
+    steps.push(current);
+    index += 1;
+  }
+  return steps;
+}
+
+/**
+ * Creates a shipment and moves a confirmed order into fulfilment. Carrier
  * access is never assumed: if the adapter is unavailable the call fails
- * loudly instead of fabricating a tracking number.
+ * loudly instead of fabricating a tracking number. The paid total is never
+ * changed here: delivery was chosen and paid at checkout.
  */
 export async function createShipment(params: ShipmentParams) {
   const resolved = getDeliveryProvider(params.carrier);
 
   // A seller who already has a carrier tracking number is the source of truth
   // (spec §123): record it verbatim and never fabricate a replacement.
-  // Marked SELLER_DECLARED — live carrier sync is unavailable for it, so the
-  // tracking screen shows the seller's data as-is instead of inventing events.
-  //
-  // This covers two cases: an unknown carrier, and a *known* carrier whose
-  // credentials the platform lacks. In the second case the seller is still
-  // handing over a real CDEK number, so we must not refuse their shipment —
-  // we simply cannot poll CDEK for updates.
   const adapter = resolved && resolved.available ? resolved : null;
   const sellerDeclared = !adapter && Boolean(params.trackingNumber);
   if (!adapter && !sellerDeclared) {
@@ -236,20 +268,18 @@ export async function createShipment(params: ShipmentParams) {
         : "Отправление создано",
     },
   });
-  await prisma.order.update({
-    where: { id: params.orderId },
-    data: {
-      deliveryKopecks: created.priceKopecks,
-      totalKopecks: { increment: created.priceKopecks },
-      status: "PROCESSING",
-    },
-  });
+  const order = await prisma.order.findUniqueOrThrow({ where: { id: params.orderId }, select: { status: true } });
+  if (canTransition(order.status, "PROCESSING")) {
+    await prisma.order.update({ where: { id: params.orderId }, data: { status: "PROCESSING" } });
+  }
   return shipment;
 }
 
 /**
  * Syncs tracking from the authoritative carrier (spec §123: the carrier is
- * the source of truth, never the AI) and records the event timeline.
+ * the source of truth, never the AI) and records the event timeline. Order
+ * status follows the shipment one step at a time through the order state
+ * machine, so a carrier that skips a status cannot strand the order.
  */
 export async function syncTracking(shipmentId: string) {
   const shipment = await prisma.deliveryShipment.findUniqueOrThrow({
@@ -262,8 +292,7 @@ export async function syncTracking(shipmentId: string) {
   const adapter = getDeliveryProvider(shipment.providerKey);
 
   // No real carrier adapter (seller-declared or PENDING_EXTERNAL_ACCESS):
-  // return the persisted timeline verbatim. Never invent carrier events
-  // (spec §49 — no fake delivery tracking presented as real).
+  // return the persisted timeline verbatim. Never invent carrier events.
   if (!adapter) {
     return shipment;
   }
@@ -290,32 +319,23 @@ export async function syncTracking(shipmentId: string) {
     });
   }
 
-  // The carrier speaks *shipment* vocabulary (HANDED_OVER), the order speaks
-  // *order* vocabulary (HANDED_TO_CARRIER). Translate explicitly (spec §123).
-  const SHIPMENT_TO_ORDER_STATUS: Record<string, string> = {
-    DELIVERED: "DELIVERED",
-    IN_TRANSIT: "IN_TRANSIT",
-    HANDED_OVER: "HANDED_TO_CARRIER",
-  };
-  const targetOrderStatus = SHIPMENT_TO_ORDER_STATUS[tracking.status];
+  const newShipmentStatus = nextShipmentStatus(shipment.status, tracking.status);
+  const order = await prisma.order.findUniqueOrThrow({ where: { id: shipment.orderId }, select: { status: true } });
+  const steps = orderStepsForShipment(order.status, newShipmentStatus);
+  if (steps.length) {
+    await prisma.$transaction([
+      prisma.order.update({ where: { id: shipment.orderId }, data: { status: steps[steps.length - 1] } }),
+      ...steps.map((to, i) =>
+        prisma.orderHistory.create({
+          data: { orderId: shipment.orderId, fromStatus: i === 0 ? order.status : steps[i - 1], toStatus: to, reason: "carrier tracking" },
+        }),
+      ),
+    ]);
+  }
 
   return prisma.deliveryShipment.update({
     where: { id: shipment.id },
-    data: {
-      status: tracking.status,
-      eta: eta ?? shipment.eta,
-      ...(targetOrderStatus
-        ? {
-            order: {
-              update: {
-                status: canTransitionShipment(shipment.status, tracking.status)
-                  ? targetOrderStatus
-                  : undefined,
-              },
-            },
-          }
-        : {}),
-    },
+    data: { status: newShipmentStatus, eta: eta ?? shipment.eta },
     include: { events: { orderBy: { occurredAt: "asc" } } },
   });
 }

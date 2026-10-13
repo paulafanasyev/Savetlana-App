@@ -64,3 +64,30 @@ body {
 .prose-steps {
   @apply mt-2 space-y-1 text-xs text-ink-soft;
 }
+
+/* Светлана: state rings replace the original animation dependency. */
+@keyframes svetlana-ring-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgb(101 68 147 / 0.25), 0 0 0 6px rgb(101 68 147 / 0.08); }
+  50% { box-shadow: 0 0 0 3px rgb(101 68 147 / 0.55), 0 0 0 11px rgb(101 68 147 / 0.12); }
+}
+@keyframes svetlana-listening-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgb(14 165 233 / 0.35), 0 0 0 6px rgb(14 165 233 / 0.10); }
+  50% { box-shadow: 0 0 0 3px rgb(14 165 233 / 0.72), 0 0 0 12px rgb(14 165 233 / 0.16); }
+}
+@keyframes svetlana-speaking-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgb(125 92 176 / 0.32), 0 0 0 6px rgb(125 92 176 / 0.10); }
+  50% { box-shadow: 0 0 0 4px rgb(125 92 176 / 0.70), 0 0 0 10px rgb(125 92 176 / 0.16); }
+}
+@keyframes svetlana-dot-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: .45; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+.svetlana-avatar-thinking { border-radius: 9999px; animation: svetlana-ring-pulse 1.8s ease-in-out infinite; }
+.svetlana-avatar-listening { border-radius: 9999px; animation: svetlana-listening-pulse 1.15s ease-in-out infinite; }
+.svetlana-avatar-speaking { border-radius: 9999px; animation: svetlana-speaking-pulse .8s ease-in-out infinite; }
+.svetlana-dot { display: inline-block; width: .35rem; height: .35rem; border-radius: 9999px; background: currentColor; animation: svetlana-dot-bounce 1s ease-in-out infinite; }
+.svetlana-dot:nth-child(2) { animation-delay: .12s; }
+.svetlana-dot:nth-child(3) { animation-delay: .24s; }
+@media (prefers-reduced-motion: reduce) {
+  .svetlana-avatar-thinking, .svetlana-avatar-listening, .svetlana-avatar-speaking, .svetlana-dot { animation: none; }
+}

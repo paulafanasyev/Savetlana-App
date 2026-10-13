@@ -5,12 +5,14 @@
  * - explicit state machine; every transition is journaled
  * - idempotent creation (same idempotency key → same orders)
  * - the AI can create orders but NEVER marks them paid on its own authority
+ * - delivery is chosen per seller at checkout and is part of the paid total
  */
 import { prisma } from "../prisma";
 import { env } from "../env";
 import { generateOrderNumber } from "../utils";
 import { getCartView, type CartLine } from "./cart";
 import { computeSettlement } from "./payments";
+import { deliveryPrice, type DeliveryMethod } from "../delivery-options";
 
 export const ORDER_STATES = [
   "CREATED",
@@ -53,6 +55,10 @@ export function canTransition(from: string, to: string): boolean {
   return (TRANSITIONS[from] ?? []).includes(to);
 }
 
+export interface DeliveryChoice {
+  method: DeliveryMethod;
+}
+
 export interface CreateOrderInput {
   buyerId: string;
   deliveryAddress: {
@@ -67,6 +73,8 @@ export interface CreateOrderInput {
   note?: string;
   /** Caller-supplied idempotency key (spec §125). */
   idempotencyKey: string;
+  /** Способ доставки по каждому продавцу. Не указан: самовывоз (0 ₽). */
+  deliveryBySeller?: Record<string, DeliveryChoice>;
 }
 
 export interface CreatedOrders {
@@ -76,6 +84,7 @@ export interface CreatedOrders {
     number: string;
     sellerId: string;
     totalKopecks: number;
+    deliveryKopecks?: number;
     itemsCount: number;
   }>;
 }
@@ -83,18 +92,16 @@ export interface CreatedOrders {
 /**
  * Checkout: splits the cart by seller and creates one order per seller
  * atomically. If the cart is empty or a line went unavailable, nothing is
- * created — the buyer is never charged for something we cannot fulfil.
+ * created: the buyer is never charged for something we cannot fulfil.
  */
 export async function createOrdersFromCart(
   input: CreateOrderInput
 ): Promise<CreatedOrders> {
   // Idempotency first: a repeated checkout with the same key returns the
-  // original group instead of creating duplicate orders. This check must run
-  // before the cart validation — a replay after a successful checkout finds an
-  // already-cleared cart and would otherwise wrongly throw (spec §125).
+  // original group instead of creating duplicate orders (spec §125).
   const existingGroup = await prisma.orderGroup.findUnique({
     where: { idempotencyKey: input.idempotencyKey },
-    include: { orders: { select: { id: true, number: true, sellerId: true, totalKopecks: true, _count: { select: { items: true } } } } },
+    include: { orders: { select: { id: true, number: true, sellerId: true, totalKopecks: true, deliveryKopecks: true, _count: { select: { items: true } } } } },
   });
   if (existingGroup) {
     return {
@@ -104,6 +111,7 @@ export async function createOrdersFromCart(
         number: o.number,
         sellerId: o.sellerId,
         totalKopecks: o.totalKopecks,
+        deliveryKopecks: o.deliveryKopecks,
         itemsCount: o._count.items,
       })),
     };
@@ -129,20 +137,9 @@ export async function createOrdersFromCart(
     bySeller.set(line.sellerId, arr);
   }
 
-  const addressJson = JSON.stringify(input.deliveryAddress);
-
-  // SQLite serialises contending writers. Keep the checkout transaction long
-  // enough to wait for a competing writer rather than turning normal
-  // contention into a false checkout failure. PostgreSQL is expected to stay
-  // well below this bound under normal operation.
   return withCheckoutTransaction(() =>
     prisma.$transaction(async (tx) => {
     // --- Atomic stock reservation (P0 fix, spec §6/§124) --------------------
-    // The pre-transaction read-only check is not authoritative: two concurrent
-    // checkouts could both see stock>=qty and both succeed. Here every unit is
-    // claimed with a conditional decrement guarded on the *current* row value,
-    // so under concurrency at most one writer can win the last item. A failure
-    // aborts the whole transaction — no order is left without its stock.
     const reserved = await reserveStock(tx, cart.lines);
     if (reserved.length > 0) {
       throw new Error(
@@ -163,7 +160,11 @@ export async function createOrdersFromCart(
     const created: CreatedOrders["orders"] = [];
     for (const [sellerId, lines] of bySeller) {
       const subtotal = lines.reduce((s, l) => s + l.lineTotalKopecks, 0);
-      const settlement = computeSettlement({ grossKopecks: subtotal });
+      // Доставка выбрана до оплаты и входит в сумму заказа; цену считает сервер.
+      const method: DeliveryMethod = input.deliveryBySeller?.[sellerId]?.method ?? "PICKUP";
+      const delivery = deliveryPrice(method);
+      const total = subtotal + delivery;
+      const settlement = computeSettlement({ grossKopecks: total });
       const order = await tx.order.create({
         data: {
           groupId: group.id,
@@ -172,11 +173,11 @@ export async function createOrdersFromCart(
           number: generateOrderNumber(),
           status: "CREATED",
           subtotalKopecks: subtotal,
-          deliveryKopecks: 0, // delivery chosen at/after confirmation
+          deliveryKopecks: delivery,
           platformFeeKopecks: settlement.platformFeeKopecks,
           paymentFeeKopecks: settlement.paymentFeeKopecks,
-          totalKopecks: subtotal,
-          deliveryAddress: addressJson,
+          totalKopecks: total,
+          deliveryAddress: JSON.stringify({ ...input.deliveryAddress, deliveryMethod: method }),
           note: input.note,
         },
       });
@@ -184,6 +185,7 @@ export async function createOrdersFromCart(
         data: lines.map((l) => ({
           orderId: order.id,
           productId: l.productId,
+          variantId: l.variantId ?? null,
           titleSnapshot: l.title,
           priceKopecks: l.priceKopecks,
           quantity: l.quantity,
@@ -193,9 +195,7 @@ export async function createOrdersFromCart(
       await tx.orderHistory.create({
         data: { orderId: order.id, toStatus: "CREATED", reason: "checkout", actorId: input.buyerId },
       });
-      // Checkout hands the order to the payment step immediately. Transitioning
-      // here (rather than letting the payment layer write PAID straight over
-      // CREATED) keeps a single authoritative state machine (spec §124).
+      // Checkout hands the order to the payment step immediately (spec §124).
       await tx.order.update({ where: { id: order.id }, data: { status: "PAYMENT_PENDING" } });
       await tx.orderHistory.create({
         data: { orderId: order.id, toStatus: "PAYMENT_PENDING", reason: "awaiting payment", actorId: input.buyerId },
@@ -204,7 +204,8 @@ export async function createOrdersFromCart(
         id: order.id,
         number: order.number,
         sellerId,
-        totalKopecks: subtotal,
+        totalKopecks: total,
+        deliveryKopecks: delivery,
         itemsCount: lines.length,
       });
     }
@@ -222,9 +223,7 @@ type TransactionClient = Parameters<Parameters<typeof prisma["$transaction"]>[0]
 let sqliteCheckoutTail = Promise.resolve();
 
 async function withCheckoutTransaction<T>(work: () => Promise<T>): Promise<T> {
-  // SQLite permits only one writer, and Prisma's SQLite query engine can
-  // deadlock contending interactive transactions inside its worker pool.
-  // Serialize only SQLite checkouts; PostgreSQL keeps its normal concurrency.
+  // SQLite permits only one writer; serialize only SQLite checkouts.
   if (!env.databaseUrl.startsWith("file:")) {
     return work();
   }
@@ -243,13 +242,9 @@ async function withCheckoutTransaction<T>(work: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Claims stock atomically for every cart line. Each line is a conditional
- * `UPDATE ... WHERE quantity >= needed`; under concurrency the database's own
- * row locking makes this the single source of truth, so two simultaneous
- * checkouts of the last item cannot both succeed (P0 overselling fix).
- *
- * Returns the lines that could not be fulfilled with the remaining quantity,
- * so the caller can abort with an honest, specific message.
+ * Claims stock atomically for every cart line with a conditional decrement,
+ * so two simultaneous checkouts of the last item cannot both succeed.
+ * Stock is kept per product: all variants share one inventory.
  */
 async function reserveStock(
   tx: TransactionClient,
@@ -274,8 +269,7 @@ async function reserveStock(
 
 /**
  * Returns reserved stock to inventory when an order is cancelled or refunded
- * (spec §10, §29). Idempotent: the restoration is recorded on the order so a
- * repeated transition does not double-credit the seller.
+ * (spec §10, §29).
  */
 export async function releaseStockForOrder(
   tx: TransactionClient,
@@ -295,14 +289,12 @@ export interface TransitionInput {
   note?: string;
   actorId: string;
   actorRole: "buyer" | "seller" | "admin" | "system";
-  /**
-   * The user the actor is acting for. When the actor is a buyer, this must
-   * match the order's buyer — the AI may never transition someone else's
-   * order (spec §38: authorization on every sensitive backend action).
-   */
+  /** When the actor is a buyer, this must match the order's buyer (spec §38). */
   actingUserId?: string;
   /** For seller/admin transitions, which seller profile is authorised. */
   actingSellerId?: string;
+  /** Разрешённые исходные статусы, проверяются внутри транзакции (защита от гонки). */
+  onlyFrom?: string[];
 }
 
 export async function transitionOrder(
@@ -338,11 +330,15 @@ export async function transitionOrder(
     if (orderMeta.status === to) {
       return { ok: true, from: orderMeta.status, to, note: "already in state", order: { id: orderMeta.id, number: orderMeta.number, status: orderMeta.status } };
     }
+    if (input.onlyFrom && !input.onlyFrom.includes(orderMeta.status)) {
+      throw new Error(`переход недоступен из статуса ${orderMeta.status}`);
+    }
     if (!canTransition(orderMeta.status, to)) {
       throw new Error(`недопустимый переход статуса заказа: ${orderMeta.status} → ${to}`);
     }
-    const updated = await tx.order.update({
-      where: { id: input.orderId },
+    // Условное обновление: если статус успел измениться (например, пришла оплата), ничего не пишем.
+    const guarded = await tx.order.updateMany({
+      where: { id: input.orderId, status: orderMeta.status },
       data: {
         status: to,
         cancelledAt: to === "CANCELLED" ? new Date() : undefined,
@@ -352,8 +348,11 @@ export async function transitionOrder(
         // order terminates without fulfilment (P0 overselling fix).
         stockReleased: to === "CANCELLED" || to === "REFUNDED" ? true : undefined,
       },
-      select: { id: true, number: true, status: true },
     });
+    if (guarded.count !== 1) {
+      throw new Error("статус заказа уже изменился, обновите страницу");
+    }
+    const updated = { id: orderMeta.id, number: orderMeta.number, status: to as string };
     if ((to === "CANCELLED" || to === "REFUNDED") && !orderMeta.stockReleased) {
       await releaseStockForOrder(tx, order);
     }

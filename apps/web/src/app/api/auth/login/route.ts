@@ -3,14 +3,8 @@ import { verifyPassword, createToken, setSessionCookie } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { audit } from "@/lib/domains/audit";
-import {
-  consumeRateLimit,
-  clientIp,
-  loginBuckets,
-  recordAuthOutcome,
-  AUTH_LIMITS,
-  tooMany,
-} from "@/lib/domains/rate-limits";
+import { promoteConfiguredAdmin } from "@/lib/domains/admin-bootstrap";
+import { consumeRateLimit, clientIp, loginBuckets, recordAuthOutcome, AUTH_LIMITS, tooMany } from "@/lib/domains/rate-limits";
 
 export const dynamic = "force-dynamic";
 
@@ -18,52 +12,19 @@ export const POST = apiRoute(async (request) => {
   const body = await jsonBody<{ email?: string; password?: string }>(request);
   const email = (body.email ?? "").trim().toLowerCase();
   const ip = clientIp(request);
-
-  // Brute-force defence (P0-15, spec §142): count both per-IP and per-account,
-  // in the database so every instance sees the same window.
-  for (const bucket of loginBuckets(ip, email)) {
-    const decision = await consumeRateLimit(bucket, AUTH_LIMITS.login.limit, AUTH_LIMITS.login.windowMs);
-    if (!decision.allowed) return tooMany(decision);
-  }
-
-  const user = await prisma.user.findUnique({ where: { email } });
-  // Identical response for unknown user / wrong password (no user enumeration).
-  const invalid = Response.json(
-    { error: "Неверный email или пароль", code: "invalid_credentials" },
-    { status: 401 }
-  );
-  if (!user) {
-    await recordAuthOutcome(`login:ip:${ip}`, false);
-    return invalid;
-  }
-  if (user.isBlocked) {
-    return Response.json({ error: "Аккаунт заблокирован", code: "blocked" }, { status: 403 });
-  }
-
-  const ok = await verifyPassword(body.password ?? "", user.passwordHash);
-  if (!ok) {
-    await recordAuthOutcome(`login:account:${email}`, false);
-    await recordAuthOutcome(`login:ip:${ip}`, false);
-    return invalid;
-  }
-  await recordAuthOutcome(`login:account:${email}`, true);
-  await recordAuthOutcome(`login:ip:${ip}`, true);
-
+  for (const bucket of loginBuckets(ip, email)) { const decision = await consumeRateLimit(bucket, AUTH_LIMITS.login.limit, AUTH_LIMITS.login.windowMs); if (!decision.allowed) return tooMany(decision); }
+  const found = await prisma.user.findUnique({ where: { email } });
+  const invalid = Response.json({ error: "Неверный email или пароль", code: "invalid_credentials" }, { status: 401 });
+  if (!found) { await recordAuthOutcome(`login:ip:${ip}`, false); return invalid; }
+  if (found.isBlocked) return Response.json({ error: "Аккаунт заблокирован", code: "blocked" }, { status: 403 });
+  if (!await verifyPassword(body.password ?? "", found.passwordHash)) { await recordAuthOutcome(`login:account:${email}`, false); await recordAuthOutcome(`login:ip:${ip}`, false); return invalid; }
+  await recordAuthOutcome(`login:account:${email}`, true); await recordAuthOutcome(`login:ip:${ip}`, true);
+  await promoteConfiguredAdmin(found.id, email);
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: found.id } });
   const token = await createToken({ sub: user.id, role: user.role });
-  await prisma.session.create({
-    data: { userId: user.id, token, expiresAt: new Date(Date.now() + 7 * 864e5) },
-  });
-  await audit({
-    actorId: user.id,
-    actorRole: user.role.toLowerCase(),
-    action: "auth.login",
-    targetType: "user",
-    targetId: user.id,
-  });
-
-  const response = Response.json({
-    user: { id: user.id, name: user.name, email: user.email, role: user.role },
-  });
+  await prisma.session.create({ data: { userId: user.id, token, expiresAt: new Date(Date.now() + 7 * 864e5) } });
+  await audit({ actorId: user.id, actorRole: user.role.toLowerCase(), action: "auth.login", targetType: "user", targetId: user.id });
+  const response = Response.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   response.headers.append("Set-Cookie", setSessionCookie(token, env.isProduction));
   return response;
 });

@@ -1,17 +1,12 @@
 import { apiRoute, jsonBody } from "@/lib/api-helpers";
-import { requireSeller } from "@/lib/auth";
+import { requireVerifiedSeller } from "@/lib/auth";
 import { confirmAvailability } from "@/lib/domains/inventory";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Direct (non-AI) seller action. The UI button and the AI tool share the same
- * domain function, so behaviour and audit logging are identical.
- */
 export const POST = apiRoute(async (request, { params }) => {
-  const { user, sellerId } = await requireSeller(request);
-  const body = await jsonBody<{ quantity?: number; extendDays?: number }>(request);
-
+  const { user, sellerId } = await requireVerifiedSeller(request, "подтверждать наличие");
+  const body = await jsonBody<{ quantity?: number; extendDays?: number }>(request).catch(() => ({}) as { quantity?: number; extendDays?: number });
   const result = await confirmAvailability(params.id, user.id, {
     sellerId,
     quantity: typeof body.quantity === "number" ? body.quantity : undefined,
