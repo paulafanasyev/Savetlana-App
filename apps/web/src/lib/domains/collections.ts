@@ -23,6 +23,10 @@ export interface CollectionProduct {
   imageUrl: string | null;
   sellerName: string;
   sellerId: string;
+  /** Stock on hand; null when the seller has no inventory record yet. */
+  quantity?: number | null;
+  /** True when the buyer must pick a variant on the product page first. */
+  hasVariants?: boolean;
 }
 
 function mapProduct(p: {
@@ -35,8 +39,9 @@ function mapProduct(p: {
   rating: number;
   reviewsCount: number;
   images: { url: string }[];
-  inventory: { availability: string } | null;
+  inventory: { availability: string; quantity: number } | null;
   sellerProfile: { displayName: string; id: string } | null;
+  variants: { id: string }[];
 }): CollectionProduct {
   return {
     id: p.id,
@@ -51,6 +56,8 @@ function mapProduct(p: {
     imageUrl: p.images[0]?.url ?? null,
     sellerName: p.sellerProfile?.displayName ?? "—",
     sellerId: p.sellerProfile?.id ?? "",
+    quantity: p.inventory ? p.inventory.quantity : null,
+    hasVariants: p.variants.length > 0,
   };
 }
 
@@ -64,8 +71,9 @@ const PRODUCT_SELECT = {
   rating: true,
   reviewsCount: true,
   images: { orderBy: { createdAt: "asc" }, take: 1, select: { url: true } },
-  inventory: { select: { availability: true } },
+  inventory: { select: { availability: true, quantity: true } },
   sellerProfile: { select: { displayName: true, id: true } },
+  variants: { select: { id: true } },
 } as const;
 
 // ---------------------------------------------------------------------------

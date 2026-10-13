@@ -37,7 +37,7 @@ export default async function FavoritesPage() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {favorites.map((p) => (
-              <ProductCard key={p.id} id={p.id} title={p.title} priceKopecks={p.priceKopecks} availability={p.availability} sellerName={p.sellerName} imageUrl={p.imageUrl} favorite />
+              <ProductCard key={p.id} id={p.id} title={p.title} priceKopecks={p.priceKopecks} availability={p.availability} quantity={p.quantity ?? null} hasVariants={p.hasVariants === true} sellerName={p.sellerName} imageUrl={p.imageUrl} favorite />
             ))}
           </div>
         )}
@@ -54,7 +54,7 @@ export default async function FavoritesPage() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {wishlistItems.map((p) => (
-              <ProductCard key={p.id} id={p.id} title={p.title} priceKopecks={p.priceKopecks} availability={p.availability} sellerName={p.sellerName} imageUrl={p.imageUrl} />
+              <ProductCard key={p.id} id={p.id} title={p.title} priceKopecks={p.priceKopecks} availability={p.availability} quantity={p.quantity ?? null} hasVariants={p.hasVariants === true} sellerName={p.sellerName} imageUrl={p.imageUrl} />
             ))}
           </div>
         )}
@@ -68,11 +68,13 @@ function ProductCard(props: {
   title: string;
   priceKopecks: number;
   availability: string;
+  quantity: number | null;
+  hasVariants: boolean;
   sellerName: string;
   imageUrl: string | null;
   favorite?: boolean;
 }) {
-  const outOfStock = props.availability === "OUT_OF_STOCK";
+  const outOfStock = props.availability === "OUT_OF_STOCK" || props.quantity === 0;
   return (
     <div className="card flex gap-3 p-3">
       <Link href={`/product/${props.id}`} className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
@@ -88,10 +90,18 @@ function ProductCard(props: {
         <div className="mt-0.5 text-xs text-ink-soft">{props.sellerName}</div>
         <div className="mt-1 flex items-center justify-between">
           <span className="text-sm font-bold text-svetlana-700">{rub(props.priceKopecks)}</span>
-          <span className="text-xs text-ink-faint">{availabilityLabel(props.availability)}</span>
+          <span className="text-xs text-ink-faint">{outOfStock ? "Нет в наличии" : availabilityLabel(props.availability)}</span>
         </div>
         <div className="mt-2 flex flex-wrap items-start gap-2">
-          <AddToCartButton productId={props.id} outOfStock={outOfStock} />
+          {outOfStock ? (
+            <span className="rounded-lg bg-surface-muted px-3 py-1.5 text-sm text-ink-faint">Нет в наличии</span>
+          ) : props.hasVariants ? (
+            <Link href={`/product/${props.id}`} className="rounded-lg bg-svetlana-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-svetlana-700">
+              Выбрать вариант
+            </Link>
+          ) : (
+            <AddToCartButton productId={props.id} outOfStock={false} />
+          )}
           {props.favorite && <FavoriteButton productId={props.id} initialFavorite reloadOnChange />}
         </div>
       </div>
