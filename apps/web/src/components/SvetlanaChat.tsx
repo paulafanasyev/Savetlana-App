@@ -37,6 +37,9 @@ const TOOL_LABELS: Record<string, string> = {
   publish_product: "Публикация карточки", change_price: "Изменение цены", advise_price: "Совет по цене", find_competitors: "Анализ конкурентов",
   product_health: "Диагностика карточки", upcoming_events: "События", remember_preference: "Память предпочтений", recall_memory: "Воспоминание",
   get_reviews: "Отзывы", search_sellers: "Поиск продавцов", get_tracking: "Отслеживание", get_payment_status: "Оплата",
+  global_search: "Поиск по площадкам мира", scan_global_competitors: "Конкуренты в интернете", delivery_quotes: "Стоимость доставки",
+  document_requirements: "Нужные документы", create_workflow_rule: "Правило автоматизации", price_history: "История цены",
+  check_inventory: "Проверка наличия", vision_search: "Поиск по фото", request_return: "Возврат", create_dispute: "Спор по заказу",
 };
 
 interface RecognitionLike {
@@ -121,7 +124,7 @@ function loginHref(): string {
 }
 
 export function SvetlanaChat({ side = "buyer", className = "", title = "Светлана" }: { side?: "buyer" | "seller"; className?: string; title?: string }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([{ role: "assistant", content: side === "seller" ? "Здравствуйте! Я Светлана. Помогу с продажами: найду причины спада, проверю карточки, подскажу по ценам и конкурентам." : "Здравствуйте! Я Светлана. Помогу найти товар, выбрать подарок, сравнить варианты и оформить заказ. Что вас интересует?", emotion: "happy" }]);
+  const [messages, setMessages] = useState<ChatMessage[]>([{ role: "assistant", content: side === "seller" ? "Здравствуйте! Я Светлана. Помогу с продажами: найду причины спада, проверю карточки, подскажу по ценам, конкурентам и закупке в Китае." : "Здравствуйте! Я Светлана. Помогу найти товар, выбрать подарок, сравнить варианты и оформить заказ. Что вас интересует?", emotion: "happy" }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
