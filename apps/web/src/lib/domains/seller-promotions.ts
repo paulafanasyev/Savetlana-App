@@ -188,14 +188,16 @@ export async function expirePromotions(opts: { sellerId?: string; now?: Date; li
     select: { productId: true, sellerId: true, actorId: true, change: true, createdAt: true },
   });
   let ended = 0;
-  for (const due of duePromotions(rows, now).slice(0, opts.limit ?? 50)) {
+  const owned = rows.flatMap((r) => (r.sellerId ? [{ ...r, sellerId: r.sellerId }] : []));
+  for (const due of duePromotions(owned, now).slice(0, opts.limit ?? 50)) {
+    const sellerId = due.sellerId;
     const product = await prisma.product.findFirst({
-      where: { id: due.productId, sellerId: due.sellerId },
+      where: { id: due.productId, sellerId },
       select: { priceKopecks: true, oldPriceKopecks: true },
     });
     if (!product || !promoState(product).onPromo || product.priceKopecks !== due.priceTo) continue;
     try {
-      await endPromotion({ sellerId: due.sellerId, actorId: due.actorId ?? "system", productIds: [due.productId] });
+      await endPromotion({ sellerId, actorId: due.actorId ?? "system", productIds: [due.productId] });
       ended += 1;
     } catch {
       // одна ошибка не должна останавливать остальные
