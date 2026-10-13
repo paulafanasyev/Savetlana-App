@@ -11,6 +11,7 @@
  *   3. Carrier tracking sync for in-flight shipments.
  *   4. Сверка зависших платежей — если уведомление банка потерялось.
  *   5. Автоотмена заказов, не оплаченных за 24 часа (товар возвращается в продажу).
+ *   6. Конец акций по сроку — обычная цена возвращается сама.
  *
  * This module exposes a single `runJobs()` entry point that performs one
  * bounded slice of every category, so it can be driven by Vercel Cron
@@ -30,6 +31,7 @@ import { sweepStaleAvailability } from "./inventory";
 import { sweepExpiredDocuments } from "./documents";
 import { syncTracking } from "./delivery";
 import { checkSlaBreaches } from "./disputes";
+import { expirePromotions } from "./seller-promotions";
 import { retryFailedDeliveries } from "../notification-delivery";
 import { ShipmentStatus_VALUES } from "../db/enums";
 
@@ -79,6 +81,7 @@ export async function runJobs(): Promise<JobRunResult> {
     timed("outbox_deadletter", () => sweepDeadLetters(), (n) => `${n} dead-lettered`),
     timed("dispute_sla", () => checkSlaBreaches(), (n) => `${n} breached`),
     timed("delivery_retry", () => retryFailedDeliveries(), (n) => `${n} retried`),
+    timed("promo_expiry", () => expirePromotions(), (n) => `${n} promotions ended`),
   ]);
 
   return {
