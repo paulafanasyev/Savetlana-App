@@ -22,6 +22,7 @@ import { createPendingAction, consumePendingAction } from "../../domains/pending
 import { integrationStatus, hasExternalAiCredentials } from "../../env";
 import type { AiMessage, AiToolDefinition } from "../types";
 import type { ToolContext, ToolResult } from "../tools/registry";
+import { chooseShown, extractShownItems, planReferenceAction, resolveToolArgs, shownContext, type ShownItem } from "../references";
 
 // Register the tool catalogue once at first use.
 registerAllTools();
@@ -124,11 +125,14 @@ export class SvetlanaMasterAgent {
     });
 
     const history = await this.loadHistory(conversationId);
+    // Короткая память разговора: какие товары Светлана только что показала,
+    // чтобы понимать «сравни эти два» и «добавь первый в корзину».
+    const shown = chooseShown(await this.recentShownLists(conversationId), input.message);
     // The user message is added ONCE. Tool results are appended after it, so
     // a model that has already acted must now react to the results instead of
     // re-decoding the same intent forever (loop protection, spec §145).
     const messages: AiMessage[] = [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: shown.length > 0 ? `${SYSTEM_PROMPT} ${shownContext(shown)}` : SYSTEM_PROMPT },
       ...history,
       { role: "user", content: input.message },
     ];
@@ -139,7 +143,24 @@ export class SvetlanaMasterAgent {
     let finalLive = false;
     let answeredByModel = false;
 
+    // Явная ссылка на показанные товары выполняется сразу, точно по ним, а
+    // модель затем отвечает по результату (как после обычного вызова).
+    const shortcut = planReferenceAction(input.message, shown);
+    if (shortcut) {
+      const call = { id: `call_${traceId}_ref`, name: shortcut.tool, arguments: shortcut.args };
+      messages.push({ role: "assistant", content: shortcut.label, toolCalls: [call] });
+      const outcome = await this.executeTool(call.name, call.arguments, ctx, routing.agent, conversationId);
+      if (outcome.kind === "awaiting_confirmation") {
+        pendingConfirmation = outcome.pending;
+        lastAnswer = outcome.message;
+      } else {
+        steps.push(outcome.step);
+        messages.push({ role: "tool", content: JSON.stringify(outcome.step.result), toolCallId: call.id });
+      }
+    }
+
     for (let step = 0; step < AGENT_LIMITS.maxSteps; step++) {
+      if (pendingConfirmation) break;
       if (steps.length >= AGENT_LIMITS.maxToolCalls) break;
 
       const toolNames = AGENT_TOOLS[routing.agent] ?? [];
@@ -159,6 +180,7 @@ export class SvetlanaMasterAgent {
         const calls = response.toolCalls.slice(0, budget).map((call, index) => ({
           ...call,
           id: call.id || `call_${traceId}_${step}_${index}`,
+          arguments: resolveToolArgs(call.name, call.arguments ?? {}, input.message, shown),
         }));
         if (calls.length === 0) break;
         // The assistant turn that requested the tools must precede their results.
@@ -258,6 +280,22 @@ export class SvetlanaMasterAgent {
         role: (r.role === "user" ? "user" : "assistant") as "user" | "assistant",
         content: r.content,
       }));
+  }
+
+  /** Товары из последних успешных вызовов инструментов этого разговора, новые первыми. */
+  private async recentShownLists(conversationId: string): Promise<ShownItem[][]> {
+    if (conversationId === GUEST_CONVERSATION) return [];
+    try {
+      const rows = await prisma.aiToolCall.findMany({
+        where: { conversationId, status: "success" },
+        orderBy: { createdAt: "desc" },
+        take: 6,
+        select: { output: true },
+      });
+      return rows.map((r) => extractShownItems(String(r.output ?? ""))).filter((list) => list.length > 0);
+    } catch {
+      return [];
+    }
   }
 
   private async persistMessage(
