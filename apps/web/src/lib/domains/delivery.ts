@@ -26,6 +26,10 @@ export interface ShipmentParams {
   trackingNumber?: string;
   deliveryKopecks?: number;
   estimatedDelivery?: Date;
+  /** СДЭК через площадку: код пункта, куда продавец сдаст посылку. */
+  fromPointCode?: string;
+  /** Вес посылки в граммах, если продавец его указал. */
+  weightGrams?: number;
 }
 
 export interface TrackingEvent {
@@ -44,7 +48,8 @@ export interface DeliveryProviderAdapter {
     priceKopecks: number;
   }>;
   cancelShipment(trackingNumber: string): Promise<{ ok: boolean }>;
-  getTracking(trackingNumber: string): Promise<{ events: TrackingEvent[]; status: string }>;
+  /** externalNumber: номер, который перевозчик выдал после регистрации (его видит покупатель). */
+  getTracking(trackingNumber: string): Promise<{ events: TrackingEvent[]; status: string; externalNumber?: string }>;
   getEta(trackingNumber: string): Promise<Date | null>;
   calculatePrice(params: { weightGrams?: number; city?: string }): Promise<number>;
 }
@@ -230,7 +235,10 @@ export async function createShipment(params: ShipmentParams) {
 
   // A seller who already has a carrier tracking number is the source of truth
   // (spec §123): record it verbatim and never fabricate a replacement.
-  const adapter = resolved && resolved.available ? resolved : null;
+  // Если продавец сам сдал посылку и ввёл трек-номер, заявку у перевозчика не
+  // создаём повторно, даже когда перевозчик подключён: записываем его номер.
+  const declaredByChoice = Boolean(params.trackingNumber) && resolved?.key === "cdek";
+  const adapter = resolved && resolved.available && !declaredByChoice ? resolved : null;
   const sellerDeclared = !adapter && Boolean(params.trackingNumber);
   if (!adapter && !sellerDeclared) {
     throw new Error(
@@ -333,9 +341,12 @@ export async function syncTracking(shipmentId: string) {
     ]);
   }
 
+  // После регистрации СДЭК выдаёт свой номер: показываем покупателю его, а не номер заявки.
+  const externalNumber = tracking.externalNumber && tracking.externalNumber !== shipment.trackingNumber ? tracking.externalNumber : undefined;
+
   return prisma.deliveryShipment.update({
     where: { id: shipment.id },
-    data: { status: newShipmentStatus, eta: eta ?? shipment.eta },
+    data: { status: newShipmentStatus, eta: eta ?? shipment.eta, ...(externalNumber ? { trackingNumber: externalNumber } : {}) },
     include: { events: { orderBy: { occurredAt: "asc" } } },
   });
 }
