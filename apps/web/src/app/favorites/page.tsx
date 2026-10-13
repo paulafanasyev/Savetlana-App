@@ -4,6 +4,7 @@ import { listFavorites, getOrCreateWishlist, listWishlistItems } from "@/lib/dom
 import { rub, availabilityLabel } from "@/lib/format";
 import { AddToCartButton } from "@/components/AddToCartButton";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { WishlistRemoveButton } from "@/components/WishlistRemoveButton";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,7 @@ export default async function FavoritesPage() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {wishlistItems.map((p) => (
-              <ProductCard key={p.id} id={p.id} title={p.title} priceKopecks={p.priceKopecks} availability={p.availability} quantity={p.quantity ?? null} hasVariants={p.hasVariants === true} sellerName={p.sellerName} imageUrl={p.imageUrl} />
+              <ProductCard key={p.id} id={p.id} title={p.title} priceKopecks={p.priceKopecks} availability={p.availability} quantity={p.quantity ?? null} hasVariants={p.hasVariants === true} sellerName={p.sellerName} imageUrl={p.imageUrl} wishlistId={wishlist.id} />
             ))}
           </div>
         )}
@@ -73,6 +74,7 @@ function ProductCard(props: {
   sellerName: string;
   imageUrl: string | null;
   favorite?: boolean;
+  wishlistId?: string;
 }) {
   const outOfStock = props.availability === "OUT_OF_STOCK" || props.quantity === 0;
   return (
@@ -103,6 +105,7 @@ function ProductCard(props: {
             <AddToCartButton productId={props.id} outOfStock={false} />
           )}
           {props.favorite && <FavoriteButton productId={props.id} initialFavorite reloadOnChange />}
+          {props.wishlistId && <WishlistRemoveButton productId={props.id} listId={props.wishlistId} />}
         </div>
       </div>
     </div>

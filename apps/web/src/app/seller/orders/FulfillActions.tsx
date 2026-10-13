@@ -15,11 +15,15 @@ export function FulfillActions({ orderId, status, hasShipment, shipmentProvider,
   const [note, setNote] = useState("");
   if (["CANCELLED", "REFUNDED", "COMPLETED", "DELIVERED"].includes(status)) return null;
 
-  // Тестовый перевозчик только вне боевого сайта (решает сервер; он же его и отклоняет).
+  // Подключённых служб доставки пока нет: продавец сдаёт посылку сам и вводит
+  // трек-номер, а получение отмечает здесь же. Тестовый перевозчик только вне
+  // боевого сайта (решает сервер; он же его и отклоняет).
   const carriers = [
-    { key: "cdek", label: "СДЭК (с вашим трек-номером)" },
+    { key: "cdek", label: "Сдал посылку сам (СДЭК, Почта и т. п.)" },
     ...(allowTestCarrier ? [{ key: "sandbox-carrier", label: "Тестовый перевозчик" }] : []),
   ];
+  const needsTracking = carrier !== "sandbox-carrier";
+  const trackingMissing = needsTracking && tracking.trim().length === 0;
 
   async function call(url: string, body?: unknown) {
     setBusy(true);
@@ -44,19 +48,20 @@ export function FulfillActions({ orderId, status, hasShipment, shipmentProvider,
   return (
     <div className="space-y-3">
       {canConfirm && <button className="btn btn-primary" disabled={busy} onClick={() => call(`/api/seller/orders/${orderId}/confirm`)}>Подтвердить заказ</button>}
-      {canShip && !showShip && <button className="btn btn-ghost" disabled={busy} onClick={() => setShowShip(true)}>Отправить перевозчиком</button>}
+      {canShip && !showShip && <button className="btn btn-ghost" disabled={busy} onClick={() => setShowShip(true)}>Отправил посылкой</button>}
       {canShip && showShip && (
         <div className="rounded border p-3">
-          <label className="block text-sm">Перевозчик
+          <label className="block text-sm">Как отправили
             <select className="input mt-1 w-full" value={carrier} onChange={(e) => setCarrier(e.target.value)}>
               {carriers.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
             </select>
           </label>
-          <label className="mt-2 block text-sm">Трек-номер (если уже сдали посылку)
+          <label className="mt-2 block text-sm">Трек-номер посылки{needsTracking ? "" : " (необязательно)"}
             <input className="input mt-1 w-full" value={tracking} onChange={(e) => setTracking(e.target.value)} />
           </label>
+          {needsTracking && <p className="mt-1 text-xs text-ink-soft">Покупатель увидит трек-номер в заказе. Когда посылку вручат, отметьте получение ниже.</p>}
           <div className="mt-3 flex gap-2">
-            <button className="btn btn-primary" disabled={busy} onClick={() => call(`/api/seller/orders/${orderId}/ship`, { carrier, trackingNumber: tracking || undefined })}>Создать отправление</button>
+            <button className="btn btn-primary" disabled={busy || trackingMissing} onClick={() => call(`/api/seller/orders/${orderId}/ship`, { carrier, trackingNumber: tracking.trim() || undefined })}>Сохранить отправку</button>
             <button className="btn btn-ghost" onClick={() => setShowShip(false)}>Отмена</button>
           </div>
         </div>
