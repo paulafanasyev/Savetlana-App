@@ -18,12 +18,15 @@ import { routeAgent, AGENT_TOOLS, type AgentKey } from "./router";
 import { decide, AGENT_LIMITS, PolicyAssertionError } from "./policy";
 import { prisma } from "../../prisma";
 import { createPendingAction, consumePendingAction } from "../../domains/pending-actions";
-import { integrationStatus } from "../../env";
+import { integrationStatus, hasExternalAiCredentials } from "../../env";
 import type { AiMessage, AiToolDefinition } from "../types";
 import type { ToolContext, ToolResult } from "../tools/registry";
 
 // Register the tool catalogue once at first use.
 registerAllTools();
+
+/** Пометка, когда внешняя модель настроена, но не ответила и ответил встроенный движок. */
+export const FALLBACK_NOTE = "(Внешний ИИ сейчас не ответил, поэтому отвечает встроенная Светлана.)";
 
 export interface MasterAgentInput {
   userId: string;
@@ -46,8 +49,10 @@ export interface MasterAgentResult {
   answer: string;
   conversationId: string;
   agent: AgentKey;
-  /** True only if a real (non-sandbox) model produced the reasoning. */
+  /** True only if a real (non-sandbox) model produced the final answer. */
   liveModel: boolean;
+  /** External model is configured but the final answer came from the built-in engine. */
+  degraded?: boolean;
   steps: AgentStep[];
   verification: "VERIFIED" | "MOCK_VERIFIED" | "NOT_PROVEN" | "PENDING_EXTERNAL_ACCESS";
   /** A sensitive action is waiting on the user's explicit confirmation. */
@@ -69,6 +74,7 @@ const SYSTEM_PROMPT = [
   "Ты видишь перед собой только безопасный контекст: никакие секреты, платёжные реквизиты и чужие персональные данные тебе не передаются.",
   "Если данных недостаточно — честно скажи, чего не хватает, вместо того чтобы придумывать.",
   "Никогда не утверждай, что действие выполнено, если инструмент не вернул реальный результат.",
+  "Доставка на площадке: самовывоз у продавца (бесплатно) или доставка продавцом (350 ₽). Оплата на странице заказа. Проблемы с заказом решаются кнопкой «Открыть спор» на странице заказа.",
 ].join(" ");
 
 function buildToolSchemas(names: string[]): AiToolDefinition[] {
@@ -118,7 +124,9 @@ export class SvetlanaMasterAgent {
     const steps: AgentStep[] = [];
     let pendingConfirmation: MasterAgentResult["pendingConfirmation"];
     let lastAnswer = "";
-    let liveModel = false;
+    let anyLive = false;
+    let finalLive = false;
+    let answeredByModel = false;
 
     for (let step = 0; step < AGENT_LIMITS.maxSteps; step++) {
       if (steps.length >= AGENT_LIMITS.maxToolCalls) break;
@@ -130,12 +138,21 @@ export class SvetlanaMasterAgent {
         taskClass: "reasoning",
         traceId: `${traceId}_s${step}`,
       });
-      liveModel = liveModel || gatewayResult.live;
+      anyLive = anyLive || gatewayResult.live;
       const response = gatewayResult.response;
 
       if (response.toolCalls && response.toolCalls.length > 0) {
-        for (const call of response.toolCalls) {
-          if (steps.length >= AGENT_LIMITS.maxToolCalls) break;
+        // Only the calls we will actually execute go into the transcript: an
+        // OpenAI-compatible API rejects a tool_call that has no tool result.
+        const budget = Math.max(0, AGENT_LIMITS.maxToolCalls - steps.length);
+        const calls = response.toolCalls.slice(0, budget).map((call, index) => ({
+          ...call,
+          id: call.id || `call_${traceId}_${step}_${index}`,
+        }));
+        if (calls.length === 0) break;
+        // The assistant turn that requested the tools must precede their results.
+        messages.push({ role: "assistant", content: response.content ?? "", toolCalls: calls });
+        for (const call of calls) {
           const outcome = await this.executeTool(call.name, call.arguments, ctx, routing.agent, conversationId);
           if (outcome.kind === "awaiting_confirmation") {
             pendingConfirmation = outcome.pending;
@@ -155,6 +172,8 @@ export class SvetlanaMasterAgent {
       }
 
       lastAnswer = response.content;
+      finalLive = gatewayResult.live;
+      answeredByModel = true;
       break;
     }
 
@@ -162,8 +181,14 @@ export class SvetlanaMasterAgent {
       lastAnswer = steps.length
         ? "Я собрала данные, но сформулировать итоговый ответ не смогла. Вот что удалось узнать: " +
           steps.map((s) => s.result.summary ?? s.toolName).join("; ")
-        : "Мне не удалось обработать запрос. Попробуйте переформулировать — я пока работаю в режиме ограниченной поддержки.";
+        : "Мне не удалось обработать запрос. Попробуйте переформулировать или написать название товара.";
     }
+
+    // Honest provenance: the label follows whoever wrote the final answer,
+    // not whoever answered first.
+    const liveModel = answeredByModel ? finalLive : anyLive;
+    const degraded = hasExternalAiCredentials && answeredByModel && !finalLive;
+    if (degraded) lastAnswer = `${lastAnswer}\n\n${FALLBACK_NOTE}`;
 
     const verification = deriveVerification(steps, liveModel);
     await this.persistMessage(conversationId, "assistant", lastAnswer, {
@@ -171,6 +196,7 @@ export class SvetlanaMasterAgent {
       agent: routing.agent,
       provider: aiMode().provider,
       verification,
+      degraded,
       steps: steps.map((s) => s.toolName),
     });
 
@@ -179,6 +205,7 @@ export class SvetlanaMasterAgent {
       conversationId,
       agent: routing.agent,
       liveModel,
+      degraded,
       steps,
       verification,
       pendingConfirmation,
@@ -211,13 +238,14 @@ export class SvetlanaMasterAgent {
       orderBy: { createdAt: "asc" },
       take: 20,
     });
-    return rows.map((r) => ({
-      role: (r.role === "user" ? "user" : r.role === "assistant" ? "assistant" : "tool") as
-        | "user"
-        | "assistant"
-        | "tool",
-      content: r.content,
-    }));
+    // Only plain user/assistant turns are replayed: a stored tool row has no
+    // matching tool_call and would make an external API reject the request.
+    return rows
+      .filter((r) => r.role === "user" || r.role === "assistant")
+      .map((r) => ({
+        role: (r.role === "user" ? "user" : "assistant") as "user" | "assistant",
+        content: r.content,
+      }));
   }
 
   private async persistMessage(
