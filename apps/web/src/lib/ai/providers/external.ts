@@ -18,6 +18,33 @@ import type {
 } from "../types";
 import type { AiMessage } from "../types";
 
+/** 4xx from the provider: the same request will fail again, so no retry. */
+class NonRetryableProviderError extends Error {}
+
+/**
+ * OpenAI-compatible wire format. A tool result is only valid right after the
+ * assistant turn that requested it, so that turn carries its tool_calls.
+ */
+export function toWireMessages(messages: AiMessage[]): Record<string, unknown>[] {
+  return messages.map((m) => {
+    if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+      return {
+        role: "assistant",
+        content: m.content || null,
+        tool_calls: m.toolCalls.map((tc) => ({
+          id: tc.id,
+          type: "function",
+          function: { name: tc.name, arguments: JSON.stringify(tc.arguments ?? {}) },
+        })),
+      };
+    }
+    if (m.role === "tool") {
+      return { role: "tool", content: m.content, tool_call_id: m.toolCallId ?? "" };
+    }
+    return { role: m.role, content: m.content };
+  });
+}
+
 export class ExternalAiProvider implements AiProvider {
   readonly key = "external";
   readonly displayName = "external-provider";
@@ -43,11 +70,7 @@ export class ExternalAiProvider implements AiProvider {
 
     const body: Record<string, unknown> = {
       model: env.aiGatewayModel,
-      messages: request.messages.map((m: AiMessage) => ({
-        role: m.role,
-        content: m.content,
-        ...(m.toolCallId ? { tool_call_id: m.toolCallId } : {}),
-      })),
+      messages: toWireMessages(request.messages),
       // Reasoning models (e.g. Atria-Dawn-Preview) spend part of this budget on
       // internal reasoning before the visible answer appears; keep it generous.
       max_tokens: request.maxTokens ?? 2048,
@@ -82,7 +105,7 @@ export class ExternalAiProvider implements AiProvider {
           const text = await safeReadText(response);
           // 4xx is not retryable; 5xx is (spec §50 error handling).
           if (response.status >= 400 && response.status < 500) {
-            throw new Error(`provider 4xx: ${response.status} ${redactError(text)}`);
+            throw new NonRetryableProviderError(`provider 4xx: ${response.status} ${redactError(text)}`);
           }
           throw new Error(`provider ${response.status} ${redactError(text)}`);
         }
@@ -127,6 +150,7 @@ export class ExternalAiProvider implements AiProvider {
       } catch (error) {
         clearTimeout(timeout);
         lastError = error instanceof Error ? error : new Error(String(error));
+        if (error instanceof NonRetryableProviderError) break;
         attempt++;
         if (attempt <= maxRetries) {
           // Exponential backoff, only for retryable (network/5xx) failures.
