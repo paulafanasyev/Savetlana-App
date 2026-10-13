@@ -22,6 +22,14 @@ const nextConfig = {
       { protocol: "https", hostname: "avatars.svetlana.example" },
     ],
   },
+  async rewrites() {
+    return [
+      {
+        source: "/images/svetlana.jpg",
+        destination: "https://raw.githubusercontent.com/paulafanasyev/Svetlana-2.0/svetlana-2.0-core-development-0416c/public/images/avatar/svetlana-master.jpg",
+      },
+    ];
+  },
   async headers() {
     const csp = [
       "default-src 'self'",
