@@ -12,12 +12,14 @@ const REJECT_REASONS: [string, string][] = [
   ["OTHER", "Другая причина"],
 ];
 
-export function FulfillActions({ orderId, status, hasShipment, shipmentProvider, allowTestCarrier = false }: { orderId: string; status: string; hasShipment: boolean; shipmentProvider?: string | null; allowTestCarrier?: boolean }) {
+export function FulfillActions({ orderId, status, hasShipment, shipmentProvider, allowTestCarrier = false, cdekConnected = false }: { orderId: string; status: string; hasShipment: boolean; shipmentProvider?: string | null; allowTestCarrier?: boolean; cdekConnected?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showShip, setShowShip] = useState(false);
   const [carrier, setCarrier] = useState("cdek");
   const [tracking, setTracking] = useState("");
+  const [pointCode, setPointCode] = useState("");
+  const [weight, setWeight] = useState("");
   const [note, setNote] = useState("");
   const [showReject, setShowReject] = useState(false);
   const [rejectReason, setRejectReason] = useState("OUT_OF_STOCK");
@@ -25,15 +27,21 @@ export function FulfillActions({ orderId, status, hasShipment, shipmentProvider,
   const [comment, setComment] = useState("");
   if (["CANCELLED", "REFUNDED", "COMPLETED", "DELIVERED"].includes(status)) return null;
 
-  // Подключённых служб доставки пока нет: продавец сдаёт посылку сам и вводит
-  // трек-номер, а получение отмечает здесь же. Тестовый перевозчик только вне
-  // боевого сайта (решает сервер; он же его и отклоняет).
+  // Продавец либо сдаёт посылку сам и вводит трек-номер, либо (если СДЭК
+  // подключён к площадке) оформляет отправку здесь: заявка уходит в СДЭК, а
+  // статусы приходят сами. Тестовый перевозчик только вне боевого сайта.
   const carriers = [
+    ...(cdekConnected ? [{ key: "cdek-api", label: "Оформить СДЭК здесь: сдам в пункт, курьер привезёт покупателю" }] : []),
     { key: "cdek", label: "Сдал посылку сам (СДЭК, Почта и т. п.)" },
     ...(allowTestCarrier ? [{ key: "sandbox-carrier", label: "Тестовый перевозчик" }] : []),
   ];
-  const needsTracking = carrier !== "sandbox-carrier";
+  const viaCdek = carrier === "cdek-api";
+  const needsTracking = carrier !== "sandbox-carrier" && !viaCdek;
   const trackingMissing = needsTracking && tracking.trim().length === 0;
+  const pointMissing = viaCdek && pointCode.trim().length < 3;
+  const shipBody = viaCdek
+    ? { carrier: "cdek", fromPointCode: pointCode.trim(), weightGrams: Number(weight) > 0 ? Number(weight) : undefined }
+    : { carrier, trackingNumber: tracking.trim() || undefined };
 
   async function call(url: string, body?: unknown, confirmText?: string) {
     if (confirmText && !window.confirm(confirmText)) return;
@@ -116,12 +124,26 @@ export function FulfillActions({ orderId, status, hasShipment, shipmentProvider,
               {carriers.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
             </select>
           </label>
-          <label className="mt-2 block text-sm">Трек-номер посылки{needsTracking ? "" : " (необязательно)"}
-            <input className="input mt-1 w-full" value={tracking} onChange={(e) => setTracking(e.target.value)} />
-          </label>
-          {needsTracking && <p className="mt-1 text-xs text-ink-soft">Покупатель увидит трек-номер в заказе. Когда посылку вручат, отметьте получение ниже.</p>}
+          {viaCdek ? (
+            <>
+              <label className="mt-2 block text-sm">Код пункта СДЭК, куда сдадите посылку
+                <input className="input mt-1 w-full" value={pointCode} maxLength={20} placeholder="Например, MSK123" onChange={(e) => setPointCode(e.target.value.toUpperCase())} />
+              </label>
+              <label className="mt-2 block text-sm">Вес посылки, г (необязательно)
+                <input className="input mt-1 w-full" inputMode="numeric" value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
+              </label>
+              <p className="mt-1 text-xs text-ink-soft">Код пункта есть на сайте СДЭК и на вывеске пункта. Заявка уйдёт в СДЭК, номер отправления и статусы покупатель увидит в заказе. Доставка уже оплачена покупателем.</p>
+            </>
+          ) : (
+            <>
+              <label className="mt-2 block text-sm">Трек-номер посылки{needsTracking ? "" : " (необязательно)"}
+                <input className="input mt-1 w-full" value={tracking} onChange={(e) => setTracking(e.target.value)} />
+              </label>
+              {needsTracking && <p className="mt-1 text-xs text-ink-soft">Покупатель увидит трек-номер в заказе. Когда посылку вручат, отметьте получение ниже.</p>}
+            </>
+          )}
           <div className="mt-3 flex gap-2">
-            <button className="btn btn-primary" disabled={busy || trackingMissing} onClick={() => call(`/api/seller/orders/${orderId}/ship`, { carrier, trackingNumber: tracking.trim() || undefined })}>Сохранить отправку</button>
+            <button className="btn btn-primary" disabled={busy || trackingMissing || pointMissing} onClick={() => call(`/api/seller/orders/${orderId}/ship`, shipBody)}>{viaCdek ? "Оформить отправку" : "Сохранить отправку"}</button>
             <button className="btn btn-ghost" onClick={() => setShowShip(false)}>Отмена</button>
           </div>
         </div>

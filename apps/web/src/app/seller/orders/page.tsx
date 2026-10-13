@@ -4,6 +4,7 @@ import { rub, timeAgo } from "@/lib/format";
 import { orderStatusLabel, paymentStatusLabel, shipmentStatusLabel } from "@/lib/labels";
 import { deliveryLabel } from "@/lib/delivery-options";
 import { isLiveDeployment } from "@/lib/live-mode";
+import { CdekCarrierAdapter } from "@/lib/domains/carriers/cdek";
 import { FulfillActions } from "./FulfillActions";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,8 @@ export default async function SellerOrdersPage() {
   const { sellerId } = await requireSellerServer();
   const orders = await getOrdersForSeller(sellerId);
   const allowTestCarrier = !isLiveDeployment();
+  // Оформлять СДЭК прямо из кабинета можно, только когда у площадки есть договор и ключи.
+  const cdekConnected = new CdekCarrierAdapter().available;
   return (
     <main className="space-y-5 p-6">
       <h1 className="text-2xl font-semibold">Заказы покупателей</h1>
@@ -84,7 +87,7 @@ export default async function SellerOrdersPage() {
                   Оплата: {paymentStatusLabel(order.payment?.status)}
                   {order.shipment ? ` · Отправление: ${order.shipment.carrierName}, ${shipmentStatusLabel(order.shipment.status)}` : ""}
                 </p>
-                <FulfillActions orderId={order.id} status={order.status} hasShipment={Boolean(order.shipment)} shipmentProvider={order.shipment?.providerKey} allowTestCarrier={allowTestCarrier} />
+                <FulfillActions orderId={order.id} status={order.status} hasShipment={Boolean(order.shipment)} shipmentProvider={order.shipment?.providerKey} allowTestCarrier={allowTestCarrier} cdekConnected={cdekConnected && method === "SELLER"} />
               </article>
             );
           })}

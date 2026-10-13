@@ -23,6 +23,9 @@ export const POST = apiRoute(async (request, { params }) => {
     trackingNumber?: string;
     deliveryKopecks?: number;
     estimatedDelivery?: string;
+    /** СДЭК через площадку: код пункта, куда продавец сдаст посылку. */
+    fromPointCode?: string;
+    weightGrams?: number;
   }>(request);
 
   const order = await prisma.order.findUniqueOrThrow({
@@ -48,6 +51,8 @@ export const POST = apiRoute(async (request, { params }) => {
       trackingNumber: body.trackingNumber,
       deliveryKopecks: body.deliveryKopecks,
       estimatedDelivery: body.estimatedDelivery ? new Date(body.estimatedDelivery) : undefined,
+      fromPointCode: typeof body.fromPointCode === "string" ? body.fromPointCode.slice(0, 20) : undefined,
+      weightGrams: Number.isFinite(Number(body.weightGrams)) && Number(body.weightGrams) > 0 ? Math.min(30_000, Math.round(Number(body.weightGrams))) : undefined,
     });
 
     await notify({
