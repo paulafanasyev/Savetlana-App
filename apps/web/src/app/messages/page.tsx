@@ -15,7 +15,14 @@ export default async function BuyerMessagesPage() {
         <p className="text-ink-soft">Переписка с магазинами. Задать вопрос продавцу можно на странице любого товара.</p>
       </div>
       {threads.length === 0 ? (
-        <p className="text-ink-faint">Сообщений пока нет.</p>
+        <div className="card p-6 text-center">
+          <div className="text-lg font-semibold text-ink">Сообщений пока нет</div>
+          <p className="mt-2 text-sm text-ink-soft">Откройте товар и нажмите «Задать вопрос продавцу»: про размер, комплектацию или доставку. Ответ появится здесь.</p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <Link href="/catalog" className="btn btn-primary">Перейти в каталог</Link>
+            <Link href="/orders" className="btn btn-ghost">Мои заказы</Link>
+          </div>
+        </div>
       ) : (
         <ul className="space-y-3">
           {threads.map((t) => (

@@ -11,7 +11,11 @@ const MAX_PHOTOS = 8;
 const MAX_BYTES = 2 * 1024 * 1024;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-export function ProductDraftAssistant({ categories }: { categories: Category[] }) {
+/**
+ * afterPublishHref: куда перейти после публикации. Без него страница просто
+ * обновляется (список товаров), со страницы «Новый товар» уходим в список.
+ */
+export function ProductDraftAssistant({ categories, afterPublishHref }: { categories: Category[]; afterPublishHref?: string }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
@@ -105,7 +109,8 @@ export function ProductDraftAssistant({ categories }: { categories: Category[] }
       const name = draft.title;
       reset();
       setMessage(`Карточка «${name}» опубликована.`);
-      window.location.reload();
+      if (afterPublishHref) window.location.assign(afterPublishHref);
+      else window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка запроса");
     } finally {
@@ -171,7 +176,7 @@ export function ProductDraftAssistant({ categories }: { categories: Category[] }
           <dl className="grid grid-cols-2 gap-2 text-sm">
             <dt className="text-ink-faint">Код товара</dt><dd className="font-mono text-xs text-ink-soft">{draft.sku}</dd>
             <dt className="text-ink-faint">Название</dt><dd>{draft.title}</dd>
-            <dt className="text-ink-faint">Цена</dt><dd>{(draft.priceKopecks / 100).toFixed(0)} ₽</dd>
+            <dt className="text-ink-faint">Цена</dt><dd>{draft.priceKopecks > 0 ? `${(draft.priceKopecks / 100).toFixed(0)} ₽` : "не указана, добавьте перед публикацией"}</dd>
           </dl>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={publish} disabled={publishing} className="btn btn-primary">
@@ -180,7 +185,7 @@ export function ProductDraftAssistant({ categories }: { categories: Category[] }
             <Link href={`/seller/products/${draft.id}/edit`} className="btn btn-ghost">Остаток, фото и характеристики</Link>
             <button type="button" onClick={reset} disabled={publishing} className="btn btn-ghost">Создать другой товар</button>
           </div>
-          <p className="text-xs text-ink-faint">Черновик сохранён в списке товаров ниже, его можно опубликовать позже.</p>
+          <p className="text-xs text-ink-faint">Черновик сохранён в разделе «Товары», его можно опубликовать позже.</p>
         </div>
       )}
     </div>
