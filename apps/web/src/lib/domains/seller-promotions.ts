@@ -7,11 +7,22 @@
  * добавили товар в избранное или ждали снижения цены, уведомляем внутри сайта.
  */
 import { prisma } from "../prisma";
-import { UserFacingError, promoPrice, promoState } from "./engagement-rules";
+import { UserFacingError, promoPrice, promoState, raisedRecently, PROMO_FAIR_PRICE_DAYS, PRICE_HISTORY_LOOKBACK_DAYS } from "./engagement-rules";
 import { applyPriceChange } from "./pricing";
 import { notifyMany, type NotificationInput } from "./notifications";
 
 const MAX_PRODUCTS = 100;
+
+/** Какие из товаров дорожали за последние две недели (по журналу цен). */
+export async function recentlyRaisedIds(productIds: string[], now: Date = new Date()): Promise<Set<string>> {
+  if (productIds.length === 0) return new Set();
+  const since = new Date(now.getTime() - PRICE_HISTORY_LOOKBACK_DAYS * 86_400_000);
+  const changes = await prisma.listingHistory.findMany({
+    where: { productId: { in: productIds }, action: "PRICE_CHANGED", createdAt: { gte: since } },
+    select: { productId: true, change: true, createdAt: true },
+  });
+  return raisedRecently(changes, now);
+}
 
 function rubText(kopecks: number): string {
   return `${Math.round(kopecks / 100).toLocaleString("ru-RU")} ₽`;
@@ -33,9 +44,13 @@ export async function startPromotion(input: { sellerId: string; actorId: string;
 
   const started: { id: string; title: string; fromKopecks: number; toKopecks: number }[] = [];
   const skipped: string[] = [];
+  const raised = await recentlyRaisedIds(products.map((p) => p.id));
+  if (raised.size === products.length) {
+    throw new UserFacingError(`Цену этих товаров повышали за последние ${PROMO_FAIR_PRICE_DAYS} дней. Скидку от поднятой цены запускать нельзя: зачёркнутая цена должна быть настоящей`, 400);
+  }
   // Сначала считаем все цены: если скидка не подходит хоть одному товару, ничего не меняем.
   const plan = products.flatMap((p) => {
-    if (promoState(p).onPromo) {
+    if (promoState(p).onPromo || raised.has(p.id)) {
       skipped.push(p.title);
       return [];
     }
