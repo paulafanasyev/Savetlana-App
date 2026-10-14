@@ -21,6 +21,7 @@ import { isValidEnum } from "./db/enums";
 import type { DeliveryChannel, DeliveryState } from "./db/enums";
 import type { NotificationKind } from "./domains/notifications";
 import type { Notification } from "@prisma/client";
+import { formatTelegramMessage, telegramApi, telegramConfig } from "./telegram";
 
 /** What a delivery adapter must be able to do. */
 export interface NotificationChannel {
@@ -545,22 +546,70 @@ export async function deliverNotification(notification: Notification): Promise<v
   }
 }
 
+export interface RetryDeps {
+  /** Подменяемый канал почты (для тестов). По умолчанию настоящий SMTP. */
+  emailChannel?: NotificationChannel;
+}
+
+/**
+ * Куда слать повтор. В строке доставки адрес хранится замаскированным
+ * (a***@mail.ru), поэтому настоящий адрес берётся заново: почта из аккаунта,
+ * чат из действующей привязки Telegram. Push не повторяем: подписка в строке
+ * не сохранена, а без неё отправить нельзя.
+ */
+async function retrySender(
+  delivery: { channel: string; userId: string; user: { email: string } },
+  deps: RetryDeps
+): Promise<((input: Omit<ChannelSendInput, "to">) => Promise<ChannelSendResult>) | null> {
+  if (delivery.channel === "email") {
+    const channel = deps.emailChannel ?? channelOf("email");
+    if (!channel || !channel.configured() || !delivery.user.email) return null;
+    return (input) => channel.send({ ...input, to: delivery.user.email });
+  }
+  if (delivery.channel === "telegram") {
+    if (!telegramConfig()) return null;
+    const link = await prisma.integrationLink.findFirst({
+      where: { userId: delivery.userId, provider: "TELEGRAM", unlinkedAt: null, status: "ACTIVE" },
+      orderBy: { linkedAt: "desc" },
+      select: { externalId: true },
+    });
+    if (!link) return null;
+    return async (input) => {
+      const res = await telegramApi("sendMessage", {
+        chat_id: link.externalId,
+        ...formatTelegramMessage({ title: input.title, body: input.body, url: input.url }),
+        disable_web_page_preview: true,
+      });
+      return res.ok ? { ok: true } : { ok: false, error: `telegram: ${res.description}` };
+    };
+  }
+  return null;
+}
+
 /** Retry the deliveries that failed transiently (called from the job engine). */
-export async function retryFailedDeliveries(maxAgeHours = 24): Promise<number> {
+export async function retryFailedDeliveries(maxAgeHours = 24, deps: RetryDeps = {}): Promise<number> {
   const since = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
   const failed = await prisma.notificationDelivery.findMany({
-    where: { status: "FAILED", createdAt: { gte: since }, attempts: { lt: 3 } },
+    where: { status: "FAILED", createdAt: { gte: since }, attempts: { lt: 3 }, channel: { in: ["email", "telegram"] } },
     take: 100,
-    include: { notification: true },
+    include: { notification: true, user: { select: { email: true } } },
   });
 
   let retried = 0;
   for (const delivery of failed) {
-    const channel = channelOf(delivery.channel as DeliveryChannel);
-    if (!channel || !channel.configured()) continue;
+    const send = await retrySender(delivery, deps);
+    if (!send) continue;
 
-    const result = await channel.send({
-      to: delivery.address,
+    // Согласие на рассылку могли отозвать после первой попытки.
+    if (!(await hasChannelConsent(delivery.userId, delivery.channel as DeliveryChannel, delivery.notification.kind))) {
+      await prisma.notificationDelivery.update({
+        where: { id: delivery.id },
+        data: { status: "SUPPRESSED", error: "marketing-consent-not-granted" },
+      });
+      continue;
+    }
+
+    const result = await send({
       title: delivery.notification.title,
       body: delivery.notification.body,
       url: delivery.notification.url ?? undefined,
