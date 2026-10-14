@@ -1,3 +1,5 @@
+import { isValidInn as innChecksumOk } from "../legal";
+
 /** Признак агента в чеке (тег 1222): площадка продаёт товары продавцов как агент. */
 export const AGENT_TYPES = [
   "banking_payment_agent",
@@ -44,8 +46,21 @@ export function receiptSettings(source: Record<string, string | undefined> = pro
   return { agentType, measure: (source.RECEIPT_FFD ?? source.YOOKASSA_FFD)?.trim() === "1.2" };
 }
 
+/** ИНН из 10 или 12 цифр с верной контрольной суммой: иначе налоговая чек не примет. */
 export function isValidInn(inn: string | null | undefined): inn is string {
-  return typeof inn === "string" && /^(\d{10}|\d{12})$/.test(inn.trim());
+  return typeof inn === "string" && innChecksumOk(inn.trim());
+}
+
+/**
+ * Почему продавец не может торговать при агентских чеках, или null. ИНН берётся
+ * тот же, что попадёт в чек: сначала юрлица, потом профиля продавца.
+ */
+export function receiptInnBlocker(
+  supplierInn: string | null | undefined,
+  settings: { agentType?: YooAgentType } = receiptSettings(),
+): string | null {
+  if (!settings.agentType) return null;
+  return isValidInn(supplierInn) ? null : "для чеков 54-ФЗ нужен ИНН продавца с верной контрольной суммой";
 }
 
 /**
