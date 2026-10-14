@@ -1,0 +1,273 @@
+"use client";
+
+import { useState } from "react";
+import {
+  ATTR_PREFIX,
+  MAX_PHOTOS,
+  MAX_PHOTOS_TOTAL_BYTES,
+  fieldsFor,
+  priceLabel,
+  type FieldDef,
+} from "@/lib/classified-fields";
+
+export interface GeoOption {
+  id: string;
+  name: string;
+  regions: { id: string; name: string; cities: { id: string; name: string }[] }[];
+}
+
+const DEALS: Record<string, { value: string; label: string }[]> = {
+  REAL_ESTATE: [
+    { value: "SELL", label: "Продажа" },
+    { value: "LONG_RENT", label: "Аренда (длительно)" },
+    { value: "DAILY_RENT", label: "Посуточно" },
+    { value: "BUY_REQUEST", label: "Куплю" },
+  ],
+  AUTO: [
+    { value: "SELL", label: "Продажа" },
+    { value: "DAILY_RENT", label: "Аренда посуточно" },
+    { value: "BUY_REQUEST", label: "Куплю" },
+  ],
+  SERVICE: [
+    { value: "SERVICE_OFFER", label: "Предлагаю услугу" },
+    { value: "SERVICE_REQUEST", label: "Нужна услуга" },
+  ],
+};
+
+const CATEGORY_HINT: Record<string, string> = {
+  REAL_ESTATE: "Например: Квартиры",
+  AUTO: "Например: Автомобили",
+  SERVICE: "Например: Ремонт и отделка",
+};
+
+const input = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm";
+const MAX_SIDE = 1600;
+
+/** Уменьшает фото в браузере до 1600 px по длинной стороне (JPEG), чтобы влезть в лимит отправки. */
+async function shrinkPhoto(file: File): Promise<Blob> {
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error(`Не удалось открыть «${file.name}». Сохраните фото как JPG или PNG`);
+  }
+  const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Браузер не умеет обрабатывать фото");
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+  if (!blob) throw new Error(`Не удалось сжать «${file.name}»`);
+  return blob;
+}
+
+function Field({ f }: { f: FieldDef }) {
+  const name = ATTR_PREFIX + f.key;
+  const label = f.unit ? `${f.label}, ${f.unit}` : f.label;
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium" htmlFor={name}>
+        {label}
+      </label>
+      {f.type === "select" ? (
+        <select id={name} name={name} className={input} defaultValue="">
+          <option value="">Не указано</option>
+          {f.options?.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          id={name}
+          name={name}
+          type={f.type === "number" ? "number" : "text"}
+          inputMode={f.type === "number" ? (f.step ? "decimal" : "numeric") : undefined}
+          min={f.min}
+          max={f.max}
+          step={f.step ?? (f.type === "number" ? 1 : undefined)}
+          maxLength={f.maxLength}
+          placeholder={f.placeholder}
+          className={input}
+        />
+      )}
+    </div>
+  );
+}
+
+export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
+  const [vertical, setVertical] = useState("REAL_ESTATE");
+  const [dealType, setDealType] = useState("SELL");
+  const [photos, setPhotos] = useState<{ file: File; url: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const deals = DEALS[vertical] ?? [];
+  const changeVertical = (v: string) => {
+    setVertical(v);
+    setDealType(DEALS[v]?.[0]?.value ?? "SELL");
+  };
+
+  const pickPhotos = (list: FileList | null) => {
+    const picked = Array.from(list ?? []).filter((f) => f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name));
+    const room = Math.max(0, MAX_PHOTOS - photos.length);
+    if (picked.length > room) setError(`Можно добавить не больше ${MAX_PHOTOS} фото`);
+    else setError(null);
+    setPhotos([...photos, ...picked.slice(0, room).map((file) => ({ file, url: URL.createObjectURL(file) }))]);
+  };
+
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const data = new FormData(e.currentTarget);
+      data.delete("photos");
+      let total = 0;
+      for (const { file } of photos) {
+        const blob = await shrinkPhoto(file);
+        total += blob.size;
+        if (total > MAX_PHOTOS_TOTAL_BYTES) {
+          throw new Error("Фото получились слишком тяжёлыми для одной отправки. Уберите часть и добавьте их позже");
+        }
+        data.append("photos", blob, `${file.name.replace(/\.[^.]+$/, "") || "photo"}.jpg`);
+      }
+      const res = await fetch("/api/classifieds", { method: "POST", body: data, headers: { Accept: "application/json" } });
+      const body = (await res.json().catch(() => ({}))) as { id?: string; status?: string; error?: string };
+      if (res.status === 401) throw new Error("Войдите в аккаунт, чтобы разместить объявление");
+      if (!res.ok || !body.id) throw new Error(body.error ?? "Не удалось разместить объявление");
+      location.assign(body.status === "MODERATION" ? "/classifieds/new?sent=moderation" : `/classifieds/${body.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось разместить объявление");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-sm font-medium" htmlFor="vertical">Раздел</label>
+          <select id="vertical" name="vertical" className={input} value={vertical} onChange={(e) => changeVertical(e.target.value)}>
+            <option value="REAL_ESTATE">Недвижимость</option>
+            <option value="AUTO">Авто</option>
+            <option value="SERVICE">Услуги</option>
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium" htmlFor="dealType">Тип сделки</label>
+          <select id="dealType" name="dealType" className={input} value={dealType} onChange={(e) => setDealType(e.target.value)}>
+            {deals.map((d) => (
+              <option key={d.value} value={d.value}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium" htmlFor="title">Заголовок</label>
+        <input id="title" name="title" required minLength={5} maxLength={120} placeholder="Например: 2-комнатная квартира у метро" className={input} />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium" htmlFor="category">Категория</label>
+        <input id="category" name="category" required maxLength={80} placeholder={CATEGORY_HINT[vertical]} className={input} />
+      </div>
+
+      <fieldset className="rounded-lg border border-zinc-200 p-4">
+        <legend className="px-1 text-sm font-semibold">Характеристики</legend>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {fieldsFor(vertical).map((f) => (
+            <Field key={`${vertical}-${f.key}`} f={f} />
+          ))}
+        </div>
+      </fieldset>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium" htmlFor="description">Описание</label>
+        <textarea id="description" name="description" rows={5} maxLength={5000} className={input} />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium" htmlFor="priceRub">{priceLabel(dealType)}</label>
+        <input id="priceRub" name="priceRub" type="number" min={0} step={1} inputMode="numeric" className={input} />
+      </div>
+
+      <div>
+        <span className="mb-1 block text-sm font-medium">Фото (до {MAX_PHOTOS})</span>
+        <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-zinc-300 px-3 py-4 text-sm text-zinc-600 hover:bg-zinc-50">
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple className="sr-only" onChange={(e) => { pickPhotos(e.target.files); e.target.value = ""; }} />
+          + Добавить фото
+        </label>
+        {photos.length > 0 && (
+          <ul className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {photos.map((p, i) => (
+              <li key={p.url} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.url} alt={p.file.name} className="aspect-square w-full rounded-lg object-cover" />
+                {i === 0 && <span className="absolute left-1 top-1 rounded bg-white/90 px-1 text-[10px]">обложка</span>}
+                <button
+                  type="button"
+                  aria-label={`Убрать ${p.file.name}`}
+                  className="absolute right-1 top-1 rounded-full bg-white/90 px-1.5 text-xs"
+                  onClick={() => {
+                    URL.revokeObjectURL(p.url);
+                    setPhotos(photos.filter((_, j) => j !== i));
+                  }}
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-1 text-xs text-zinc-500">Первое фото станет обложкой. Фото уменьшаются перед отправкой, качество для объявления сохраняется.</p>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium" htmlFor="cityId">Город</label>
+        <select id="cityId" name="cityId" required className={input}>
+          {tree.map((d) => (
+            <optgroup key={d.id} label={d.name}>
+              {d.regions.map((r) =>
+                r.cities.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({r.name})
+                  </option>
+                ))
+              )}
+            </optgroup>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-sm font-medium" htmlFor="districtName">Район / населённый пункт</label>
+          <input id="districtName" name="districtName" maxLength={120} className={input} />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium" htmlFor="addressLine">Адрес</label>
+          <input id="addressLine" name="addressLine" maxLength={200} className={input} />
+        </div>
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+          {error}
+        </div>
+      )}
+
+      <button type="submit" disabled={busy} className="rounded-lg bg-zinc-900 px-6 py-2 text-sm font-medium text-white disabled:opacity-60">
+        {busy ? "Отправляем…" : "Опубликовать"}
+      </button>
+    </form>
+  );
+}
