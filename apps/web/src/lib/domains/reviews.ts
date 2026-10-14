@@ -10,6 +10,7 @@
 import { prisma } from "../prisma";
 import { aiGateway, aiMode } from "../ai/gateway";
 import { newTraceId } from "../ai/gateway";
+import { moderationReason, recomputeProductRating, recordReviewHeld, rejectBlockedReview, screenReview } from "./review-screening";
 
 export interface ReviewSummary {
   productId: string;
@@ -143,6 +144,9 @@ export async function classifyReviewSentiment(
 // product in an order that reached a delivered state. The platform never
 // publishes a review for a product the user never bought — and never hides one
 // on AI opinion alone.
+// Антифрод (шаг 3): отзыв на свой товар, фишинг и номера карт не принимаются;
+// накрутка, «отзыв за кешбэк», копии текста и отзывы новых аккаунтов без
+// покупки сохраняются скрытыми и ждут модератора. В рейтинг они не входят.
 const DELIVERED_STATES = new Set(["DELIVERED", "COMPLETED"]);
 
 export async function createReview(input: {
@@ -151,14 +155,17 @@ export async function createReview(input: {
   orderId?: string;
   rating: number;
   body: string;
-}): Promise<{ id: string; verifiedPurchase: boolean }> {
+}): Promise<{ id: string; verifiedPurchase: boolean; status: "published" | "moderation" }> {
   const rating = Math.round(input.rating);
   if (rating < 1 || rating > 5) throw new Error("Оценка должна быть от 1 до 5");
   const body = input.body.trim();
   if (body.length < 10) throw new Error("Отзыв слишком короткий");
   if (body.length > 4000) throw new Error("Отзыв слишком длинный");
 
-  const product = await prisma.product.findUnique({ where: { id: input.productId } });
+  const product = await prisma.product.findUnique({
+    where: { id: input.productId },
+    include: { sellerProfile: { select: { userId: true } } },
+  });
   if (!product) throw new Error("Товар не найден");
 
   // Establish verified-purchase status from a real delivered order.
@@ -196,6 +203,17 @@ export async function createReview(input: {
     if (dup) throw new Error("Вы уже оставляли отзыв к этому заказу");
   }
 
+  const screening = await screenReview({
+    authorId: input.authorId,
+    productId: input.productId,
+    sellerUserId: product.sellerProfile.userId,
+    rating,
+    body,
+    verifiedPurchase: verified,
+  });
+  if (screening.verdict === "block") await rejectBlockedReview(input.authorId, input.productId, screening);
+  const held = screening.verdict === "hold";
+
   const created = await prisma.review.create({
     data: {
       productId: input.productId,
@@ -204,31 +222,23 @@ export async function createReview(input: {
       rating,
       body,
       verifiedPurchase: verified,
+      isHidden: held,
+      hiddenReason: held ? moderationReason(screening) : null,
     },
   });
+  if (held) await recordReviewHeld(input.authorId, created.id, screening).catch(() => undefined);
 
-  // Recompute the product's aggregate rating from stored reviews.
-  const agg = await prisma.review.aggregate({
-    where: { productId: input.productId, isHidden: false },
-    _avg: { rating: true },
-    _count: { _all: true },
-  });
-  await prisma.product.update({
-    where: { id: input.productId },
-    data: {
-      rating: Math.round((agg._avg.rating ?? product.rating) * 10) / 10,
-      reviewsCount: agg._count._all,
-    },
-  });
+  // Recompute the product's aggregate rating from visible reviews only.
+  await recomputeProductRating(input.productId);
 
   await recordReviewEvent({
     type: "review",
     userId: input.authorId,
     productId: input.productId,
-    payload: { rating, verifiedPurchase: verified, orderId: orderId ?? null },
+    payload: { rating, verifiedPurchase: verified, orderId: orderId ?? null, moderation: held },
   });
 
-  return { id: created.id, verifiedPurchase: verified };
+  return { id: created.id, verifiedPurchase: verified, status: held ? "moderation" : "published" };
 }
 
 async function recordReviewEvent(input: {

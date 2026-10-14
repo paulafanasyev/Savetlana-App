@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireAdminServer } from "@/lib/auth";
 import { getDisputeCase } from "@/lib/domains/disputes";
+import { assessDisputeBuyer } from "@/lib/domains/dispute-screening";
 import { rub } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,8 @@ export default async function AdminDisputeCasePage({
     (sum, i) => sum + (i.priceKopecks ?? 0) * (i.quantity ?? 1),
     0,
   );
+  // Сигналы злоупотребления спорами: только для модератора.
+  const risk = await assessDisputeBuyer(dispute.id).catch(() => null);
 
   return (
     <div className="space-y-6">
@@ -70,6 +73,28 @@ export default async function AdminDisputeCasePage({
           </p>
         )}
       </header>
+
+      <section className={`card p-6 ${risk && risk.level !== "low" ? "border-amber-300 bg-amber-50" : ""}`}>
+        <h2 className="mb-2 text-lg font-semibold text-ink">Антифрод: история покупателя</h2>
+        {!risk ? (
+          <p className="text-sm text-ink-soft">Не удалось посчитать.</p>
+        ) : risk.level === "low" ? (
+          <p className="text-sm text-ink-soft">Признаков злоупотребления спорами и возвратами нет.</p>
+        ) : (
+          <>
+            <p className="mb-2 text-sm font-medium text-amber-900">
+              {risk.level === "high" ? "Высокий риск злоупотребления" : "Есть признаки злоупотребления"}. Это не
+              повод отказать автоматически: проверьте факты доставки и доказательства.
+            </p>
+            <ul className="space-y-1 text-sm text-amber-900">
+              {risk.signals.map((s) => (
+                <li key={s.code}>• {s.text}</li>
+              ))}
+            </ul>
+          </>
+        )}
+        <p className="mt-2 text-xs text-ink-faint">Покупатель и продавец этот блок не видят.</p>
+      </section>
 
       <section className="card p-6">
         <h2 className="mb-4 text-lg font-semibold text-ink">Доказательства</h2>
