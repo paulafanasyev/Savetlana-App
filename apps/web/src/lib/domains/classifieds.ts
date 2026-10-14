@@ -10,6 +10,9 @@
  *   configured, reports surface `NOT_PROVEN`, never a fabricated "clean".
  * - Geo is required for every ad and resolved from the seeded geo tree, so
  *   "Москва" is always a real city id, never a free-text label.
+ *
+ * Антифрод (шаг 2): каждое объявление перед публикацией проходит проверку
+ * classified-guard. Опасное не публикуется, подозрительное уходит модератору.
  */
 import { prisma } from "../prisma";
 import { readObject, writeJson } from "../db/json";
@@ -24,6 +27,8 @@ import {
   AutoDriveType_VALUES,
 } from "../db/enums";
 import { audit } from "./audit";
+import type { ClassifiedVerdict } from "./classified-guard";
+import { recordSentToModeration, rejectIfBlocked, screenClassified } from "./classified-screening";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -260,6 +265,23 @@ export async function createClassified(
   if (!city) throw new Error("unknown_city");
 
   const attrs = validateAttrs(input.vertical, input.attrs ?? {});
+  const priceKopecks = Math.max(0, Math.floor(input.priceKopecks ?? 0));
+
+  // Антифрод: опасное объявление не создаётся, подозрительное ждёт модератора.
+  const screening = await screenClassified({
+    authorId,
+    cityId: city.id,
+    vertical: input.vertical,
+    dealType: input.dealType,
+    title: input.title.trim(),
+    description: input.description ?? null,
+    category: input.category,
+    priceKopecks,
+    attrs,
+    images: input.images,
+  });
+  await rejectIfBlocked(authorId, screening);
+  const needsReview = screening.verdict === "review";
 
   const created = await prisma.classified.create({
     data: {
@@ -271,7 +293,7 @@ export async function createClassified(
       description: input.description?.trim() || null,
       category: input.category,
       attrs: writeJson(attrs),
-      priceKopecks: Math.max(0, Math.floor(input.priceKopecks ?? 0)),
+      priceKopecks,
       regionId: city.regionId,
       cityId: city.id,
       districtName: input.districtName?.trim() || null,
@@ -280,7 +302,7 @@ export async function createClassified(
       metroWalkMin: input.metroWalkMin ?? null,
       lat: input.lat ?? null,
       lon: input.lon ?? null,
-      status: opts.aiDraft ? "DRAFT" : "PUBLISHED",
+      status: opts.aiDraft ? "DRAFT" : needsReview ? "MODERATION" : "PUBLISHED",
       aiDraft: opts.aiDraft ?? false,
       expiresAt: input.expiresInDays
         ? new Date(Date.now() + input.expiresInDays * 86400_000)
@@ -292,6 +314,8 @@ export async function createClassified(
     include: { images: true },
   });
 
+  if (needsReview && !opts.aiDraft) await recordSentToModeration(authorId, created.id, screening);
+
   await audit({
     actorId: authorId,
     actorRole: opts.actorRole ?? "BUYER",
@@ -299,24 +323,43 @@ export async function createClassified(
     targetType: "Classified",
     targetId: created.id,
     before: null,
-    after: { vertical: created.vertical, title: created.title, cityId: created.cityId },
+    after: { vertical: created.vertical, title: created.title, cityId: created.cityId, status: created.status },
   });
 
-  return created;
+  return Object.assign(created, { screening });
 }
 
 export async function publishClassified(classifiedId: string, authorId: string) {
-  const found = await prisma.classified.findUnique({ where: { id: classifiedId } });
+  const found = await prisma.classified.findUnique({ where: { id: classifiedId }, include: { images: true } });
   if (!found) throw new Error("not_found");
   if (found.authorId !== authorId) throw new Error("forbidden");
+  if (found.status === "MODERATION") return found;
+
+  // Черновик (в том числе от Светланы) проверяется так же, как новое объявление.
+  const screening: ClassifiedVerdict = await screenClassified({
+    authorId,
+    cityId: found.cityId,
+    vertical: found.vertical,
+    dealType: found.dealType,
+    title: found.title,
+    description: found.description,
+    category: found.category,
+    priceKopecks: found.priceKopecks,
+    attrs: readObject(found.attrs),
+    images: found.images.map((i) => i.url),
+    excludeId: found.id,
+  });
+  await rejectIfBlocked(authorId, screening);
+  const status = screening.verdict === "review" ? "MODERATION" : "PUBLISHED";
 
   const updated = await prisma.classified.update({
     where: { id: classifiedId },
     data: {
-      status: "PUBLISHED",
+      status,
       expiresAt: new Date(Date.now() + 30 * 86400_000),
     },
   });
+  if (status === "MODERATION") await recordSentToModeration(authorId, classifiedId, screening);
 
   await audit({
     actorId: authorId,
@@ -325,7 +368,7 @@ export async function publishClassified(classifiedId: string, authorId: string) 
     targetType: "Classified",
     targetId: classifiedId,
     before: { status: found.status },
-    after: { status: "PUBLISHED" },
+    after: { status },
   });
 
   return updated;
