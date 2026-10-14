@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { prisma } from "../src/lib/prisma";
 import { parseCsv, parseYml, rowsToItems, fieldOfHeader, parseMoney } from "../src/lib/catalog-import-parse";
-import { importSku, sanitizeItem } from "../src/lib/domains/catalog-import";
+import { importCatalogItems, importSku, sanitizeItem } from "../src/lib/domains/catalog-import";
 
 describe("перенос товаров: разбор файлов", () => {
   it("узнаёт колонки Ozon, WB и 1С", () => {
@@ -62,5 +63,30 @@ describe("перенос товаров: проверка на сервере", 
     const a = importSku("seller-1", { article: "KT-100", title: "Чайник" });
     expect(importSku("seller-1", { article: "KT-100", title: "Другое" })).toBe(a);
     expect(importSku("seller-2", { article: "KT-100", title: "Чайник" })).not.toBe(a);
+  });
+});
+
+describe("перенос товаров: повторная загрузка", () => {
+  it("обновляет цену и остаток, а не создаёт дубль", async () => {
+    const tag = `imp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const user = await prisma.user.create({ data: { email: `${tag}@test.ru`, passwordHash: "x", role: "SELLER" } });
+    const seller = await prisma.sellerProfile.create({ data: { userId: user.id, slug: tag, displayName: "Тест импорта" } });
+    const base = { article: "A-1", title: "Чайник для импорта", description: "", images: [] as string[] };
+    const run = (priceRub: number, quantity: number, dryRun: boolean) =>
+      importCatalogItems({ sellerId: seller.id, actorId: user.id, items: [{ ...base, priceRub, quantity }], dryRun, verified: false });
+
+    expect((await run(1000, 5, false)).created).toBe(1);
+
+    const preview = await run(1200, 7, true);
+    expect(preview).toMatchObject({ wouldCreate: 0, wouldUpdate: 1 });
+    expect(preview.updates[0]).toMatchObject({ priceFromRub: 1000, priceToRub: 1200, stockFrom: 5, stockTo: 7 });
+
+    expect((await run(1200, 7, false)).updated).toBe(1);
+    const products = await prisma.product.findMany({ where: { sellerId: seller.id }, include: { inventory: true } });
+    expect(products).toHaveLength(1);
+    expect(products[0].priceKopecks).toBe(120_000);
+    expect(products[0].inventory?.quantity).toBe(7);
+
+    expect(await run(1200, 7, true)).toMatchObject({ wouldCreate: 0, wouldUpdate: 0, unchanged: 1 });
   });
 });

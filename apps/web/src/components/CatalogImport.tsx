@@ -6,15 +6,27 @@ import { FIELD_LABELS, IMPORT_MAX_ITEMS, parseCatalogFile, type ImportItem, type
 
 const CHUNK = 100;
 
+interface Update {
+  title: string;
+  priceFromRub?: number;
+  priceToRub?: number;
+  stockFrom?: number;
+  stockTo?: number;
+}
+
 interface Outcome {
   created: number;
   wouldCreate: number;
+  updated: number;
+  wouldUpdate: number;
+  unchanged: number;
+  updates: Update[];
   skipped: { title: string; reason: string }[];
   preview: { title: string; priceRub: number; quantity: number | null; images: number }[];
 }
 
 async function sendChunks(items: ImportItem[], dryRun: boolean, onProgress: (done: number) => void): Promise<Outcome> {
-  const total: Outcome = { created: 0, wouldCreate: 0, skipped: [], preview: [] };
+  const total: Outcome = { created: 0, wouldCreate: 0, updated: 0, wouldUpdate: 0, unchanged: 0, updates: [], skipped: [], preview: [] };
   for (let i = 0; i < items.length; i += CHUNK) {
     const res = await fetch("/api/seller/products/import", {
       method: "POST",
@@ -25,6 +37,10 @@ async function sendChunks(items: ImportItem[], dryRun: boolean, onProgress: (don
     if (!res.ok || !data) throw new Error(data?.error ?? "Сервер не ответил. Попробуйте ещё раз через минуту.");
     total.created += data.created;
     total.wouldCreate += data.wouldCreate;
+    total.updated += data.updated ?? 0;
+    total.wouldUpdate += data.wouldUpdate ?? 0;
+    total.unchanged += data.unchanged ?? 0;
+    if (total.updates.length < 10) total.updates.push(...(data.updates ?? []).slice(0, 10 - total.updates.length));
     total.skipped.push(...data.skipped);
     if (total.preview.length < 10) total.preview.push(...data.preview.slice(0, 10 - total.preview.length));
     onProgress(Math.min(i + CHUNK, items.length));
@@ -81,10 +97,13 @@ export function CatalogImport() {
   if (result) {
     return (
       <div className="card space-y-3 p-6">
-        <h2 className="text-lg font-bold text-ink">Готово: добавлено {result.created} черновиков</h2>
-        <p className="text-sm text-ink-soft">
-          Товары пока не видны покупателям. Проверьте карточки, подтвердите наличие и опубликуйте их.
-        </p>
+        <h2 className="text-lg font-bold text-ink">Готово: добавлено {result.created}, обновлено {result.updated}</h2>
+        {result.created > 0 && (
+          <p className="text-sm text-ink-soft">
+            Новые товары пока не видны покупателям. Проверьте карточки, подтвердите наличие и опубликуйте их.
+          </p>
+        )}
+        {result.updated > 0 && <p className="text-sm text-ink-soft">У уже перенесённых товаров обновлены цены и остатки, изменения записаны в журнал товара.</p>}
         {result.skipped.length > 0 && <SkippedList skipped={result.skipped} />}
         <div className="flex flex-wrap gap-2">
           <Link href="/seller/products" className="btn btn-primary">К товарам</Link>
@@ -152,15 +171,34 @@ export function CatalogImport() {
                 {check.wouldCreate > check.preview.length && <p className="mt-1 text-xs text-ink-faint">Показаны первые {check.preview.length} из {check.wouldCreate}.</p>}
               </div>
             )}
+            {check.wouldUpdate > 0 && (
+              <div className="overflow-x-auto">
+                <p className="mb-1 font-medium text-ink">Уже есть в магазине, обновим: {check.wouldUpdate}</p>
+                <table className="w-full text-left">
+                  <thead className="text-xs text-ink-faint"><tr><th className="py-1 pr-3">Товар</th><th className="py-1 pr-3">Цена</th><th className="py-1">Остаток</th></tr></thead>
+                  <tbody className="divide-y divide-surface-line">
+                    {check.updates.map((u, i) => (
+                      <tr key={i}>
+                        <td className="py-1 pr-3 text-ink">{u.title}</td>
+                        <td className="py-1 pr-3">{u.priceToRub !== undefined && u.priceFromRub !== undefined ? `${rubles(u.priceFromRub)} → ${rubles(u.priceToRub)}` : "без изменений"}</td>
+                        <td className="py-1">{u.stockTo !== undefined ? `${u.stockFrom ?? 0} → ${u.stockTo}` : "без изменений"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {check.wouldUpdate > check.updates.length && <p className="mt-1 text-xs text-ink-faint">Показаны первые {check.updates.length} из {check.wouldUpdate}.</p>}
+              </div>
+            )}
+            {check.unchanged > 0 && <p className="text-ink-soft">Без изменений: {check.unchanged}.</p>}
             {check.skipped.length > 0 && <SkippedList skipped={check.skipped} />}
-            {check.wouldCreate > 0 ? (
+            {check.wouldCreate + check.wouldUpdate > 0 ? (
               <button className="btn btn-primary" disabled={Boolean(busy)} onClick={runImport}>
-                Добавить {check.wouldCreate} товаров черновиками
+                {[check.wouldCreate > 0 ? `Добавить ${check.wouldCreate}` : "", check.wouldUpdate > 0 ? `обновить ${check.wouldUpdate}` : ""].filter(Boolean).join(" и ").replace(/^о/, "О")}
               </button>
             ) : (
-              <p className="text-ink-soft">Новых товаров для добавления нет.</p>
+              <p className="text-ink-soft">Всё уже совпадает с файлом, менять нечего.</p>
             )}
-            <p className="text-xs text-ink-faint">Черновики не видны покупателям, пока вы их не опубликуете. Повторная загрузка того же файла не создаст дублей.</p>
+            <p className="text-xs text-ink-faint">Новые товары появятся черновиками и не будут видны покупателям, пока вы их не опубликуете. Повторная загрузка не создаёт дублей: у уже перенесённых товаров обновляются цена и остаток. Скидки из файла не переносятся на опубликованные товары, ими управляет раздел «Акции».</p>
           </div>
         )}
       </div>
