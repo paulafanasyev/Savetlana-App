@@ -1,6 +1,7 @@
 import { apiRoute, jsonBody } from "@/lib/api-helpers";
 import { requireSeller } from "@/lib/auth";
 import { consumeRateLimit, tooMany } from "@/lib/domains/rate-limits";
+import { getSellerOnboardingGate } from "@/lib/domains/seller-onboarding";
 import { importCatalogItems } from "@/lib/domains/catalog-import";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,8 @@ export const POST = apiRoute(async (request) => {
     const decision = await consumeRateLimit(`catalog-import:${sellerId}`, 60, 60 * 60_000);
     if (!decision.allowed) return tooMany(decision);
   }
-  const result = await importCatalogItems({ sellerId, actorId: user.id, items: body.items, dryRun });
+  // Цены опубликованных товаров меняет только проверенный продавец (как в массовом редактировании).
+  const gate = await getSellerOnboardingGate(sellerId);
+  const result = await importCatalogItems({ sellerId, actorId: user.id, items: body.items, dryRun, verified: gate.active });
   return Response.json(result);
 });
