@@ -1,6 +1,9 @@
 import { requireSellerServer } from "@/lib/auth";
 import { getPayoutProvider, sellerSettlementStatement } from "@/lib/domains/payments";
 import { availablePayoutKopecks } from "@/lib/domains/seller-payouts";
+import { bankRegistryMode } from "@/lib/domains/payout-registry";
+import { bankDetailsSummary } from "@/lib/domains/bank-details";
+import { BankDetailsForm } from "./BankDetailsForm";
 import { rub, timeAgo } from "@/lib/format";
 import { settlementStatusLabel } from "@/lib/labels";
 
@@ -12,6 +15,8 @@ const RESULT_TEXT: Record<string, string> = {
   bank_required: "Выплаты включатся после подключения банка-партнёра. Деньги не пропадут: они числятся за вами.",
   succeeded: "Выплата отправлена.",
   in_progress: "Выплата в обработке у банка.",
+  registry_queued: "Выплата запрошена. Площадка переведёт деньги на ваш счёт банковским переводом, обычно в течение 1–2 рабочих дней. Мы сообщим, когда платёж уйдёт.",
+  bank_details_required: "Сначала укажите реквизиты для выплат ниже.",
 };
 
 export default async function SellerPayoutsPage({ searchParams }: { searchParams?: Promise<{ payout?: string; test?: string }> }) {
@@ -19,7 +24,9 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
   const [statement, available] = await Promise.all([sellerSettlementStatement(sellerId), availablePayoutKopecks(sellerId)]);
   const params = (await searchParams) ?? {};
   const result = params.payout;
-  const sandbox = getPayoutProvider().sandbox;
+  const registry = bankRegistryMode();
+  const sandbox = !registry && getPayoutProvider().sandbox;
+  const bank = registry ? await bankDetailsSummary(sellerId) : null;
   const waiting = Math.max(0, statement.totals.pendingKopecks - available);
   return (
     <main className="space-y-5 p-6">
@@ -39,8 +46,10 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
         <Stat label="Доступно к выплате" value={rub(available)} />
         <Stat label="Ждёт доставки" value={rub(waiting)} />
       </div>
+      {registry && <BankDetailsForm current={bank} />}
       <form method="post" action="/api/seller/payouts">
-        <button className="btn btn-primary" type="submit" disabled={!available}>Запросить выплату {rub(available)}</button>
+        <button className="btn btn-primary" type="submit" disabled={!available || (registry && !bank)}>Запросить выплату {rub(available)}</button>
+        {registry && !bank && <p className="mt-1 text-xs text-ink-faint">Кнопка станет активной, когда вы сохраните реквизиты.</p>}
       </form>
       <div className="card overflow-x-auto">
         <h2 className="p-4 text-lg font-semibold">История расчётов</h2>
@@ -60,7 +69,11 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
         </table>
         {statement.settlements.length === 0 && <p className="p-4 text-ink-faint">Расчётов пока нет.</p>}
       </div>
-      <p className="text-sm text-ink-faint">Выплата доступна по доставленным заказам и выполняется банком-партнёром.</p>
+      <p className="text-sm text-ink-faint">
+        {registry
+          ? "Выплата доступна по доставленным заказам. Деньги переводятся банковским переводом на реквизиты выше."
+          : "Выплата доступна по доставленным заказам и выполняется банком-партнёром."}
+      </p>
     </main>
   );
 }
