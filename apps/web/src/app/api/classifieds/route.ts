@@ -1,6 +1,8 @@
 import { apiRoute } from "@/lib/api-helpers";
-import { requireUser } from "@/lib/auth";
+import { requireUser, ApiError } from "@/lib/auth";
 import { createClassified, searchClassifieds } from "@/lib/domains/classifieds";
+import { UserFacingError } from "@/lib/domains/engagement-rules";
+import { explainClassified } from "@/lib/domains/classified-guard";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +36,8 @@ export const GET = apiRoute(async (request) => {
 // Create a classified ad. Authenticated; author owns the ad. Geo is resolved
 // server-side from the seeded tree, so free-text locations are never stored.
 // Accepts both JSON and HTML form-encoded bodies (the UI posts a plain form).
+// Антифрод: опасное объявление отклоняется с причиной, подозрительное уходит
+// на проверку модератору (статус MODERATION, в поиске не видно).
 export const POST = apiRoute(async (request) => {
   const ctx = await requireUser(request);
 
@@ -47,25 +51,40 @@ export const POST = apiRoute(async (request) => {
   }
   const isForm = !contentType.includes("application/json");
 
-  const created = await createClassified(
-    ctx.user.id,
-    {
-      vertical: String(body.vertical ?? ""),
-      dealType: String(body.dealType ?? ""),
-      title: String(body.title ?? ""),
-      description: body.description ? String(body.description) : undefined,
-      category: String(body.category ?? ""),
-      priceKopecks: body.priceRub ? Math.round(Number(body.priceRub) * 100) : undefined,
-      cityId: String(body.cityId ?? ""),
-      districtName: body.districtName ? String(body.districtName) : undefined,
-      addressLine: body.addressLine ? String(body.addressLine) : undefined,
-    },
-    { actorRole: ctx.user.role }
-  );
+  let created: Awaited<ReturnType<typeof createClassified>>;
+  try {
+    created = await createClassified(
+      ctx.user.id,
+      {
+        vertical: String(body.vertical ?? ""),
+        dealType: String(body.dealType ?? ""),
+        title: String(body.title ?? ""),
+        description: body.description ? String(body.description) : undefined,
+        category: String(body.category ?? ""),
+        priceKopecks: body.priceRub ? Math.round(Number(body.priceRub) * 100) : undefined,
+        cityId: String(body.cityId ?? ""),
+        districtName: body.districtName ? String(body.districtName) : undefined,
+        addressLine: body.addressLine ? String(body.addressLine) : undefined,
+      },
+      { actorRole: ctx.user.role }
+    );
+  } catch (error) {
+    if (!(error instanceof UserFacingError)) throw error;
+    if (isForm) redirect(`/classifieds/new?error=${encodeURIComponent(error.message)}`);
+    throw new ApiError(error.status, error.message);
+  }
 
+  const onModeration = created.status === "MODERATION";
   // HTML form posts redirect to the new ad; JSON API clients get the id.
   if (isForm) {
-    redirect(`/classifieds/${created.id}`);
+    redirect(onModeration ? "/classifieds/new?sent=moderation" : `/classifieds/${created.id}`);
   }
-  return Response.json({ id: created.id, status: created.status }, { status: 201 });
+  return Response.json(
+    {
+      id: created.id,
+      status: created.status,
+      ...(onModeration ? { moderation: explainClassified(created.screening) } : {}),
+    },
+    { status: 201 }
+  );
 });
