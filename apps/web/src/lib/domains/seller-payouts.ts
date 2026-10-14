@@ -2,9 +2,11 @@
  * Выплата продавцу только за доставленные заказы. Резерв и outbox как в payments.ts
  * (вызов банка вне транзакции, идемпотентность по ключу), но фильтр по статусу
  * заказа стоит прямо в резерве, а не только в маршруте.
+ * После смены реквизитов или сброса пароля выплата ждёт (защита от захвата аккаунта).
  */
 import { prisma } from "../prisma";
 import { getPayoutProvider, processPayoutOutbox } from "./payments";
+import { assertNoPayoutHold } from "./account-security";
 
 export const DELIVERED_ORDER_STATUSES = ["DELIVERED", "COMPLETED"];
 
@@ -25,6 +27,7 @@ export async function payoutDeliveredSettlements(input: {
   actorId: string;
   idempotencyKey: string;
 }): Promise<{ payoutId: string | null; amountKopecks: number; status: string; sandbox: boolean }> {
+  await assertNoPayoutHold(input.sellerId);
   const reserved = await prisma.$transaction(async (tx) => {
     const existing = await tx.payout.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
     if (existing) return { payoutId: existing.id };

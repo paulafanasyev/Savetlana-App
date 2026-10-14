@@ -8,11 +8,13 @@
  * Проверки как в банке: БИК, контрольный ключ расчётного и корреспондентского
  * счёта, контрольные цифры ИНН. ИНН получателя должен совпадать с ИНН магазина,
  * чтобы выплату нельзя было перенаправить на чужой счёт.
+ * После смены счёта выплаты на 48 часов приостанавливаются (account-security).
  */
 import { prisma } from "../prisma";
 import { storeSecret, loadSecret } from "./secret-store";
 import { audit } from "./audit";
 import { notify } from "./notifications";
+import { flagBankDetailsChange } from "./account-security";
 
 export const BANK_DETAILS_PROVIDER = "bank_requisites";
 
@@ -136,12 +138,16 @@ export async function saveBankDetails(input: { sellerId: string; actorId: string
     targetId: input.sellerId,
     after: { bik: details.bik, account: accountMasked, inn: details.inn },
   });
+  // Смена счёта: запись в риски (особенно опасно сразу после входа с нового устройства).
+  if (previous) await flagBankDetailsChange(input.sellerId, seller.userId).catch(() => undefined);
   // Смена счёта для выплат: продавец должен узнать, если это сделал не он.
   await notify({
     userId: seller.userId,
     kind: "security",
     title: previous ? "Реквизиты для выплат изменены" : "Реквизиты для выплат сохранены",
-    body: `Выплаты будут приходить на счёт ${accountMasked} в ${details.bankName}. Если это были не вы, смените пароль и напишите в поддержку.`,
+    body: previous
+      ? `Выплаты будут приходить на счёт ${accountMasked} в ${details.bankName}. Для защиты от мошенников выплаты на новый счёт начнутся через 48 часов. Если это были не вы, смените пароль и напишите в поддержку.`
+      : `Выплаты будут приходить на счёт ${accountMasked} в ${details.bankName}. Если это были не вы, смените пароль и напишите в поддержку.`,
     url: "/seller/payouts",
   });
   return { ok: true, accountMasked };

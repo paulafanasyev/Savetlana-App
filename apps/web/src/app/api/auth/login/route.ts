@@ -6,6 +6,7 @@ import { audit } from "@/lib/domains/audit";
 import { promoteConfiguredAdmin } from "@/lib/domains/admin-bootstrap";
 import { needsTermsConsent } from "@/lib/domains/terms-consent";
 import { consumeRateLimit, clientIp, loginBuckets, recordAuthOutcome, AUTH_LIMITS, tooMany } from "@/lib/domains/rate-limits";
+import { inspectLogin, notifyNewDeviceLogin } from "@/lib/domains/account-security";
 
 export const dynamic = "force-dynamic";
 
@@ -34,8 +35,14 @@ export const POST = apiRoute(async (request) => {
   await promoteConfiguredAdmin(found.id, email);
   const user = await prisma.user.findUniqueOrThrow({ where: { id: found.id } });
   const token = await createToken({ sub: user.id, role: user.role });
-  await prisma.session.create({ data: { userId: user.id, token, expiresAt: new Date(Date.now() + 7 * 864e5) } });
+  // Устройство сравниваем с прошлыми входами до записи новой сессии.
+  const login = await inspectLogin(user.id, request.headers.get("user-agent"), ip).catch(() => null);
+  await prisma.session.create({
+    data: { userId: user.id, token, expiresAt: new Date(Date.now() + 7 * 864e5), userAgent: login?.userAgent ?? null, ipHash: login?.ipHash ?? null },
+  });
   await audit({ actorId: user.id, actorRole: user.role.toLowerCase(), action: "auth.login", targetType: "user", targetId: user.id });
+  // Вход с нового устройства: владелец сразу получает письмо и может сменить пароль.
+  if (login?.isNew) await notifyNewDeviceLogin(user.id, login).catch(() => undefined);
   // Аккаунты, созданные до записи согласий или согласившиеся на старую версию условий:
   // страница входа попросит принять условия перед тем, как пустить дальше.
   const needsConsent = await needsTermsConsent(user.id);
