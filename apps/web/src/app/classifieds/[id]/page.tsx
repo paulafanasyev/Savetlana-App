@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getClassifiedPublic, incrementViews } from "@/lib/domains/classifieds";
+import { describeAttrs } from "@/lib/classified-fields";
 import { rub, timeAgo } from "@/lib/format";
 import { dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
 import { resolveParams } from "@/lib/page-params";
@@ -18,7 +19,8 @@ export default async function ClassifiedDetailPage({
   const ad = await getClassifiedPublic(id);
   if (!ad) notFound();
 
-  const attrs = Object.entries(ad.attrs);
+  // Характеристики с русскими подписями; VIN показываем не целиком.
+  const attrs = describeAttrs(ad.vertical, ad.attrs);
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-6">
@@ -38,14 +40,11 @@ export default async function ClassifiedDetailPage({
               />
               {ad.images.length > 1 && (
                 <div className="grid grid-cols-4 gap-2">
-                  {ad.images.slice(1, 5).map((img) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      key={img}
-                      src={img}
-                      alt={ad.title}
-                      className="aspect-square w-full rounded-lg object-cover"
-                    />
+                  {ad.images.slice(1, 9).map((img) => (
+                    <a key={img} href={img} target="_blank" rel="noopener noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img} alt={ad.title} className="aspect-square w-full rounded-lg object-cover" />
+                    </a>
                   ))}
                 </div>
               )}
@@ -66,7 +65,11 @@ export default async function ClassifiedDetailPage({
           </div>
           <h1 className="text-xl font-bold">{ad.title}</h1>
           {ad.priceKopecks > 0 ? (
-            <p className="mt-2 text-2xl font-bold">{rub(ad.priceKopecks)}</p>
+            <p className="mt-2 text-2xl font-bold">
+              {rub(ad.priceKopecks)}
+              {ad.dealType === "LONG_RENT" || ad.dealType === "RENT" ? <span className="text-base font-medium text-zinc-500"> в месяц</span> : null}
+              {ad.dealType === "DAILY_RENT" ? <span className="text-base font-medium text-zinc-500"> за сутки</span> : null}
+            </p>
           ) : (
             <p className="mt-2 text-lg font-bold text-zinc-500">Цена не указана</p>
           )}
@@ -95,6 +98,11 @@ export default async function ClassifiedDetailPage({
               </p>
             )}
             <p className="mt-1 text-zinc-500">Опубликовано {timeAgo(ad.createdAt)}</p>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            Не переводите задаток и предоплату до встречи и просмотра. Не переходите по ссылкам «на оплату» и не
+            называйте коды из СМС.
           </div>
 
           {ad.vertical === "AUTO" && (
@@ -134,10 +142,10 @@ export default async function ClassifiedDetailPage({
         <section className="mt-8">
           <h2 className="mb-2 text-lg font-semibold">Характеристики</h2>
           <dl className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
-            {attrs.map(([k, v]) => (
-              <div key={k} className="flex justify-between border-b border-zinc-100 py-1 text-sm">
-                <dt className="text-zinc-600">{k}</dt>
-                <dd className="font-medium">{String(v)}</dd>
+            {attrs.map((row) => (
+              <div key={row.label} className="flex justify-between border-b border-zinc-100 py-1 text-sm">
+                <dt className="text-zinc-600">{row.label}</dt>
+                <dd className="font-medium">{row.value}</dd>
               </div>
             ))}
           </dl>
