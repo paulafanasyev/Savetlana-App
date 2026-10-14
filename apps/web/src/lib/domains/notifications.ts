@@ -25,7 +25,10 @@ export type NotificationKind =
   | "seller_message"
   | "buyer_message"
   // Продавцу: товар заканчивается или закончился (см. stock-alerts.ts)
-  | "stock_low";
+  | "stock_low"
+  // Продавцу: реквизиты для выплат изменены, выплата отправлена или вернулась
+  | "security"
+  | "payout_update";
 
 export interface NotificationInput {
   userId: string;
