@@ -241,7 +241,10 @@ export function parseYml(xml: string): ParseResult {
 // ---------------------------------------------------------------------------
 
 async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  // Копия в отдельный ArrayBuffer: Blob не принимает срез общего буфера по типам TS.
+  const copy = new Uint8Array(data.length);
+  copy.set(data);
+  const stream = new Blob([copy.buffer as ArrayBuffer]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
