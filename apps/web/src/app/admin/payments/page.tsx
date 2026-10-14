@@ -3,6 +3,29 @@ import { rub, timeAgo } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+const STATUS_LABELS: Record<string, string> = {
+  SUCCEEDED: "Проведён",
+  PENDING: "Ожидает",
+  IN_PROGRESS: "В работе",
+  FAILED: "Ошибка",
+  CANCELED: "Отменён",
+  CANCELLED: "Отменён",
+  REFUNDED: "Возвращён",
+  RETURNED: "Вернулся",
+};
+
+function statusLabel(status: string): string {
+  return STATUS_LABELS[status] ?? status;
+}
+
+function ModeBadge({ sandbox }: { sandbox: boolean }) {
+  return sandbox ? (
+    <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800" title="Деньги не двигались">Тест</span>
+  ) : (
+    <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-800">Настоящий</span>
+  );
+}
+
 /**
  * Admin payments & payouts section (spec §37, §26).
  *
@@ -16,7 +39,7 @@ export default async function AdminPaymentsPage() {
   return (
     <div className="space-y-6">
       <section className="card overflow-hidden">
-        <div className="border-b border-line p-4">
+        <div className="border-b border-surface-line p-4">
           <h2 className="text-base font-bold text-ink">Платежи покупателей</h2>
           <p className="text-xs text-ink-soft">Последние {payments.length} записей</p>
         </div>
@@ -25,7 +48,7 @@ export default async function AdminPaymentsPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-surface text-xs uppercase tracking-wide text-ink-faint">
+              <thead className="bg-surface-muted text-xs uppercase tracking-wide text-ink-faint">
                 <tr>
                   <th className="px-4 py-2">Заказ</th>
                   <th className="px-4 py-2">Покупатель</th>
@@ -36,7 +59,7 @@ export default async function AdminPaymentsPage() {
                   <th className="px-4 py-2">Дата</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line">
+              <tbody className="divide-y divide-surface-line">
                 {payments.map((p) => (
                   <tr key={p.id}>
                     <td className="px-4 py-2 font-mono text-xs text-ink-soft">{p.orderId.slice(-8)}</td>
@@ -45,15 +68,11 @@ export default async function AdminPaymentsPage() {
                     <td className="px-4 py-2 text-ink-soft">{p.provider}</td>
                     <td className="px-4 py-2">
                       <span className={p.status === "SUCCEEDED" ? "text-green-700" : "text-amber-700"}>
-                        {p.status}
+                        {statusLabel(p.status)}
                       </span>
                     </td>
                     <td className="px-4 py-2">
-                      {p.sandbox ? (
-                        <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">sandbox</span>
-                      ) : (
-                        <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-800">real</span>
-                      )}
+                      <ModeBadge sandbox={p.sandbox} />
                     </td>
                     <td className="px-4 py-2 text-ink-faint" title={p.createdAt}>
                       {timeAgo(new Date(p.createdAt))}
@@ -67,7 +86,7 @@ export default async function AdminPaymentsPage() {
       </section>
 
       <section className="card overflow-hidden">
-        <div className="border-b border-line p-4">
+        <div className="border-b border-surface-line p-4">
           <h2 className="text-base font-bold text-ink">Выплаты продавцам</h2>
           <p className="text-xs text-ink-soft">Последние {payouts.length} записей</p>
         </div>
@@ -76,7 +95,7 @@ export default async function AdminPaymentsPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-surface text-xs uppercase tracking-wide text-ink-faint">
+              <thead className="bg-surface-muted text-xs uppercase tracking-wide text-ink-faint">
                 <tr>
                   <th className="px-4 py-2">Продавец</th>
                   <th className="px-4 py-2">Сумма</th>
@@ -86,7 +105,7 @@ export default async function AdminPaymentsPage() {
                   <th className="px-4 py-2">Дата</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line">
+              <tbody className="divide-y divide-surface-line">
                 {payouts.map((p) => (
                   <tr key={p.id}>
                     <td className="px-4 py-2 text-ink">{p.sellerName}</td>
@@ -94,15 +113,11 @@ export default async function AdminPaymentsPage() {
                     <td className="px-4 py-2 text-ink-soft">{p.provider}</td>
                     <td className="px-4 py-2">
                       <span className={p.status === "SUCCEEDED" ? "text-green-700" : "text-ink-soft"}>
-                        {p.status}
+                        {statusLabel(p.status)}
                       </span>
                     </td>
                     <td className="px-4 py-2">
-                      {p.sandbox ? (
-                        <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">sandbox</span>
-                      ) : (
-                        <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-800">real</span>
-                      )}
+                      <ModeBadge sandbox={p.sandbox} />
                     </td>
                     <td className="px-4 py-2 text-ink-faint" title={p.createdAt}>
                       {timeAgo(new Date(p.createdAt))}

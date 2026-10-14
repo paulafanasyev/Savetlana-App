@@ -26,8 +26,10 @@ export type NotificationKind =
   | "buyer_message"
   // Продавцу: товар заканчивается или закончился (см. stock-alerts.ts)
   | "stock_low"
-  // Продавцу: реквизиты для выплат изменены, выплата отправлена или вернулась
+  // Безопасность аккаунта: сброс пароля, подтверждение почты, смена реквизитов.
+  // Это служебные письма, не реклама: согласие на рассылку для них не нужно.
   | "security"
+  // Продавцу: выплата отправлена или вернулась
   | "payout_update";
 
 export interface NotificationInput {
@@ -38,7 +40,16 @@ export interface NotificationInput {
   url?: string;
 }
 
-export async function notify(input: NotificationInput): Promise<void> {
+export interface NotifyOptions {
+  /**
+   * Дождаться отправки письма до ответа. На хостинге вроде Vercel работа после
+   * ответа может быть оборвана, и письмо так и не уйдёт. Включать для писем,
+   * без которых человек не войдёт (сброс пароля, подтверждение почты).
+   */
+  awaitDelivery?: boolean;
+}
+
+export async function notify(input: NotificationInput, options: NotifyOptions = {}): Promise<void> {
   const notification = await prisma.notification.create({
     data: {
       userId: input.userId,
@@ -50,9 +61,10 @@ export async function notify(input: NotificationInput): Promise<void> {
   });
   // Out-of-band delivery (email/push). Failures here must never break the
   // in-app notification — the delivery layer records its own honest status.
-  void deliverNotification(notification).catch(() => {
+  const delivery = deliverNotification(notification).catch(() => {
     /* delivery failure is recorded in NotificationDelivery, not raised */
   });
+  if (options.awaitDelivery) await delivery;
 }
 
 export async function notifyMany(inputs: NotificationInput[]): Promise<void> {

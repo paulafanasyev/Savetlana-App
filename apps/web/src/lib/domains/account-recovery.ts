@@ -15,6 +15,9 @@
  *    external mailer is configured the link is surfaced via an in-app
  *    notification and the caller may return it ONLY in development — never in
  *    production, where it would defeat email ownership.
+ *  - Письма со ссылками идут как "security": это служебные письма, и согласие
+ *    на рекламную рассылку для них не требуется. Отправки ждём до ответа,
+ *    иначе хостинг может оборвать её после ответа.
  */
 import { prisma } from "../prisma";
 import { env } from "../env";
@@ -145,12 +148,15 @@ export async function requestEmailVerification(userId: string): Promise<IssuedTi
   const ticket = await mintTicket(userId, "VERIFY_EMAIL");
   const link = verificationUrl(ticket.secret);
 
-  await notify({
-    userId,
-    kind: "reminder",
-    title: "Подтвердите email",
-    body: `Перейдите по ссылке, чтобы подтвердить email: ${link}`,
-  }).catch(() => {
+  await notify(
+    {
+      userId,
+      kind: "security",
+      title: "Подтвердите email",
+      body: `Перейдите по ссылке, чтобы подтвердить email: ${link}`,
+    },
+    { awaitDelivery: true }
+  ).catch(() => {
     /* notification is best-effort; the ticket is still valid */
   });
 
@@ -208,12 +214,15 @@ export async function requestPasswordReset(email: string): Promise<PasswordReset
   const ticket = await mintTicket(user.id, "RESET_PASSWORD");
   const link = resetUrl(ticket.secret);
 
-  await notify({
-    userId: user.id,
-    kind: "reminder",
-    title: "Восстановление пароля",
-    body: `Ссылка для сброса пароля: ${link}`,
-  }).catch(() => {
+  await notify(
+    {
+      userId: user.id,
+      kind: "security",
+      title: "Восстановление пароля",
+      body: `Ссылка для сброса пароля (действует ${RESET_TTL_MINUTES} минут): ${link}\n\nЕсли вы не запрашивали сброс, просто проигнорируйте это письмо.`,
+    },
+    { awaitDelivery: true }
+  ).catch(() => {
     /* best-effort */
   });
 
