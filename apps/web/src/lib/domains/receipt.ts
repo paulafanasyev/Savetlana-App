@@ -38,9 +38,10 @@ export function receiptSettings(source: Record<string, string | undefined> = pro
   agentType?: YooAgentType;
   measure: boolean;
 } {
-  const raw = source.YOOKASSA_AGENT_TYPE?.trim().toLowerCase();
+  // RECEIPT_* действуют для всех банков, YOOKASSA_* оставлены для совместимости.
+  const raw = (source.RECEIPT_AGENT_TYPE ?? source.YOOKASSA_AGENT_TYPE)?.trim().toLowerCase();
   const agentType = raw && (AGENT_TYPES as readonly string[]).includes(raw) ? (raw as YooAgentType) : undefined;
-  return { agentType, measure: source.YOOKASSA_FFD?.trim() === "1.2" };
+  return { agentType, measure: (source.RECEIPT_FFD ?? source.YOOKASSA_FFD)?.trim() === "1.2" };
 }
 
 export function isValidInn(inn: string | null | undefined): inn is string {

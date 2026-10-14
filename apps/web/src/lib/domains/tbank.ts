@@ -9,10 +9,25 @@
  * Переменные (только сервер): TBANK_TERMINAL_KEY, TBANK_PASSWORD,
  * TBANK_API_URL (по умолчанию https://securepay.tinkoff.ru/v2).
  * СБП включается в личном кабинете Т-Бизнеса для терминала.
+ *
+ * Чеки 54-ФЗ: TBANK_RECEIPTS=true (+ TBANK_TAXATION, TBANK_TAX). Чек уходит в
+ * Init и в Cancel (возврат на свою сумму), см. fiscal.ts.
  */
 import { createHash } from "node:crypto";
 import { env } from "../env";
 import type { ChargeParams, ChargeResult, PaymentProvider } from "./payments";
+import {
+  bundleTotal,
+  fiscalReceipt,
+  loadReceiptBaseByOrder,
+  loadReceiptBaseByPayment,
+  tbankReceiptConfig,
+  toTbankReceipt,
+  type ReceiptBase,
+  type TbankReceipt,
+  type TbankReceiptConfig,
+} from "./fiscal";
+import { receiptSettings } from "./receipt";
 
 /**
  * Подпись Т-Банка: корневые скалярные поля (без Token, без вложенных
@@ -66,6 +81,21 @@ interface TbankResponse {
   Data?: string;
 }
 
+/** Откуда брать чек. Подменяется в тестах. */
+export interface TbankReceiptDeps {
+  config: () => TbankReceiptConfig;
+  settings: () => ReturnType<typeof receiptSettings>;
+  loadByOrder: (orderId: string) => Promise<ReceiptBase | null>;
+  loadByPayment: (paymentId: string) => Promise<ReceiptBase | null>;
+}
+
+const defaultTbankDeps: TbankReceiptDeps = {
+  config: () => tbankReceiptConfig(),
+  settings: () => receiptSettings(),
+  loadByOrder: loadReceiptBaseByOrder,
+  loadByPayment: (paymentId) => loadReceiptBaseByPayment("tbank", paymentId),
+};
+
 export class TbankPaymentProvider implements PaymentProvider {
   readonly key = "tbank";
   readonly sandbox = false;
@@ -73,16 +103,19 @@ export class TbankPaymentProvider implements PaymentProvider {
   private readonly terminalKey: string | undefined;
   private readonly password: string | undefined;
   private readonly apiUrl: string;
+  private readonly receiptDeps: TbankReceiptDeps;
 
   constructor(
     terminalKey: string | undefined = env.tbankTerminalKey,
     password: string | undefined = env.tbankPassword,
     apiUrl: string = env.tbankApiUrl,
+    receiptDeps: Partial<TbankReceiptDeps> = {},
   ) {
     this.terminalKey = terminalKey;
     this.password = password;
     this.apiUrl = apiUrl.replace(/\/+$/, "");
     this.available = Boolean(terminalKey && password && /^https:\/\//.test(this.apiUrl));
+    this.receiptDeps = { ...defaultTbankDeps, ...receiptDeps };
   }
 
   /** Проверка подписи уведомления. */
@@ -121,7 +154,22 @@ export class TbankPaymentProvider implements PaymentProvider {
     }
   }
 
+  /** Чек на сумму amountKopecks (для возврата — на сумму возврата), или null, если чеки выключены. */
+  private async receipt(base: ReceiptBase | null, amountKopecks: number, refund: boolean): Promise<TbankReceipt | null> {
+    const cfg = this.receiptDeps.config();
+    if (!cfg.enabled) return null;
+    if (!base) throw new Error("Т-Банк: не найден заказ для чека");
+    const r = toTbankReceipt(
+      fiscalReceipt(base, { amountKopecks: refund ? amountKopecks : undefined, settings: this.receiptDeps.settings() }),
+      cfg,
+    );
+    if (bundleTotal(r.Items) !== Math.round(amountKopecks)) throw new Error("Т-Банк: сумма чека не совпадает с суммой платежа");
+    return r;
+  }
+
   async createCharge(params: ChargeParams): Promise<ChargeResult> {
+    const cfg = this.receiptDeps.config();
+    const receipt = cfg.enabled ? await this.receipt(await this.receiptDeps.loadByOrder(params.orderId), params.amountKopecks, false) : null;
     const init = await this.call("Init", {
       Amount: Math.round(params.amountKopecks),
       OrderId: attemptOrderId(params.orderId),
@@ -131,6 +179,7 @@ export class TbankPaymentProvider implements PaymentProvider {
       FailURL: params.returnUrl ?? `${env.publicAppUrl}/orders/${params.orderId}`,
       NotificationURL: `${env.publicAppUrl}/api/webhooks/tbank`,
       DATA: { order_id: params.orderId },
+      ...(receipt ? { Receipt: receipt } : {}),
     });
     const paymentId = String(init.PaymentId ?? "");
     if (!paymentId) throw new Error("Т-Банк не вернул PaymentId");
@@ -155,7 +204,13 @@ export class TbankPaymentProvider implements PaymentProvider {
   }
 
   async refund(params: { paymentProviderRef: string; amountKopecks: number; reason: string; idempotencyKey: string }): Promise<{ providerRef: string; status: string }> {
-    const r = await this.call("Cancel", { PaymentId: params.paymentProviderRef, Amount: Math.round(params.amountKopecks) });
+    const cfg = this.receiptDeps.config();
+    const receipt = cfg.enabled ? await this.receipt(await this.receiptDeps.loadByPayment(params.paymentProviderRef), params.amountKopecks, true) : null;
+    const r = await this.call("Cancel", {
+      PaymentId: params.paymentProviderRef,
+      Amount: Math.round(params.amountKopecks),
+      ...(receipt ? { Receipt: receipt } : {}),
+    });
     const ok = r.Status === "REFUNDED" || r.Status === "PARTIAL_REFUNDED" || r.Status === "REVERSED" || r.Status === "QUEUED";
     return { providerRef: `${params.paymentProviderRef}:refund`, status: ok ? "SUCCEEDED" : "FAILED" };
   }
