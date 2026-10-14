@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 /** Куда вернуться после входа: только на страницу этого же сайта (защита от open redirect). */
@@ -13,10 +13,10 @@ function safeNext(raw: string | null | undefined): string {
 }
 
 function LoginInner() {
-  const router = useRouter();
   const params = useSearchParams();
   const next = safeNext(params?.get("next"));
   const [form, setForm] = useState({ email: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -30,12 +30,15 @@ function LoginInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Ошибка входа");
-      router.push(next);
+      // Если сервер ответил не JSON (таймаут хостинга), не показываем технический текст.
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) throw new Error(data?.error ?? "Сервер не ответил. Попробуйте ещё раз через минуту.");
+      // Администратора без явного «куда» ведём сразу в админку.
+      const target = next === "/" && data?.user?.role === "ADMIN" ? "/admin" : next;
+      // Полная перезагрузка, чтобы шапка сайта сразу показала, что вход выполнен.
+      window.location.assign(target);
     } catch (e2) {
       setError(e2 instanceof Error ? e2.message : "Ошибка входа");
-    } finally {
       setBusy(false);
     }
   };
@@ -52,28 +55,36 @@ function LoginInner() {
               type="email"
               className="input"
               required
+              autoComplete="username"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
           </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-ink">Пароль</span>
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label htmlFor="login-password" className="text-sm font-medium text-ink">Пароль</label>
+              <button type="button" className="text-xs font-medium text-svetlana-700 hover:underline" onClick={() => setShowPassword((v) => !v)}>
+                {showPassword ? "Скрыть" : "Показать"}
+              </button>
+            </div>
             <input
-              type="password"
+              id="login-password"
+              type={showPassword ? "text" : "password"}
               className="input"
               required
+              autoComplete="current-password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
             />
-          </label>
-          {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-bad">{error}</div>}
+          </div>
+          {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-bad" role="alert">{error}</div>}
           <button className="btn btn-primary w-full" disabled={busy}>
             {busy ? "Входим…" : "Войти"}
           </button>
         </form>
         <div className="mt-3 text-right text-sm">
           <Link
-            href="/password-reset"
+            href={form.email ? `/password-reset?email=${encodeURIComponent(form.email)}` : "/password-reset"}
             className="font-medium text-svetlana-700 hover:underline"
           >
             Забыли пароль?
