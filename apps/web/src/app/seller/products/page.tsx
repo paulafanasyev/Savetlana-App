@@ -7,20 +7,26 @@ import { ensureBaseCategories } from "@/lib/domains/categories";
 import { ProductDraftAssistant } from "@/components/ProductDraftAssistant";
 import { ConfirmAvailabilityButton } from "@/components/ConfirmAvailabilityButton";
 import { PublishProductButton } from "@/components/PublishProductButton";
+import { PublishAllDrafts } from "@/components/PublishAllDrafts";
+import { getSellerOnboardingGate } from "@/lib/domains/seller-onboarding";
+import { planDraftPublish, publishGateReason } from "@/lib/domains/seller-publish";
 
 export const dynamic = "force-dynamic";
 
 export default async function SellerProductsPage() {
   const { sellerId } = await requireSellerServer();
   await ensureBaseCategories();
-  const [products, categories] = await Promise.all([
+  const [products, categories, publishPlan, gate] = await Promise.all([
     prisma.product.findMany({
       where: { sellerId },
       include: { images: { take: 1, orderBy: { position: "asc" } }, inventory: true, category: { select: { name: true } } },
       orderBy: { updatedAt: "desc" },
     }),
     prisma.category.findMany({ select: { id: true, name: true, slug: true }, orderBy: { name: "asc" } }),
+    planDraftPublish(sellerId),
+    getSellerOnboardingGate(sellerId),
   ]);
+  const gateReason = publishGateReason(gate);
   const now = new Date();
   return (
     <main className="space-y-6 p-6">
@@ -40,6 +46,7 @@ export default async function SellerProductsPage() {
           <p className="mt-2">Уже торгуете на Ozon, Wildberries или ведёте товары в 1С? <Link href="/seller/products/import" className="font-medium text-svetlana-700 hover:underline">Перенесите весь каталог одним файлом</Link>.</p>
         </div>
       )}
+      <PublishAllDrafts drafts={publishPlan.drafts} ready={publishPlan.ready} blocked={publishPlan.blocked} more={publishPlan.more} gateReason={gateReason} />
       <ProductDraftAssistant categories={categories} />
       {products.length > 0 && <div className="card overflow-x-auto">
         <table className="w-full text-left text-sm">
