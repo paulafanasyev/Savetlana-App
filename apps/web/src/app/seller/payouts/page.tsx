@@ -3,6 +3,8 @@ import { getPayoutProvider, sellerSettlementStatement } from "@/lib/domains/paym
 import { availablePayoutKopecks } from "@/lib/domains/seller-payouts";
 import { bankRegistryMode } from "@/lib/domains/payout-registry";
 import { bankDetailsSummary } from "@/lib/domains/bank-details";
+import { getPayoutHold } from "@/lib/domains/account-security";
+import { holdMessage } from "@/lib/domains/account-guard";
 import { BankDetailsForm } from "./BankDetailsForm";
 import { rub, timeAgo } from "@/lib/format";
 import { settlementStatusLabel } from "@/lib/labels";
@@ -17,11 +19,16 @@ const RESULT_TEXT: Record<string, string> = {
   in_progress: "Выплата в обработке у банка.",
   registry_queued: "Выплата запрошена. Площадка переведёт деньги на ваш счёт банковским переводом, обычно в течение 1–2 рабочих дней. Мы сообщим, когда платёж уйдёт.",
   bank_details_required: "Сначала укажите реквизиты для выплат ниже.",
+  security_hold: "Выплата временно приостановлена для защиты аккаунта.",
 };
 
 export default async function SellerPayoutsPage({ searchParams }: { searchParams?: Promise<{ payout?: string; test?: string }> }) {
   const { sellerId } = await requireSellerServer();
-  const [statement, available] = await Promise.all([sellerSettlementStatement(sellerId), availablePayoutKopecks(sellerId)]);
+  const [statement, available, hold] = await Promise.all([
+    sellerSettlementStatement(sellerId),
+    availablePayoutKopecks(sellerId),
+    getPayoutHold(sellerId).catch(() => null),
+  ]);
   const params = (await searchParams) ?? {};
   const result = params.payout;
   const registry = bankRegistryMode();
@@ -33,6 +40,11 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
       <h1 className="text-2xl font-semibold">Выплаты</h1>
       {sandbox && (
         <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Банк для выплат пока не подключён. Расчёты видны, но деньги на счёт не переводятся.</p>
+      )}
+      {hold && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+          🔒 {holdMessage(hold)}
+        </p>
       )}
       {result && (
         <p className="rounded-lg bg-surface-muted p-3 text-sm" role="status">
@@ -48,7 +60,7 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
       </div>
       {registry && <BankDetailsForm current={bank} />}
       <form method="post" action="/api/seller/payouts">
-        <button className="btn btn-primary" type="submit" disabled={!available || (registry && !bank)}>Запросить выплату {rub(available)}</button>
+        <button className="btn btn-primary" type="submit" disabled={!available || (registry && !bank) || Boolean(hold)}>Запросить выплату {rub(available)}</button>
         {registry && !bank && <p className="mt-1 text-xs text-ink-faint">Кнопка станет активной, когда вы сохраните реквизиты.</p>}
       </form>
       <div className="card overflow-x-auto">

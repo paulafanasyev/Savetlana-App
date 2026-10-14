@@ -6,6 +6,8 @@ import { payoutIdempotencyKey } from "@/lib/payout-key";
 import { getPayoutProvider, sellerSettlementStatement } from "@/lib/domains/payments";
 import { DELIVERED_ORDER_STATUSES, payoutDeliveredSettlements } from "@/lib/domains/seller-payouts";
 import { bankRegistryMode, requestRegistryPayout, RegistryPayoutError } from "@/lib/domains/payout-registry";
+import { getPayoutHold, PayoutHoldError } from "@/lib/domains/account-security";
+import { holdMessage } from "@/lib/domains/account-guard";
 import { isLiveDeployment } from "@/lib/live-mode";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +42,11 @@ export const POST = apiRoute(async (request) => {
     }
   }
 
+  // Защита от захвата аккаунта: после смены реквизитов или сброса пароля
+  // выплата ждёт, чтобы владелец успел заметить чужие действия.
+  const hold = await getPayoutHold(ctx.sellerId);
+  if (hold) return reply("security_hold", 409, holdMessage(hold));
+
   const pending = await prisma.settlement.findMany({
     where: { sellerId: ctx.sellerId, status: "PENDING", payoutId: null },
     select: { id: true, order: { select: { status: true } } },
@@ -63,11 +70,16 @@ export const POST = apiRoute(async (request) => {
     }
   }
 
-  const result = await payoutDeliveredSettlements({
-    sellerId: ctx.sellerId,
-    actorId: ctx.user.id,
-    idempotencyKey,
-  });
-  if (isForm) return reply(result.status.toLowerCase(), 201, undefined, result.sandbox ? "&test=1" : "");
-  return Response.json(result, { status: result.status === "NOTHING_TO_PAYOUT" ? 200 : 201 });
+  try {
+    const result = await payoutDeliveredSettlements({
+      sellerId: ctx.sellerId,
+      actorId: ctx.user.id,
+      idempotencyKey,
+    });
+    if (isForm) return reply(result.status.toLowerCase(), 201, undefined, result.sandbox ? "&test=1" : "");
+    return Response.json(result, { status: result.status === "NOTHING_TO_PAYOUT" ? 200 : 201 });
+  } catch (error) {
+    if (error instanceof PayoutHoldError) return reply(error.code, 409, error.message);
+    throw error;
+  }
 });
