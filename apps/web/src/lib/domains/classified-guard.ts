@@ -171,6 +171,9 @@ export function scanClassified(ad: ClassifiedForScan, ctx: ClassifiedScanContext
     if (/(без птс|птс (дубликат|утерян|потерян)|дубликат птс|документы (потом|позже|при встрече не)|без документов|без сто?с|в залоге|под залогом|залогов(ый|ое|ая) (авто|автомобиль|машина)|в кредите|запрет на регистрац|ограничени(е|я) на регистрац|под арестом)/.test(text)) {
       add("AUTO_DOCS_RISK", "review", "Машина без ПТС, с дубликатом, в залоге или с запретом. Такую машину могут забрать у нового владельца");
     }
+    if (ad.attrs.pts === "duplicate" || ad.attrs.pts === "none") {
+      add("AUTO_DOCS_RISK", "review", "Машина без ПТС или с дубликатом ПТС. Проверьте по VIN, нет ли залога и запретов");
+    }
     const year = num(ad.attrs.year);
     const km = num(ad.attrs.mileageKm);
     const nowYear = (ctx.now ?? new Date()).getFullYear();
