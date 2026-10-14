@@ -77,6 +77,70 @@ function ConsentStep({ target }: { target: string }) {
   );
 }
 
+/** Вход с нового устройства: код из письма. */
+function CodeStep({ challenge, sentTo, device, onDone, onBack }: { challenge: string; sentTo: string; device: string; onDone: (data: { user?: { role?: string }; needsConsent?: boolean }) => void; onBack: () => void }) {
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/login/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challenge, code }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) throw new Error(data?.error ?? NO_ANSWER);
+      onDone(data);
+    } catch (e2) {
+      setError(e2 instanceof Error ? e2.message : NO_ANSWER);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-md px-4 py-10">
+      <div className="card p-8">
+        <h1 className="text-2xl font-bold text-ink">Подтвердите вход</h1>
+        <p className="mt-2 text-sm text-ink-soft">
+          Вы входите с нового устройства ({device}). Мы отправили код {sentTo}. Это защита на случай, если пароль
+          узнал кто-то другой.
+        </p>
+        <form className="mt-6 space-y-4" onSubmit={submit}>
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-ink">Код из письма</span>
+            <input
+              className="input text-center text-lg tracking-[0.4em]"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              required
+              autoFocus
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            />
+          </label>
+          {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-bad" role="alert">{error}</div>}
+          <button className="btn btn-primary w-full" disabled={busy || code.length !== 6}>
+            {busy ? "Проверяем…" : "Войти"}
+          </button>
+        </form>
+        <p className="mt-4 text-xs text-ink-faint">
+          Код действует 10 минут. Письма нет? Проверьте «Спам» или войдите заново, придёт новый код.
+        </p>
+        <button className="btn btn-secondary mt-3 w-full" disabled={busy} onClick={onBack}>
+          Назад
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function LoginInner() {
   const params = useSearchParams();
   const next = safeNext(params?.get("next"));
@@ -85,6 +149,20 @@ function LoginInner() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [consentTarget, setConsentTarget] = useState<string | null>(null);
+  const [codeStep, setCodeStep] = useState<{ challenge: string; sentTo: string; device: string } | null>(null);
+
+  // Общий финал: и после пароля, и после кода с нового устройства.
+  const done = (data: { user?: { role?: string }; needsConsent?: boolean }) => {
+    // Администратора без явного «куда» ведём сразу в админку.
+    const target = next === "/" && data?.user?.role === "ADMIN" ? "/admin" : next;
+    if (data.needsConsent) {
+      setConsentTarget(target);
+      setBusy(false);
+      return;
+    }
+    // Полная перезагрузка, чтобы шапка сайта сразу показала, что вход выполнен.
+    window.location.assign(target);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,15 +177,12 @@ function LoginInner() {
       // Если сервер ответил не JSON (таймаут хостинга), не показываем технический текст.
       const data = await res.json().catch(() => null);
       if (!res.ok || !data) throw new Error(data?.error ?? NO_ANSWER);
-      // Администратора без явного «куда» ведём сразу в админку.
-      const target = next === "/" && data?.user?.role === "ADMIN" ? "/admin" : next;
-      if (data.needsConsent) {
-        setConsentTarget(target);
+      if (data.needsCode) {
+        setCodeStep({ challenge: data.challenge, sentTo: data.sentTo ?? "на почту", device: data.device ?? "новое устройство" });
         setBusy(false);
         return;
       }
-      // Полная перезагрузка, чтобы шапка сайта сразу показала, что вход выполнен.
-      window.location.assign(target);
+      done(data);
     } catch (e2) {
       setError(e2 instanceof Error ? e2.message : "Ошибка входа");
       setBusy(false);
@@ -115,6 +190,9 @@ function LoginInner() {
   };
 
   if (consentTarget) return <ConsentStep target={consentTarget} />;
+  if (codeStep) {
+    return <CodeStep {...codeStep} onDone={done} onBack={() => { setCodeStep(null); setForm({ ...form, password: "" }); }} />;
+  }
 
   return (
     <div className="mx-auto max-w-md px-4 py-10">
