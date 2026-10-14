@@ -74,9 +74,8 @@ export function Header() {
           {mobileOpen ? "✕" : "☰"}
         </button>
 
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-svetlana-600 font-bold text-white">Св</span>
-          <span className="hidden text-lg font-bold text-ink sm:inline">Светлана</span>
+        <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="АИКО, на главную">
+          <span className="text-xl font-extrabold tracking-wide text-svetlana-700">АИКО</span>
         </Link>
 
         <nav className="ml-2 hidden items-center gap-1 md:flex" aria-label="Основная навигация">
@@ -108,7 +107,7 @@ export function Header() {
                       {label}
                     </Link>
                   ))}
-                  {user.role === "SELLER" && (
+                  {(user.role === "SELLER" || user.role === "ADMIN") && (
                     <Link href="/seller" role="menuitem" className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
                       Кабинет продавца
                     </Link>

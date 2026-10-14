@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { AvatarPhase, Emotion } from "@/lib/avatar-logic";
 
 const sizes = {
@@ -33,6 +34,18 @@ export function SvetlanaAvatar({
   showName = false,
   className = "",
 }: SvetlanaAvatarProps) {
+  // Букву «С» показываем, только если фото действительно не загрузилось.
+  // Раньше запасной вариант прятался атрибутом hidden, но класс flex его
+  // перебивал, и буква всегда закрывала фото.
+  const [failed, setFailed] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    // Ошибка могла случиться до того, как React подключился к странице.
+    const img = imgRef.current;
+    if (img && img.complete && img.naturalWidth === 0) setFailed(true);
+  }, []);
+
   const emotionClass = emotion === "happy" || emotion === "laughing"
     ? "brightness-110 saturate-110"
     : emotion === "sad" || emotion === "crying"
@@ -49,16 +62,17 @@ export function SvetlanaAvatar({
         phase === "speaking" ? "svetlana-avatar-speaking" : ""
       }`}>
         <div className="relative h-full w-full overflow-hidden rounded-full border-2 border-svetlana-200 bg-gradient-to-br from-svetlana-100 via-white to-svetlana-200 shadow-card">
-          <img
-            src={SVETLANA_PHOTO_SRC}
-            alt="Аватар Светланы"
-            className={`h-full w-full object-cover transition-[filter] duration-300 ${emotionClass}`}
-            onError={(event) => {
-              event.currentTarget.style.display = "none";
-              event.currentTarget.nextElementSibling?.removeAttribute("hidden");
-            }}
-          />
-          <span hidden className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-svetlana-100 via-white to-svetlana-200 text-2xl font-bold text-svetlana-700" aria-hidden="true">С</span>
+          {failed ? (
+            <span className="absolute inset-0 flex items-center justify-center text-2xl font-bold text-svetlana-700" aria-hidden="true">С</span>
+          ) : (
+            <img
+              ref={imgRef}
+              src={SVETLANA_PHOTO_SRC}
+              alt="Аватар Светланы"
+              className={`h-full w-full object-cover transition-[filter] duration-300 ${emotionClass}`}
+              onError={() => setFailed(true)}
+            />
+          )}
           <span className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-t from-svetlana-700/15 to-transparent" aria-hidden="true" />
         </div>
       </div>
