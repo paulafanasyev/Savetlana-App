@@ -7,10 +7,15 @@
  * адресом уведомления:
  *   продавец → покупатель: kind = seller_message, userId = покупатель, url = /messages/<sellerId>
  *   покупатель → продавец: kind = buyer_message, userId = пользователь продавца, url = /seller/messages/<buyerId>
+ *
+ * Антифрод: каждое сообщение проверяется до отправки (message-guard.ts).
+ * Фишинговые ссылки, номера карт и просьбы назвать код не отправляются,
+ * подозрительные сообщения уходят с предупреждением получателю.
  */
 import { prisma } from "../prisma";
 import { UserFacingError, cleanMessage, buildInbox } from "./engagement-rules";
 import { notify } from "./notifications";
+import { guardOutgoingMessage, warnRecipient } from "./message-guard";
 
 const HOURLY_LIMIT = 30;
 
@@ -50,6 +55,7 @@ export async function sendBuyerToSeller(buyer: { id: string; name: string | null
   if ((await sentLastHour({ userId: seller.userId, kind: "buyer_message", url: sellerThreadUrl(buyer.id) })) >= HOURLY_LIMIT) {
     throw new UserFacingError("Слишком много сообщений подряд. Дождитесь ответа продавца", 429);
   }
+  const verdict = await guardOutgoingMessage(buyer.id, text);
   await notify({
     userId: seller.userId,
     kind: "buyer_message",
@@ -57,6 +63,7 @@ export async function sendBuyerToSeller(buyer: { id: string; name: string | null
     body: text,
     url: sellerThreadUrl(buyer.id),
   });
+  await warnRecipient(seller.userId, verdict, sellerThreadUrl(buyer.id));
 }
 
 export async function sendSellerToBuyer(sellerId: string, buyerId: string, raw: unknown): Promise<void> {
@@ -70,6 +77,7 @@ export async function sendSellerToBuyer(sellerId: string, buyerId: string, raw: 
   if ((await sentLastHour({ userId: buyerId, kind: "seller_message", url: buyerThreadUrl(seller.id) })) >= HOURLY_LIMIT) {
     throw new UserFacingError("Слишком много сообщений подряд. Дождитесь ответа покупателя", 429);
   }
+  const verdict = await guardOutgoingMessage(seller.userId, text);
   await notify({
     userId: buyerId,
     kind: "seller_message",
@@ -77,6 +85,7 @@ export async function sendSellerToBuyer(sellerId: string, buyerId: string, raw: 
     body: text,
     url: buyerThreadUrl(seller.id),
   });
+  await warnRecipient(buyerId, verdict, buyerThreadUrl(seller.id));
 }
 
 /** Переписка покупателя с магазином. viewer определяет, какие сообщения «мои», и что пометить прочитанным. */
