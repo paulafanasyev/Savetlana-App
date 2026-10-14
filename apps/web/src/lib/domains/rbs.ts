@@ -12,10 +12,15 @@
  *             ALFA_USERNAME, ALFA_PASSWORD, ALFA_API_URL, ALFA_CALLBACK_SECRET.
  * Тестовые стенды: Сбер https://3dsec.sberbank.ru/payment/rest,
  *                  Альфа https://alfa.rbsuat.com/payment/rest.
+ *
+ * Чеки 54-ФЗ: SBER_RECEIPTS=true / ALFA_RECEIPTS=true (+ RBS_TAX_SYSTEM,
+ * RBS_TAX_TYPE). Корзина orderBundle передаётся в register.do, см. fiscal.ts.
  */
 import { createHmac } from "node:crypto";
 import { env } from "../env";
 import type { ChargeParams, ChargeResult, PaymentProvider } from "./payments";
+import { bundleTotal, fiscalReceipt, loadReceiptBaseByOrder, rbsReceiptConfig, toRbsOrderBundle, type RbsReceiptConfig, type ReceiptBase } from "./fiscal";
+import { receiptSettings } from "./receipt";
 
 export type RbsBank = "sber" | "alfa";
 
@@ -55,6 +60,13 @@ export function rbsOrderNumber(orderId: string, now = Date.now()): string {
   return `${orderId.slice(-20)}_${now.toString(36)}`.slice(0, 32);
 }
 
+/** Откуда брать чек. Подменяется в тестах. */
+export interface RbsReceiptDeps {
+  config: () => RbsReceiptConfig;
+  settings: () => ReturnType<typeof receiptSettings>;
+  loadByOrder: (orderId: string) => Promise<ReceiptBase | null>;
+}
+
 export class RbsPaymentProvider implements PaymentProvider {
   readonly key: RbsBank;
   readonly sandbox = false;
@@ -63,8 +75,13 @@ export class RbsPaymentProvider implements PaymentProvider {
   private readonly password: string | undefined;
   private readonly apiUrl: string;
   private readonly callbackSecret: string | undefined;
+  private readonly receiptDeps: RbsReceiptDeps;
 
-  constructor(bank: RbsBank, cfg?: { userName?: string; password?: string; apiUrl?: string; callbackSecret?: string }) {
+  constructor(
+    bank: RbsBank,
+    cfg?: { userName?: string; password?: string; apiUrl?: string; callbackSecret?: string },
+    receiptDeps: Partial<RbsReceiptDeps> = {},
+  ) {
     this.key = bank;
     const d = bank === "sber"
       ? { userName: env.sberUserName, password: env.sberPassword, apiUrl: env.sberApiUrl, callbackSecret: env.sberCallbackSecret }
@@ -75,6 +92,12 @@ export class RbsPaymentProvider implements PaymentProvider {
     this.apiUrl = (c.apiUrl ?? d.apiUrl).replace(/\/+$/, "");
     this.callbackSecret = c.callbackSecret;
     this.available = Boolean(this.userName && this.password && /^https:\/\//.test(this.apiUrl));
+    this.receiptDeps = {
+      config: () => rbsReceiptConfig(bank),
+      settings: () => receiptSettings(),
+      loadByOrder: loadReceiptBaseByOrder,
+      ...receiptDeps,
+    };
   }
 
   get label(): string {
@@ -115,6 +138,18 @@ export class RbsPaymentProvider implements PaymentProvider {
     }
   }
 
+  /** orderBundle + taxSystem для register.do, если чеки включены. */
+  private async receiptFields(orderId: string, amountKopecks: number): Promise<Record<string, string>> {
+    const cfg = this.receiptDeps.config();
+    if (!cfg.enabled) return {};
+    const base = await this.receiptDeps.loadByOrder(orderId);
+    if (!base) throw new Error(`${this.label}: не найден заказ для чека`);
+    const bundle = toRbsOrderBundle(fiscalReceipt(base, { settings: this.receiptDeps.settings() }), cfg);
+    const items = (bundle.cartItems as { items: { itemAmount: number }[] }).items;
+    if (bundleTotal(items) !== Math.round(amountKopecks)) throw new Error(`${this.label}: сумма чека не совпадает с суммой платежа`);
+    return { orderBundle: JSON.stringify(bundle), taxSystem: cfg.taxSystem };
+  }
+
   async createCharge(params: ChargeParams): Promise<ChargeResult> {
     const back = params.returnUrl ?? `${env.publicAppUrl}/orders/${params.orderId}`;
     const r = await this.call("register.do", {
@@ -126,6 +161,7 @@ export class RbsPaymentProvider implements PaymentProvider {
       description: (params.description ?? `Заказ ${params.orderId}`).slice(0, 512),
       dynamicCallbackUrl: `${env.publicAppUrl}/api/webhooks/${this.key}`,
       jsonParams: JSON.stringify({ order_id: params.orderId }),
+      ...(await this.receiptFields(params.orderId, params.amountKopecks)),
     });
     if (!r.orderId || !r.formUrl) throw new Error(`${this.label}: банк не вернул orderId/formUrl`);
     return { providerRef: r.orderId, status: "PENDING", confirmationUrl: r.formUrl };
