@@ -1,7 +1,11 @@
 /**
- * Разбор файлов с товарами для переноса магазина: выгрузки Ozon и Wildberries
- * (Excel .xlsx или .csv), прайс-листы и выгрузки 1С (.csv), фиды YML для
- * Яндекс Маркета (.xml / .yml, их отдают 1С, InSales, Тильда и большинство CMS).
+ * Разбор файлов с товарами для переноса магазина: выгрузки Яндекс Маркета,
+ * Ozon и Wildberries (Excel .xlsx или .csv), прайс-листы и выгрузки 1С (.csv),
+ * фиды YML (.xml / .yml, их отдают 1С, InSales, Тильда и большинство CMS).
+ *
+ * В книге Excel из кабинета Маркета первым листом часто идёт инструкция, а
+ * товары лежат на другом листе. Поэтому смотрим все видимые листы и берём тот,
+ * где нашлось больше всего товаров.
  *
  * Модуль не зависит ни от браузера, ни от сервера: им пользуется страница
  * импорта (разбор файла у продавца, на сервер уходит только список товаров),
@@ -27,6 +31,10 @@ export interface ParseResult {
   /** Какие колонки файла мы узнали (для показа продавцу). */
   columns: Partial<Record<Field, string>>;
   format: "table" | "yml";
+  /** Лист книги Excel, с которого взяли товары (если листов несколько). */
+  sheet?: string;
+  /** Откуда, похоже, выгрузка: «Яндекс Маркет», «Ozon», «Wildberries». */
+  source?: string;
 }
 
 type Field = "article" | "title" | "description" | "price" | "oldPrice" | "quantity" | "images" | "brand" | "barcode";
@@ -55,6 +63,8 @@ export function fieldOfHeader(header: string): Field | null {
   const h = norm(header);
   if (!h) return null;
   if (/штрих|баркод|barcode|\bean\b|gtin/.test(h)) return "barcode";
+  // Номер карточки на самом Маркете не артикул продавца: берём «Ваш SKU».
+  if (/sku на маркете|маркет sku|market sku|sku маркета|sku яндекс/.test(h)) return null;
   if (/артикул|vendorcode|offer_id|offer id|\bsku\b|^код( товара)?$/.test(h)) return "article";
   if (/до скидки|старая цена|зачеркнут|oldprice|цена без скидки/.test(h)) return "oldPrice";
   if (/себестоим|закуп|минимальн|рекоменд|ндс|комисси|логистик/.test(h)) return null;
@@ -133,8 +143,9 @@ export function rowsToItems(rows: string[][]): ParseResult {
     rows[r].forEach((h, c) => {
       const f = fieldOfHeader(h);
       if (!f) return;
-      // Из нескольких артикулов (WB: «Артикул WB» и «Артикул продавца») берём артикул продавца.
-      if (map[f] === undefined || (f === "article" && /продавц/i.test(h))) map[f] = c;
+      // Из нескольких артикулов (WB: «Артикул WB» и «Артикул продавца», Маркет:
+      // «Ваш SKU») берём артикул продавца.
+      if (map[f] === undefined || (f === "article" && /продавц|ваш/i.test(h))) map[f] = c;
     });
     if (map.title !== undefined && map.price !== undefined && Object.keys(map).length > Object.keys(best).length) {
       best = map;
@@ -175,7 +186,16 @@ export function rowsToItems(rows: string[][]): ParseResult {
       barcode: cell(row, "barcode") || undefined,
     });
   }
-  return { items, problems, columns, format: "table" };
+  return { items, problems, columns, format: "table", source: detectSource(header) };
+}
+
+/** По заголовкам колонок угадываем, из какого кабинета выгрузка. */
+export function detectSource(header: string[]): string | undefined {
+  const all = header.map(norm).join(" | ");
+  if (/ваш sku|на маркете|яндекс|маркет sku|market sku/.test(all)) return "Яндекс Маркет";
+  if (/ozon|озон/.test(all)) return "Ozon";
+  if (/\bwb\b|wildberries|вайлдберриз/.test(all)) return "Wildberries";
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -288,9 +308,7 @@ function colIndex(ref: string): number {
   return n - 1;
 }
 
-/** Первый (видимый по порядку) лист книги Excel как таблица строк. */
-export async function parseXlsx(buffer: ArrayBuffer): Promise<string[][]> {
-  const files = await unzip(buffer);
+async function sharedStrings(files: Map<string, () => Promise<string>>): Promise<string[]> {
   const shared: string[] = [];
   const sst = files.get("xl/sharedStrings.xml");
   if (sst) {
@@ -299,19 +317,10 @@ export async function parseXlsx(buffer: ArrayBuffer): Promise<string[][]> {
       shared.push(Array.from(si[1].matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g), (t) => decodeXml(t[1])).join(""));
     }
   }
-  // Первый лист по книге: workbook.xml -> r:id -> workbook.xml.rels -> путь.
-  let sheetPath = "xl/worksheets/sheet1.xml";
-  const wb = files.get("xl/workbook.xml");
-  const rels = files.get("xl/_rels/workbook.xml.rels");
-  if (wb && rels) {
-    const rid = (await wb()).match(/<sheet\b[^>]*r:id="([^"]+)"/)?.[1];
-    const relsXml = await rels();
-    const target = rid ? relsXml.match(new RegExp(`<Relationship\\b[^>]*Id="${rid}"[^>]*Target="([^"]+)"`))?.[1] ?? relsXml.match(new RegExp(`<Relationship\\b[^>]*Target="([^"]+)"[^>]*Id="${rid}"`))?.[1] : undefined;
-    if (target) sheetPath = target.startsWith("/") ? target.slice(1) : `xl/${target.replace(/^\.\//, "")}`;
-  }
-  const sheet = files.get(sheetPath) ?? Array.from(files.entries()).find(([k]) => /^xl\/worksheets\/sheet\d+\.xml$/.test(k))?.[1];
-  if (!sheet) throw new Error("В файле Excel не нашли лист с данными");
-  const xml = await sheet();
+  return shared;
+}
+
+function sheetRows(xml: string, shared: string[]): string[][] {
   const rows: string[][] = [];
   for (const rowMatch of xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
     const row: string[] = [];
@@ -335,6 +344,62 @@ export async function parseXlsx(buffer: ArrayBuffer): Promise<string[][]> {
   return rows.filter((r) => r.some((c) => c.trim() !== ""));
 }
 
+function relTarget(relsXml: string, rid: string): string | undefined {
+  const target =
+    relsXml.match(new RegExp(`<Relationship\\b[^>]*Id="${rid}"[^>]*Target="([^"]+)"`))?.[1] ??
+    relsXml.match(new RegExp(`<Relationship\\b[^>]*Target="([^"]+)"[^>]*Id="${rid}"`))?.[1];
+  if (!target) return undefined;
+  return target.startsWith("/") ? target.slice(1) : `xl/${target.replace(/^\.\//, "")}`;
+}
+
+export interface XlsxSheet {
+  name: string;
+  rows: string[][];
+}
+
+/** Все видимые листы книги Excel по порядку. Скрытые листы (списки значений шаблона) пропускаем. */
+export async function parseXlsxSheets(buffer: ArrayBuffer): Promise<XlsxSheet[]> {
+  const files = await unzip(buffer);
+  const shared = await sharedStrings(files);
+  const wb = files.get("xl/workbook.xml");
+  const rels = files.get("xl/_rels/workbook.xml.rels");
+  const sheets: XlsxSheet[] = [];
+  if (wb && rels) {
+    const relsXml = await rels();
+    for (const m of (await wb()).matchAll(/<sheet\b([^>]*?)\/?>/g)) {
+      const attrs = m[1];
+      if (/\bstate="(hidden|veryHidden)"/.test(attrs)) continue;
+      const rid = attrs.match(/\br:id="([^"]+)"/)?.[1];
+      const path = rid ? relTarget(relsXml, rid) : undefined;
+      const file = path ? files.get(path) : undefined;
+      if (!file) continue;
+      sheets.push({ name: decodeXml(attrs.match(/\bname="([^"]*)"/)?.[1] ?? ""), rows: sheetRows(await file(), shared) });
+    }
+  }
+  if (sheets.length === 0) {
+    const fallback = files.get("xl/worksheets/sheet1.xml") ?? Array.from(files.entries()).find(([k]) => /^xl\/worksheets\/sheet\d+\.xml$/.test(k))?.[1];
+    if (!fallback) throw new Error("В файле Excel не нашли лист с данными");
+    sheets.push({ name: "", rows: sheetRows(await fallback(), shared) });
+  }
+  return sheets;
+}
+
+/** Первый видимый лист книги Excel как таблица строк. */
+export async function parseXlsx(buffer: ArrayBuffer): Promise<string[][]> {
+  return (await parseXlsxSheets(buffer))[0].rows;
+}
+
+/** Из листов книги выбираем тот, где больше всего товаров (при равенстве меньше ошибок). */
+export function bestSheet(sheets: XlsxSheet[]): ParseResult {
+  const results = sheets.map((s) => ({ ...rowsToItems(s.rows), sheet: sheets.length > 1 && s.name ? s.name : undefined }));
+  const withItems = results.filter((r) => r.items.length > 0);
+  if (withItems.length > 0) {
+    return withItems.reduce((a, b) => (b.items.length > a.items.length || (b.items.length === a.items.length && b.problems.length < a.problems.length) ? b : a));
+  }
+  // Товаров нет нигде: покажем лист, где хотя бы узнали заголовки, иначе первый.
+  return results.find((r) => Object.keys(r.columns).length > 0) ?? results[0];
+}
+
 /** Текст CSV: сначала UTF-8, а если файл из старого Excel/1С, то Windows-1251. */
 export function decodeText(buffer: ArrayBuffer): string {
   const utf8 = new TextDecoder("utf-8").decode(buffer);
@@ -345,7 +410,7 @@ export function decodeText(buffer: ArrayBuffer): string {
 /** Разбор файла любого поддерживаемого формата по имени и содержимому. */
 export async function parseCatalogFile(name: string, buffer: ArrayBuffer): Promise<ParseResult> {
   const lower = name.toLowerCase();
-  if (lower.endsWith(".xlsx")) return rowsToItems(await parseXlsx(buffer));
+  if (lower.endsWith(".xlsx")) return bestSheet(await parseXlsxSheets(buffer));
   if (lower.endsWith(".xls")) {
     throw new Error("Старый формат .xls не поддерживается. Откройте файл в Excel и сохраните как .xlsx или .csv.");
   }
