@@ -25,6 +25,7 @@ import { audit } from "./audit";
 import { notify } from "./notifications";
 import { assertEnum } from "../db/enums";
 import { ApiError, hashPassword } from "../auth";
+import { notifyPasswordChanged } from "./password-changed";
 
 const TICKET_TTL_MINUTES = 30;
 const RESET_TTL_MINUTES = 30;
@@ -263,6 +264,8 @@ export async function resetPassword(secret: string, newPassword: string): Promis
     targetType: "user",
     targetId: userId,
   });
+  // Владелец должен сразу узнать о смене пароля, даже если менял не он.
+  await notifyPasswordChanged(userId, "reset");
 }
 
 /** True when the presented secret is still spendable (for UI pre-validation). */

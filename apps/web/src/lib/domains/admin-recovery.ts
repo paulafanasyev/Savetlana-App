@@ -17,6 +17,7 @@ import { env } from "../env";
 import { ApiError, hashPassword } from "../auth";
 import { audit } from "./audit";
 import { consumeRateLimit } from "./rate-limits";
+import { notifyPasswordChanged } from "./password-changed";
 
 export const MIN_RECOVERY_TOKEN_LENGTH = 24;
 
@@ -64,5 +65,6 @@ export async function recoverAdminPassword(input: { email: string; token: string
     prisma.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } }),
   ]);
   await audit({ actorId: user.id, actorRole: "admin", action: "auth.admin_recovery", targetType: "User", targetId: user.id, after: { email } });
+  await notifyPasswordChanged(user.id, "admin_recovery");
   return { email };
 }
