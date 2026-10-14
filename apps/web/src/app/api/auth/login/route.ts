@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { audit } from "@/lib/domains/audit";
 import { promoteConfiguredAdmin } from "@/lib/domains/admin-bootstrap";
+import { needsTermsConsent } from "@/lib/domains/terms-consent";
 import { consumeRateLimit, clientIp, loginBuckets, recordAuthOutcome, AUTH_LIMITS, tooMany } from "@/lib/domains/rate-limits";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,10 @@ export const POST = apiRoute(async (request) => {
   const token = await createToken({ sub: user.id, role: user.role });
   await prisma.session.create({ data: { userId: user.id, token, expiresAt: new Date(Date.now() + 7 * 864e5) } });
   await audit({ actorId: user.id, actorRole: user.role.toLowerCase(), action: "auth.login", targetType: "user", targetId: user.id });
-  const response = Response.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  // Аккаунты, созданные до записи согласий или согласившиеся на старую версию условий:
+  // страница входа попросит принять условия перед тем, как пустить дальше.
+  const needsConsent = await needsTermsConsent(user.id);
+  const response = Response.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role }, needsConsent });
   response.headers.append("Set-Cookie", setSessionCookie(token, env.isProduction));
   return response;
 });
