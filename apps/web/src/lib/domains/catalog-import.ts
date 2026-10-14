@@ -9,18 +9,37 @@
  *  - наличие не считается подтверждённым: остаток из файла записывается, но
  *    гарантию наличия покупателю не обещаем, пока продавец её не подтвердит;
  *  - повторный импорт того же файла не создаёт дублей: артикул продавца
- *    превращается в стабильный код товара, уже существующие пропускаются.
+ *    превращается в стабильный код товара. У уже перенесённых товаров
+ *    обновляются цена и остаток по тем же правилам, что и в массовом
+ *    редактировании (честные скидки, цена опубликованного товара меняется
+ *    только у проверенного продавца). Цена до скидки из файла у них не
+ *    трогается: скидками управляет раздел «Акции».
  */
 import { createHash } from "node:crypto";
 import { prisma } from "../prisma";
 import { slugify, toKopecks } from "../utils";
 import { computeAvailability } from "./inventory";
 import { audit } from "./audit";
+import { planBulk, type BulkCurrent, type BulkItem } from "./bulk-rules";
+import { applyBulkUpdate } from "./seller-bulk";
 import { IMPORT_MAX_ITEMS, type ImportItem } from "../catalog-import-parse";
+
+export interface ImportUpdate {
+  title: string;
+  priceFromRub?: number;
+  priceToRub?: number;
+  stockFrom?: number;
+  stockTo?: number;
+}
 
 export interface ImportOutcome {
   created: number;
   wouldCreate: number;
+  updated: number;
+  wouldUpdate: number;
+  /** Уже перенесённые товары, у которых в файле ничего не поменялось. */
+  unchanged: number;
+  updates: ImportUpdate[];
   skipped: { title: string; reason: string }[];
   preview: { title: string; priceRub: number; quantity: number | null; images: number }[];
 }
@@ -67,12 +86,18 @@ export function importSku(sellerId: string, item: Pick<ImportItem, "article" | "
   return `imp-${readable}-${hash}`;
 }
 
-export async function importCatalogItems(input: { sellerId: string; actorId: string; items: unknown; dryRun: boolean }): Promise<ImportOutcome> {
+const EMPTY = { created: 0, wouldCreate: 0, updated: 0, wouldUpdate: 0, unchanged: 0, updates: [], preview: [] };
+
+function rubOf(kopecks: number | undefined): number | undefined {
+  return kopecks === undefined ? undefined : kopecks / 100;
+}
+
+export async function importCatalogItems(input: { sellerId: string; actorId: string; items: unknown; dryRun: boolean; verified: boolean }): Promise<ImportOutcome> {
   if (!Array.isArray(input.items) || input.items.length === 0) {
-    return { created: 0, wouldCreate: 0, skipped: [{ title: "файл", reason: "в файле нет товаров" }], preview: [] };
+    return { ...EMPTY, skipped: [{ title: "файл", reason: "в файле нет товаров" }] };
   }
   if (input.items.length > IMPORT_MAX_ITEMS) {
-    return { created: 0, wouldCreate: 0, skipped: [{ title: "файл", reason: `за раз можно загрузить до ${IMPORT_MAX_ITEMS} товаров, разделите файл` }], preview: [] };
+    return { ...EMPTY, skipped: [{ title: "файл", reason: `за раз можно загрузить до ${IMPORT_MAX_ITEMS} товаров, разделите файл` }] };
   }
   const skipped: ImportOutcome["skipped"] = [];
   const unique = new Map<string, ImportItem>();
@@ -83,14 +108,45 @@ export async function importCatalogItems(input: { sellerId: string; actorId: str
     if (unique.has(sku)) { skipped.push({ title: res.item.title, reason: "повтор в файле" }); continue; }
     unique.set(sku, res.item);
   }
-  const existing = await prisma.product.findMany({ where: { sku: { in: [...unique.keys()] } }, select: { sku: true } });
-  for (const { sku } of existing) {
-    const item = unique.get(sku);
-    if (item) skipped.push({ title: item.title, reason: "уже есть в магазине" });
-    unique.delete(sku);
+  // Уже перенесённые товары: не дублируем, а обновляем цену и остаток.
+  const existing = await prisma.product.findMany({
+    where: { sku: { in: [...unique.keys()] } },
+    select: { id: true, sku: true, sellerId: true, title: true, status: true, priceKopecks: true, oldPriceKopecks: true, inventory: { select: { quantity: true } } },
+  });
+  const bulkItems: BulkItem[] = [];
+  const current: BulkCurrent[] = [];
+  for (const p of existing) {
+    const item = unique.get(p.sku);
+    unique.delete(p.sku);
+    if (!item) continue;
+    if (p.sellerId !== input.sellerId) { skipped.push({ title: item.title, reason: "код товара занят" }); continue; }
+    current.push({ id: p.id, sku: p.sku, title: p.title, status: p.status, priceKopecks: p.priceKopecks, oldPriceKopecks: p.oldPriceKopecks, quantity: p.inventory?.quantity ?? 0 });
+    bulkItems.push({ id: p.id, priceRub: item.priceRub, stockQuantity: item.quantity });
   }
+  const plan = planBulk(current, bulkItems, { verified: input.verified });
+  skipped.push(...plan.skipped);
+  const unchanged = current.length - plan.changes.length;
+  const updates: ImportUpdate[] = plan.changes.slice(0, 10).map((c) => ({
+    title: c.title,
+    priceFromRub: rubOf(c.priceFrom),
+    priceToRub: rubOf(c.priceTo),
+    stockFrom: c.stockFrom,
+    stockTo: c.stockTo,
+  }));
+
   const preview = [...unique.values()].slice(0, 10).map((i) => ({ title: i.title, priceRub: i.priceRub, quantity: i.quantity ?? null, images: i.images.length }));
-  if (input.dryRun) return { created: 0, wouldCreate: unique.size, skipped, preview };
+  if (input.dryRun) {
+    return { created: 0, wouldCreate: unique.size, updated: 0, wouldUpdate: plan.changes.length, unchanged, updates, skipped, preview };
+  }
+
+  let updated = 0;
+  if (plan.changes.length > 0) {
+    // Применяем только то, что реально меняется: те же проверки и журнал, что в массовом редактировании.
+    const wanted = plan.changes.map((c) => ({ id: c.id, priceRub: c.priceTo === undefined ? undefined : c.priceTo / 100, stockQuantity: c.stockTo }));
+    const result = await applyBulkUpdate({ sellerId: input.sellerId, actorId: input.actorId, verified: input.verified, items: wanted });
+    updated = result.updated;
+    skipped.push(...result.skipped);
+  }
 
   let created = 0;
   for (const [sku, item] of unique) {
@@ -141,7 +197,7 @@ export async function importCatalogItems(input: { sellerId: string; actorId: str
     action: "catalog.import",
     targetType: "seller",
     targetId: input.sellerId,
-    after: { created, skipped: skipped.length },
+    after: { created, updated, skipped: skipped.length },
   });
-  return { created, wouldCreate: unique.size, skipped, preview };
+  return { created, wouldCreate: unique.size, updated, wouldUpdate: plan.changes.length, unchanged, updates, skipped, preview };
 }
