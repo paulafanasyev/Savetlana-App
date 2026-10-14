@@ -7,6 +7,7 @@
 import { prisma } from "../prisma";
 import { audit } from "./audit";
 import { deliverNotification } from "../notification-delivery";
+import { deliverTelegram } from "./telegram-link";
 
 export type NotificationKind =
   | "order_status"
@@ -59,11 +60,16 @@ export async function notify(input: NotificationInput, options: NotifyOptions = 
       url: input.url,
     },
   });
-  // Out-of-band delivery (email/push). Failures here must never break the
-  // in-app notification — the delivery layer records its own honest status.
-  const delivery = deliverNotification(notification).catch(() => {
-    /* delivery failure is recorded in NotificationDelivery, not raised */
-  });
+  // Out-of-band delivery (email/push/Telegram). Failures here must never break
+  // the in-app notification — the delivery layer records its own honest status.
+  const delivery = Promise.all([
+    deliverNotification(notification).catch(() => {
+      /* delivery failure is recorded in NotificationDelivery, not raised */
+    }),
+    deliverTelegram(notification).catch(() => {
+      /* то же самое: статус записан в NotificationDelivery */
+    }),
+  ]);
   if (options.awaitDelivery) await delivery;
 }
 
