@@ -8,6 +8,7 @@ const NAV: { href: string; label: string }[] = [
   { href: "/admin", label: "Обзор" },
   { href: "/admin/users", label: "Пользователи" },
   { href: "/admin/sellers", label: "Продавцы" },
+  { href: "/admin/receipts", label: "Чеки и ИНН" },
   { href: "/admin/products", label: "Товары" },
   { href: "/admin/orders", label: "Заказы" },
   { href: "/admin/disputes", label: "Споры" },
@@ -52,7 +53,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink">Панель администратора</h1>
-          <p className="text-sm text-ink-soft">{user.name} · платформа Svetlana</p>
+          <p className="text-sm text-ink-soft">{user.name} · площадка АИКО</p>
         </div>
         <Link href="/" className="btn btn-ghost">
           На главную
