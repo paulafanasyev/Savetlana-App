@@ -4,15 +4,44 @@ import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewClassifiedPage() {
+interface PageProps {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}
+
+function first(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v;
+}
+
+export default async function NewClassifiedPage({ searchParams }: PageProps) {
   const ctx = await requireUserServer();
   if (!ctx) redirect("/login");
+
+  const params = (await searchParams) ?? {};
+  const error = first(params.error)?.slice(0, 400);
+  const sent = first(params.sent) === "moderation";
 
   const tree = await getGeoTree();
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6">
       <h1 className="mb-6 text-2xl font-bold">Разместить объявление</h1>
+
+      {sent && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+          <b>Объявление отправлено на проверку.</b> В нём есть признаки, которые часто встречаются у мошенников, поэтому
+          его сначала посмотрит модератор. Когда проверка закончится, придёт уведомление.
+        </div>
+      )}
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
+          {error}
+        </div>
+      )}
+
+      <div className="mb-4 rounded-lg bg-zinc-50 p-3 text-xs text-zinc-600">
+        Не пишите в объявлении номер карты и ссылки на оплату. Объявления с оплатой до просмотра, платой за обучение
+        или форму для работы и с ценой сильно ниже рынка сначала проверяет модератор.
+      </div>
 
       <form action="/api/classifieds" method="POST" className="space-y-4">
         <div>
