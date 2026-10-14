@@ -16,6 +16,8 @@ export default async function SellerPage({ params }: PageProps) {
   const profile = await getPublicSellerProfile(id);
   if (!profile) notFound();
   const products = await listSellerProducts(profile.id);
+  const { stats } = profile;
+  const verifiedSeller = profile.badges.some((b) => b.key === "verified_seller");
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -33,10 +35,17 @@ export default async function SellerPage({ params }: PageProps) {
                 {profile.displayName.charAt(0).toUpperCase()}
               </div>
               <div>
-                <h1 className="text-xl font-bold text-ink">{profile.displayName}</h1>
+                <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold text-ink">
+                  {profile.displayName}
+                  {verifiedSeller && (
+                    <span title="Личность и налоговый статус подтверждены" className="chip bg-green-50 text-xs font-semibold text-green-700">
+                      ✓ Проверенный продавец
+                    </span>
+                  )}
+                </h1>
                 <div className="mt-1 text-xs text-ink-soft">
                   {sellerTypeLabel(profile.sellerType)} · на платформе с{" "}
-                  {new Date(profile.createdAt).getFullYear()}
+                  {new Date(profile.createdAt).getFullYear()} · <span className={levelClass(stats.level)}>{stats.levelLabel}</span>
                 </div>
               </div>
             </div>
@@ -47,28 +56,57 @@ export default async function SellerPage({ params }: PageProps) {
               </p>
             )}
 
-            <div className="mt-4 grid grid-cols-3 gap-3 border-t border-surface-line pt-4 text-center">
+            <div className="mt-4 grid grid-cols-2 gap-3 border-t border-surface-line pt-4 text-center sm:grid-cols-4">
               <div>
-                <div className="text-lg font-bold text-ink">{profile.stats.productsPublished}</div>
+                <div className="text-lg font-bold text-ink">{stats.productsPublished}</div>
                 <div className="text-xs text-ink-soft">товаров</div>
               </div>
               <div>
-                <div className="text-lg font-bold text-ink">{profile.stats.rating.toFixed(1)}</div>
-                <div className="text-xs text-ink-soft">рейтинг</div>
+                <div className="text-lg font-bold text-ink">
+                  {stats.reviewsCount > 0 ? `★ ${stats.rating.toFixed(1)}` : "—"}
+                </div>
+                <div className="text-xs text-ink-soft">
+                  {stats.reviewsCount > 0 ? `рейтинг, ${stats.reviewsCount} ${reviewsWord(stats.reviewsCount)}` : "пока нет отзывов"}
+                </div>
               </div>
               <div>
-                <div className="text-lg font-bold text-ink">{profile.stats.completedOrders}</div>
+                <div className="text-lg font-bold text-ink">{stats.completedOrders}</div>
                 <div className="text-xs text-ink-soft">заказов доставлено</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-ink">
+                  {stats.successRate === null ? "—" : `${Math.round(stats.successRate * 100)}%`}
+                </div>
+                <div className="text-xs text-ink-soft">
+                  {stats.successRate === null ? "мало сделок для оценки" : "сделок без отмен и возвратов"}
+                </div>
               </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            {profile.badges.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {profile.badges
+                  .filter((b) => b.key !== "verified_seller")
+                  .map((b) => (
+                    <span key={b.key} title={b.hint} className="chip bg-green-50 text-green-700">
+                      ✓ {b.label}
+                    </span>
+                  ))}
+              </div>
+            )}
+
+            <div className="mt-3 flex flex-wrap gap-2">
               <VerificationChip label="Личность" status={profile.identityStatus} />
-              <VerificationChip label="Бизнес" status={profile.businessStatus} />
-              <VerificationChip label="НПД" status={profile.npdStatus} />
+              {profile.sellerType === "SELF_EMPLOYED" ? (
+                <VerificationChip label="Статус самозанятого (ФНС)" status={profile.npdStatus} />
+              ) : (
+                <VerificationChip label={profile.sellerType === "COMPANY" ? "Организация" : "ИП"} status={profile.businessStatus} />
+              )}
             </div>
             <p className="mt-2 text-xs text-ink-faint">
-              Статус проверки показывается как факт, без раскрытия документов и реквизитов.
+              Отметки ставятся только по ответу официального источника (ФНС, Госуслуги) или после проверки модератором.
+              Рейтинг считается по отзывам и итогам реальных заказов, отзывы без подтверждённой покупки весят меньше.
+              Документы и реквизиты продавца не показываются.
             </p>
           </div>
 
@@ -129,14 +167,29 @@ function sellerTypeLabel(s: string): string {
   }
 }
 
+function reviewsWord(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "отзыв";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "отзыва";
+  return "отзывов";
+}
+
+function levelClass(level: string): string {
+  if (level === "trusted" || level === "good") return "font-semibold text-green-700";
+  if (level === "complaints") return "font-semibold text-bad";
+  return "text-ink-soft";
+}
+
 function VerificationChip({ label, status }: { label: string; status: string }) {
   const ok = status === "VERIFIED";
   const pending = status === "PENDING";
+  const rejected = status === "REJECTED" || status === "REVOKED";
   return (
     <span
       className={`chip ${ok ? "bg-green-50 text-green-700" : pending ? "bg-amber-50 text-amber-700" : "text-ink-soft"}`}
     >
-      {label}: {ok ? "✓ проверено" : pending ? "на проверке" : "не проверено"}
+      {label}: {ok ? "✓ проверено" : pending ? "на проверке" : rejected ? "не подтверждено" : "не проверено"}
     </span>
   );
 }

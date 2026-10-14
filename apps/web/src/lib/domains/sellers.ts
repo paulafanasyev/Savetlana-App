@@ -8,6 +8,7 @@
  */
 import { prisma } from "../prisma";
 import { fromKopecks } from "../utils";
+import { computeSellerRating, sellerBadges, type SellerBadge, type SellerRating } from "./seller-trust-display";
 
 export interface PublicSellerProfile {
   id: string;
@@ -23,12 +24,22 @@ export interface PublicSellerProfile {
   createdAt: string;
   stats: {
     productsPublished: number;
+    /** Рейтинг продавца 1–5 с поправкой на малое число отзывов (0, если отзывов нет). */
     rating: number;
+    /** Простое среднее по отзывам. */
+    averageRating: number;
     reviewsCount: number;
     completedOrders: number;
+    /** Доля успешных сделок 0–1 или null, если заказов мало. */
+    successRate: number | null;
+    level: SellerRating["level"];
+    levelLabel: string;
   };
+  badges: SellerBadge[];
   trustSignals: Record<string, unknown>;
 }
+
+const PAID_PAYMENT_STATUSES = ["AUTHORIZED", "CAPTURED", "SUCCEEDED", "REFUNDED", "PARTIALLY_REFUNDED"];
 
 export async function getPublicSellerProfile(
   idOrSlug: string
@@ -41,18 +52,11 @@ export async function getPublicSellerProfile(
     include: {
       products: {
         where: { status: "ACTIVE" },
-        select: { id: true, rating: true, reviewsCount: true },
+        select: { id: true },
       },
     },
   });
   if (!seller) return null;
-
-  const rated = seller.products.filter((p) => p.reviewsCount > 0);
-  const rating =
-    rated.length > 0
-      ? Math.round((rated.reduce((s, p) => s + p.rating, 0) / rated.length) * 10) / 10
-      : 0;
-  const reviewsCount = seller.products.reduce((s, p) => s + p.reviewsCount, 0);
 
   let trustSignals: Record<string, unknown> = {};
   try {
@@ -61,8 +65,32 @@ export async function getPublicSellerProfile(
     trustSignals = {};
   }
 
-  const completedOrders = await prisma.order.count({
-    where: { sellerId: seller.id, status: { in: ["DELIVERED", "COMPLETED"] } },
+  // Рейтинг только по фактам: видимые отзывы на товары продавца и итоги заказов.
+  const [reviewGroups, completedOrders, cancelledAfterPayment, refundedOrders, disputedOrders] = await Promise.all([
+    prisma.review.groupBy({
+      by: ["verifiedPurchase"],
+      where: { isHidden: false, product: { sellerId: seller.id } },
+      _sum: { rating: true },
+      _count: { _all: true },
+    }),
+    prisma.order.count({ where: { sellerId: seller.id, status: { in: ["DELIVERED", "COMPLETED"] } } }),
+    prisma.order.count({
+      where: { sellerId: seller.id, status: "CANCELLED", payment: { is: { status: { in: PAID_PAYMENT_STATUSES } } } },
+    }),
+    prisma.order.count({ where: { sellerId: seller.id, status: "REFUNDED" } }),
+    prisma.order.count({ where: { sellerId: seller.id, status: "DISPUTED" } }),
+  ]);
+  const verified = reviewGroups.find((g) => g.verifiedPurchase);
+  const other = reviewGroups.find((g) => !g.verifiedPurchase);
+  const rating = computeSellerRating({
+    verifiedSum: verified?._sum.rating ?? 0,
+    verifiedCount: verified?._count._all ?? 0,
+    otherSum: other?._sum.rating ?? 0,
+    otherCount: other?._count._all ?? 0,
+    completedOrders,
+    cancelledAfterPayment,
+    refundedOrders,
+    disputedOrders,
   });
 
   return {
@@ -79,10 +107,15 @@ export async function getPublicSellerProfile(
     createdAt: seller.createdAt.toISOString(),
     stats: {
       productsPublished: seller.products.length,
-      rating,
-      reviewsCount,
+      rating: rating.score,
+      averageRating: rating.average,
+      reviewsCount: rating.reviewsCount,
       completedOrders,
+      successRate: rating.successRate,
+      level: rating.level,
+      levelLabel: rating.levelLabel,
     },
+    badges: sellerBadges(seller),
     trustSignals,
   };
 }
