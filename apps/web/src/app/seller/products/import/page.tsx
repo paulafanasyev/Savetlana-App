@@ -11,7 +11,7 @@ export default async function SellerCatalogImportPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Перенос товаров</h1>
-          <p className="mt-1 text-sm text-ink-soft">Загрузите файл из Ozon, Wildberries, 1С или фид YML, и товары появятся в вашем магазине черновиками.</p>
+          <p className="mt-1 text-sm text-ink-soft">Загрузите файл из Яндекс Маркета, Ozon, Wildberries, 1С или фид YML, и товары появятся в вашем магазине черновиками.</p>
         </div>
         <Link href="/seller/products" className="btn btn-ghost">К товарам</Link>
       </div>
