@@ -12,8 +12,13 @@
  * Only ACTIVE may publish, receive orders or request a payout. Unverified
  * sellers keep full read access to their cabinet (spec §112: the seller must
  * be able to work manually) — they simply cannot trade yet.
+ *
+ * Чеки 54-ФЗ: если включён агентский чек (RECEIPT_AGENT_TYPE), продавец без
+ * верного ИНН не торгует. Иначе покупатель дошёл бы до оплаты, а банк отказал
+ * бы в чеке.
  */
 import { prisma } from "../prisma";
+import { receiptInnBlocker, receiptSettings } from "./receipt";
 
 export type SellerOnboardingState =
   | "REGISTERED"
@@ -47,6 +52,8 @@ export async function getSellerOnboardingGate(sellerId: string): Promise<Onboard
       businessStatus: true,
       npdStatus: true,
       isActivated: true,
+      inn: true,
+      companies: { select: { inn: true }, orderBy: { createdAt: "asc" }, take: 1 },
       documents: { select: { status: true }, take: 32 },
     },
   });
@@ -82,6 +89,17 @@ export async function getSellerOnboardingGate(sellerId: string): Promise<Onboard
       active: false,
       blockers,
       nextStep: "подтвердите статус ИП/ООО или самозанятого",
+    };
+  }
+
+  const innBlocker = receiptInnBlocker(seller.companies?.[0]?.inn ?? seller.inn, receiptSettings());
+  if (innBlocker) {
+    blockers.push(innBlocker);
+    return {
+      state,
+      active: false,
+      blockers,
+      nextStep: "укажите верный ИНН в анкете продавца",
     };
   }
   state = "BUSINESS_VERIFIED";
