@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { FIELD_LABELS, IMPORT_MAX_ITEMS, parseCatalogFile, type ImportItem, type ParseResult } from "@/lib/catalog-import-parse";
+import { ImportPhotoCopy } from "@/components/ImportPhotoCopy";
 
 const CHUNK = 100;
 
@@ -105,6 +106,7 @@ export function CatalogImport() {
         )}
         {result.updated > 0 && <p className="text-sm text-ink-soft">У уже перенесённых товаров обновлены цены и остатки, изменения записаны в журнал товара.</p>}
         {result.skipped.length > 0 && <SkippedList skipped={result.skipped} />}
+        {result.created > 0 && <ImportPhotoCopy autoStart />}
         <div className="flex flex-wrap gap-2">
           <Link href="/seller/products" className="btn btn-primary">К товарам</Link>
           <button className="btn btn-ghost" onClick={() => { setResult(null); setParsed(null); setCheck(null); setFileName(""); }}>Загрузить ещё файл</button>
@@ -125,6 +127,8 @@ export function CatalogImport() {
         </ul>
         <p>Нужны хотя бы колонки с названием и ценой. Артикул, описание, остаток, фото, бренд и штрихкод подхватим, если они есть.</p>
       </div>
+
+      <ImportPhotoCopy />
 
       <div className="card space-y-4 p-6">
         <label className="block">
