@@ -60,14 +60,15 @@ function LoginInner() {
               onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
           </label>
-          <label className="block">
-            <span className="mb-1 flex items-center justify-between text-sm font-medium text-ink">
-              Пароль
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label htmlFor="login-password" className="text-sm font-medium text-ink">Пароль</label>
               <button type="button" className="text-xs font-medium text-svetlana-700 hover:underline" onClick={() => setShowPassword((v) => !v)}>
                 {showPassword ? "Скрыть" : "Показать"}
               </button>
-            </span>
+            </div>
             <input
+              id="login-password"
               type={showPassword ? "text" : "password"}
               className="input"
               required
@@ -75,7 +76,7 @@ function LoginInner() {
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
             />
-          </label>
+          </div>
           {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-bad" role="alert">{error}</div>}
           <button className="btn btn-primary w-full" disabled={busy}>
             {busy ? "Входим…" : "Войти"}

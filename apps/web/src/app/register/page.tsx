@@ -96,14 +96,15 @@ export default function RegisterPage() {
               onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
           </label>
-          <label className="block">
-            <span className="mb-1 flex items-center justify-between text-sm font-medium text-ink">
-              Пароль
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label htmlFor="register-password" className="text-sm font-medium text-ink">Пароль</label>
               <button type="button" className="text-xs font-medium text-svetlana-700 hover:underline" onClick={() => setShowPassword((v) => !v)}>
                 {showPassword ? "Скрыть" : "Показать"}
               </button>
-            </span>
+            </div>
             <input
+              id="register-password"
               type={showPassword ? "text" : "password"}
               className="input"
               required
@@ -113,16 +114,16 @@ export default function RegisterPage() {
               onChange={(e) => setForm({ ...form, password: e.target.value })}
             />
             <span className="mt-1 block text-xs text-ink-faint">Не короче 8 символов</span>
-          </label>
-          <label className="flex items-start gap-2 text-sm text-ink-soft">
-            <input type="checkbox" className="mt-0.5" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
-            <span>
+          </div>
+          <div className="flex items-start gap-2 text-sm text-ink-soft">
+            <input id="register-accept" type="checkbox" className="mt-0.5" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
+            <label htmlFor="register-accept">
               Принимаю{" "}
               <Link href="/legal/offer" target="_blank" className="font-medium text-svetlana-700 hover:underline">условия пользования</Link>{" "}
               и даю{" "}
               <Link href="/privacy" target="_blank" className="font-medium text-svetlana-700 hover:underline">согласие на обработку персональных данных</Link>
-            </span>
-          </label>
+            </label>
+          </div>
           {error && (
             <div className="rounded-xl bg-red-50 p-3 text-sm text-bad" role="alert">
               {error}
