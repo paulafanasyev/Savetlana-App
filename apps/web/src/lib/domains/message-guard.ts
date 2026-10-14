@@ -12,7 +12,8 @@ import { notify } from "./notifications";
 import { UserFacingError } from "./engagement-rules";
 import { explainVerdict, scanMessage, type ScamVerdict } from "./scam-guard";
 
-export const SAFETY_WARNING_KIND = "safety_warning";
+/** Предупреждения о мошенничестве идут как уведомления безопасности. */
+export const SAFETY_WARNING_KIND = "security" as const;
 
 function ownDomains(): string[] {
   try {
