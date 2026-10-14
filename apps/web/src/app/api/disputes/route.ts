@@ -1,6 +1,7 @@
 import { apiRoute, rateLimit, tooManyRequests, jsonBody } from "@/lib/api-helpers";
 import { requireBuyer, ApiError } from "@/lib/auth";
-import { openDispute, listDisputesForUser, transitionDispute } from "@/lib/domains/disputes";
+import { openDispute, listDisputesForUser } from "@/lib/domains/disputes";
+import { screenNewDispute } from "@/lib/domains/dispute-screening";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,9 @@ const REASONS = [
 /**
  * Opens a dispute. Svetlana collects evidence and a timeline, but the verdict
  * on a dispute that requires judgement is escalated to a human (spec §42, §91).
+ * Антифрод: история покупателя (серийные споры, «не получил» при отметке о
+ * вручении) поднимает флаг для модератора. Покупатель этих сигналов не видит,
+ * и спор никогда не отклоняется автоматически.
  */
 export const POST = apiRoute(async (request) => {
   if (!rateLimit("disputes:open", 5, 60_000)) return tooManyRequests();
@@ -53,5 +57,7 @@ export const POST = apiRoute(async (request) => {
     description: body.description.trim(),
     evidenceUrls: body.evidenceUrls,
   });
+  // Сбой проверки не должен мешать покупателю открыть спор.
+  await screenNewDispute(dispute.id).catch(() => null);
   return Response.json({ dispute }, { status: 201 });
 });
