@@ -12,6 +12,7 @@ const NAV: { href: string; label: string }[] = [
   { href: "/admin/orders", label: "Заказы" },
   { href: "/admin/disputes", label: "Споры" },
   { href: "/admin/payments", label: "Платежи" },
+  { href: "/admin/payouts", label: "Выплаты" },
   { href: "/admin/verification", label: "Верификация" },
   { href: "/admin/risk", label: "Риски" },
   { href: "/admin/ai", label: "AI мониторинг" },

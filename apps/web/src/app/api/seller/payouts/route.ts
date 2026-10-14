@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { payoutIdempotencyKey } from "@/lib/payout-key";
 import { getPayoutProvider, sellerSettlementStatement } from "@/lib/domains/payments";
 import { DELIVERED_ORDER_STATUSES, payoutDeliveredSettlements } from "@/lib/domains/seller-payouts";
+import { bankRegistryMode, requestRegistryPayout, RegistryPayoutError } from "@/lib/domains/payout-registry";
 import { isLiveDeployment } from "@/lib/live-mode";
 
 export const dynamic = "force-dynamic";
@@ -25,12 +26,18 @@ export const POST = apiRoute(async (request) => {
       ? new Response(null, { status: 303, headers: { Location: `/seller/payouts?payout=${encodeURIComponent(code)}${extra}` } })
       : Response.json(error ? { error, code } : { code }, { status });
 
+  // Выплаты переводом по реестру: деньги переводит площадка со своего счёта,
+  // поэтому банк-партнёр не нужен, нужны реквизиты продавца.
+  const registry = bankRegistryMode();
+
   // На боевом сайте без полностью подключённого банка (ключ и адрес) выплату не
   // резервируем: иначе деньги зависнут в очереди или выплата будет только на бумаге.
-  const provider = getPayoutProvider();
-  const bankReady = !provider.sandbox && Boolean(env.paymentProviderBaseUrl);
-  if (!bankReady && isLiveDeployment()) {
-    return reply("bank_required", 409, "Выплаты включатся после подключения банка-партнёра");
+  if (!registry) {
+    const provider = getPayoutProvider();
+    const bankReady = !provider.sandbox && Boolean(env.paymentProviderBaseUrl);
+    if (!bankReady && isLiveDeployment()) {
+      return reply("bank_required", 409, "Выплаты включатся после подключения банка-партнёра");
+    }
   }
 
   const pending = await prisma.settlement.findMany({
@@ -43,10 +50,23 @@ export const POST = apiRoute(async (request) => {
       ? reply("delivery_required", 409, "Выплата станет доступна после доставки заказа")
       : reply("nothing_to_payout", 200);
   }
+  const idempotencyKey = payoutIdempotencyKey(ctx.sellerId, ready.map((row) => row.id));
+
+  if (registry) {
+    try {
+      const result = await requestRegistryPayout({ sellerId: ctx.sellerId, actorId: ctx.user.id, idempotencyKey });
+      if (isForm) return reply(result.status === "IN_PROGRESS" ? "registry_queued" : result.status.toLowerCase(), 201);
+      return Response.json(result, { status: result.status === "NOTHING_TO_PAYOUT" ? 200 : 201 });
+    } catch (error) {
+      if (error instanceof RegistryPayoutError) return reply(error.code, 409, error.message);
+      throw error;
+    }
+  }
+
   const result = await payoutDeliveredSettlements({
     sellerId: ctx.sellerId,
     actorId: ctx.user.id,
-    idempotencyKey: payoutIdempotencyKey(ctx.sellerId, ready.map((row) => row.id)),
+    idempotencyKey,
   });
   if (isForm) return reply(result.status.toLowerCase(), 201, undefined, result.sandbox ? "&test=1" : "");
   return Response.json(result, { status: result.status === "NOTHING_TO_PAYOUT" ? 200 : 201 });
