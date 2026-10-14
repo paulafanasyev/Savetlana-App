@@ -5,7 +5,7 @@ import { checkPhotoUrl, copyImportedPhotos, fetchRemotePhoto, isOwnPhotoUrl, isP
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
 
 function respond(status: number, init: { body?: Uint8Array; headers?: Record<string, string> } = {}): Response {
-  return new Response(init.body ?? null, { status, headers: init.headers });
+  return new Response(init.body ? new Uint8Array(init.body) : null, { status, headers: init.headers });
 }
 
 describe("копирование фото: защита от обращений во внутреннюю сеть", () => {
