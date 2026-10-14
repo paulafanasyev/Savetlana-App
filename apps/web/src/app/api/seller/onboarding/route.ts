@@ -20,7 +20,7 @@ export const POST = apiRoute(async (request) => {
       inn: String(body.inn ?? ""),
       ogrn: body.ogrn ? String(body.ogrn) : undefined,
     }, user.id);
-    return Response.json({ status: "PENDING", recordId: result.record.id });
+    return Response.json({ status: "PENDING", recordId: result.record.id, npd: result.npd });
   } catch (error) {
     if (error instanceof ZodError) throw new ApiError(400, error.issues[0]?.message ?? "Проверьте данные");
     throw new ApiError(400, error instanceof Error ? error.message : "Проверьте данные");
