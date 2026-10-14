@@ -115,6 +115,12 @@ function resolveDatabaseUrl(raw: string): string {
   return raw;
 }
 
+/** Адрес сайта без лишнего: пробелы и «/» в конце убираются, без схемы дописывается https://. */
+export function normalizeAppUrl(raw: string): string {
+  const trimmed = raw.trim().replace(/\/+$/, "");
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 export const env = {
   databaseUrl: TEST_DATABASE_URL ?? resolveDatabaseUrl(
     PLATFORM_DATABASE_URL ?? requiredInProduction("DATABASE_URL", "file:./prisma/dev.db"),
@@ -211,14 +217,19 @@ export const env = {
   // --- Platform config ----------------------------------------------------
   platformFeePercent: Number(optional("PLATFORM_FEE_PERCENT") ?? "1.5"),
   defaultCurrency: optional("DEFAULT_CURRENCY") ?? "RUB",
-  publicAppUrl: required(
+  publicAppUrl: normalizeAppUrl(required(
     "PUBLIC_APP_URL",
-    process.env.VERCEL_URL
+    // На Vercel постоянный адрес сайта приходит сам (VERCEL_PROJECT_PRODUCTION_URL),
+    // поэтому PUBLIC_APP_URL задавать не обязательно. VERCEL_URL меняется с каждой
+    // выкладкой и годится только как запасной вариант.
+    process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
       : ENFORCE_PRODUCTION_SECRETS
       ? undefined
       : "http://localhost:3000",
-  ),
+  )),
   nodeEnv: NODE_ENV,
   isProduction: IS_PRODUCTION,
   // Shared secret for the background-job scheduler (P0-18).
