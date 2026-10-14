@@ -28,6 +28,7 @@ export default async function SellerProductsPage() {
         <h1 className="text-2xl font-semibold">Товары</h1>
         <div className="flex flex-wrap gap-2">
           {products.length > 0 && <Link href="/seller/products/new" className="btn btn-primary">Добавить товар</Link>}
+          <Link href="/seller/products/import" className="btn btn-ghost">Перенести с Ozon / WB / 1С</Link>
           {products.length > 0 && <Link href="/seller/products/bulk" className="btn btn-ghost">Массовое редактирование</Link>}
           <Link href="/seller/products" className="btn btn-ghost">Обновить</Link>
         </div>
@@ -36,6 +37,7 @@ export default async function SellerProductsPage() {
         <div className="rounded-xl border border-svetlana-200 bg-svetlana-50 p-5 text-sm text-ink-soft">
           <div className="text-base font-semibold text-ink">Добавьте первый товар</div>
           <p className="mt-1">Заполните форму ниже: название, описание, цену и фото. Светлана создаст черновик, вы проверите его и опубликуете. Можно и проще: напишите Светлане «создай карточку чайник за 1990».</p>
+          <p className="mt-2">Уже торгуете на Ozon, Wildberries или ведёте товары в 1С? <Link href="/seller/products/import" className="font-medium text-svetlana-700 hover:underline">Перенесите весь каталог одним файлом</Link>.</p>
         </div>
       )}
       <ProductDraftAssistant categories={categories} />
