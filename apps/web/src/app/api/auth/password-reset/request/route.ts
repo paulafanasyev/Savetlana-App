@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 import { apiRoute } from "@/lib/api-helpers";
+import { env } from "@/lib/env";
 import { requestPasswordReset } from "@/lib/domains/account-recovery";
 import { AUTH_LIMITS, clientIp, consumeRateLimit, tooMany } from "@/lib/domains/rate-limits";
 
@@ -10,6 +11,8 @@ import { AUTH_LIMITS, clientIp, consumeRateLimit, tooMany } from "@/lib/domains/
  * Body: { email }
  * Does NOT reveal whether an account exists — the response shape is identical
  * either way, so the endpoint cannot be used for account enumeration.
+ * emailEnabled сообщает только о настройке сайта (настроена ли почта), про
+ * конкретный аккаунт он ничего не говорит.
  */
 export const POST = apiRoute(async (request: Request) => {
   const body = await request.json().catch(() => ({}));
@@ -27,10 +30,14 @@ export const POST = apiRoute(async (request: Request) => {
   }
 
   const result = await requestPasswordReset(email);
+  const emailEnabled = Boolean(env.smtpUrl);
   // Identical response whether or not the account exists.
   return Response.json({
     ok: true,
-    message: "Если аккаунт существует, ссылка для сброса отправлена на email.",
+    emailEnabled,
+    message: emailEnabled
+      ? "Если аккаунт существует, ссылка для сброса отправлена на email."
+      : "Отправка писем на сайте пока не настроена, письмо не придёт.",
     devTicket: result.devLink,
   });
 });

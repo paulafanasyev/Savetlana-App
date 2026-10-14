@@ -14,6 +14,7 @@
  *  - User consent gates every channel. Marketing-class notifications are never
  *    sent without an explicit granted consent (spec §35).
  */
+import type { Socket } from "net";
 import { env } from "./env";
 import { prisma } from "./prisma";
 import { isValidEnum } from "./db/enums";
@@ -61,6 +62,8 @@ export interface PushEndpoint {
  * SMTP submission over TLS. Implemented directly against the SMTP protocol so
  * the platform needs no nodemailer-style dependency; the URI form keeps the
  * credentials out of the code base (`smtp(s)://user:pass@host:port`).
+ * smtps:// (порт 465) сразу шифрует соединение; smtp:// (порт 587) обязательно
+ * переходит на шифрование через STARTTLS, пароль открытым текстом не уходит.
  */
 export class SmtpEmailChannel implements NotificationChannel {
   readonly channel: DeliveryChannel = "email";
@@ -94,7 +97,7 @@ export class SmtpEmailChannel implements NotificationChannel {
   }
 }
 
-interface SmtpTarget {
+export interface SmtpTarget {
   host: string;
   port: number;
   secure: boolean;
@@ -141,26 +144,30 @@ function buildRawEmail(
   return lines.join("\r\n");
 }
 
-async function submitSmtp(
+/** Последняя строка ответа SMTP: по ней виден итоговый код. */
+function lastReplyLine(reply: string): string {
+  const lines = reply.trimEnd().split("\r\n");
+  return lines[lines.length - 1] ?? "";
+}
+
+/**
+ * Отправка одного письма. Ответ сервера может прийти несколькими кусками, а
+ * многострочный ответ (например, на EHLO) закончен только когда последняя
+ * строка вида "250 текст", поэтому ответы собираются целиком перед проверкой.
+ */
+export async function submitSmtp(
   target: SmtpTarget,
   raw: string,
   recipient: string
 ): Promise<{ ok: boolean; error?: string }> {
-  const { connect } = await import("net");
-  const { createSecureContext, connect: tlsConnect } = await import("tls");
+  const net = await import("net");
+  const tls = await import("tls");
 
   return new Promise((resolve) => {
-    let socket = target.secure
-      ? tlsConnect({
-          host: target.host,
-          port: target.port,
-          servername: target.host,
-          secureContext: createSecureContext({}),
-          rejectUnauthorized: true,
-        })
-      : connect({ host: target.host, port: target.port });
+    let socket: Socket = target.secure
+      ? tls.connect({ host: target.host, port: target.port, servername: target.host, rejectUnauthorized: true })
+      : net.connect({ host: target.host, port: target.port });
 
-    let step = "greeting";
     let done = false;
     const finish = (ok: boolean, error?: string) => {
       if (done) return;
@@ -173,43 +180,79 @@ async function submitSmtp(
       resolve({ ok, error });
     };
 
-    const commands: Array<[string, RegExp]> = [
-      [`EHLO svetlana.example`, /^250/],
-      [`AUTH LOGIN`, /^334/],
-      [Buffer.from(target.user).toString("base64"), /^334/],
-      [Buffer.from(target.pass).toString("base64"), /^235/],
-      [`MAIL FROM:<${env.smtpFrom.replace(/^.*</, "").replace(/>.*$/, "")}>`, /^250/],
-      [`RCPT TO:<${recipient}>`, /^250/],
-      [`DATA`, /^354/],
-      [`${raw}\r\n.`, /^250/],
-      [`QUIT`, /^221/],
-    ];
-
-    socket.setTimeout(20_000, () => finish(false, "smtp-timeout"));
-    socket.on("error", (err) => finish(false, errorMessage(err)));
-    socket.on("close", () => finish(done));
-
-    socket.on("data", (chunk) => {
-      const text = chunk.toString("utf-8");
-      // Multi-line SMTP replies: last line carries the code.
-      const lastLine = text.trim().split("\r\n").pop() ?? "";
-      if (step === "greeting") {
-        if (!/^220/.test(lastLine)) return finish(false, `smtp-greeting: ${text.trim()}`);
-        step = "auth";
-        socket.write(`${commands[0][0]}\r\n`);
-        return;
+    let buffer = "";
+    const replies: string[] = [];
+    let waiter: ((reply: string) => void) | null = null;
+    const onData = (chunk: Buffer) => {
+      buffer += chunk.toString("utf-8");
+      if (!buffer.endsWith("\r\n")) return;
+      if (!/^\d{3}(?: |$)/.test(lastReplyLine(buffer))) return;
+      const reply = buffer;
+      buffer = "";
+      if (waiter) {
+        const w = waiter;
+        waiter = null;
+        w(reply);
+      } else {
+        replies.push(reply);
       }
-      const idx = commands.findIndex((c) => c[0] === step);
-      if (idx === -1) return;
-      const [, expect] = commands[idx];
-      if (!expect.test(lastLine)) {
-        return finish(false, `smtp-step-${step}: ${text.trim().slice(0, 200)}`);
+    };
+    const attach = (s: Socket) => {
+      s.setTimeout(20_000, () => finish(false, "smtp-timeout"));
+      s.on("error", (err) => finish(false, errorMessage(err)));
+      s.on("close", () => finish(false, "smtp-connection-closed"));
+      s.on("data", onData);
+    };
+    const read = () =>
+      new Promise<string>((res) => {
+        const next = replies.shift();
+        if (next !== undefined) res(next);
+        else waiter = res;
+      });
+    const expect = async (re: RegExp, step: string) => {
+      const reply = await read();
+      if (!re.test(lastReplyLine(reply))) throw new Error(`smtp-step-${step}: ${reply.trim().slice(0, 200)}`);
+      return reply;
+    };
+    const send = (command: string, re: RegExp, step: string) => {
+      socket.write(`${command}\r\n`);
+      return expect(re, step);
+    };
+
+    attach(socket);
+
+    const run = async () => {
+      await expect(/^220/, "greeting");
+      const ehlo = await send("EHLO svetlana.local", /^250/, "ehlo");
+      if (!target.secure) {
+        // Пароль нельзя отправлять открытым текстом: без STARTTLS не отправляем.
+        if (!/STARTTLS/i.test(ehlo)) throw new Error("smtp-starttls-unavailable");
+        await send("STARTTLS", /^220/, "starttls");
+        const plain = socket;
+        plain.removeListener("data", onData);
+        plain.removeAllListeners("close");
+        await new Promise<void>((res) => {
+          socket = tls.connect({ socket: plain, servername: target.host, rejectUnauthorized: true }, () => res());
+          attach(socket);
+        });
+        await send("EHLO svetlana.local", /^250/, "ehlo-tls");
       }
-      const next = commands[idx + 1];
-      if (!next) return finish(true);
-      step = next[0];
-      socket.write(`${next[0]}\r\n`);
-    });
+      await send("AUTH LOGIN", /^334/, "auth");
+      await send(Buffer.from(target.user).toString("base64"), /^334/, "auth-user");
+      await send(Buffer.from(target.pass).toString("base64"), /^235/, "auth-pass");
+      await send(`MAIL FROM:<${env.smtpFrom.replace(/^.*</, "").replace(/>.*$/, "")}>`, /^250/, "mail-from");
+      await send(`RCPT TO:<${recipient}>`, /^25[01]/, "rcpt-to");
+      await send("DATA", /^354/, "data");
+      // Строки, начинающиеся с точки, удваиваются (RFC 5321, 4.5.2).
+      const body = raw.replace(/\r?\n/g, "\r\n").replace(/\r\n\./g, "\r\n..").replace(/^\./, "..");
+      await send(`${body}\r\n.`, /^250/, "message");
+      socket.write("QUIT\r\n");
+    };
+
+    run().then(
+      () => finish(true),
+      (err) => finish(false, errorMessage(err))
+    );
   });
 }
 
