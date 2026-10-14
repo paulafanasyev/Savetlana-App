@@ -1,12 +1,11 @@
 import { apiRoute, jsonBody } from "@/lib/api-helpers";
-import { hashPassword, verifyPassword, createToken, setSessionCookie } from "@/lib/auth";
+import { hashPassword, verifyPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { env } from "@/lib/env";
-import { audit } from "@/lib/domains/audit";
 import { promoteConfiguredAdmin } from "@/lib/domains/admin-bootstrap";
-import { needsTermsConsent } from "@/lib/domains/terms-consent";
 import { consumeRateLimit, clientIp, loginBuckets, recordAuthOutcome, AUTH_LIMITS, tooMany } from "@/lib/domains/rate-limits";
-import { inspectLogin, notifyNewDeviceLogin } from "@/lib/domains/account-security";
+import { inspectLogin } from "@/lib/domains/account-security";
+import { startLoginChallenge } from "@/lib/domains/login-challenge";
+import { finishLogin } from "@/lib/login-finish";
 
 export const dynamic = "force-dynamic";
 
@@ -34,19 +33,15 @@ export const POST = apiRoute(async (request) => {
   await recordAuthOutcome(`login:account:${email}`, true); await recordAuthOutcome(`login:ip:${ip}`, true);
   await promoteConfiguredAdmin(found.id, email);
   const user = await prisma.user.findUniqueOrThrow({ where: { id: found.id } });
-  const token = await createToken({ sub: user.id, role: user.role });
   // Устройство сравниваем с прошлыми входами до записи новой сессии.
   const login = await inspectLogin(user.id, request.headers.get("user-agent"), ip).catch(() => null);
-  await prisma.session.create({
-    data: { userId: user.id, token, expiresAt: new Date(Date.now() + 7 * 864e5), userAgent: login?.userAgent ?? null, ipHash: login?.ipHash ?? null },
-  });
-  await audit({ actorId: user.id, actorRole: user.role.toLowerCase(), action: "auth.login", targetType: "user", targetId: user.id });
-  // Вход с нового устройства: владелец сразу получает письмо и может сменить пароль.
-  if (login?.isNew) await notifyNewDeviceLogin(user.id, login).catch(() => undefined);
-  // Аккаунты, созданные до записи согласий или согласившиеся на старую версию условий:
-  // страница входа попросит принять условия перед тем, как пустить дальше.
-  const needsConsent = await needsTermsConsent(user.id);
-  const response = Response.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role }, needsConsent });
-  response.headers.append("Set-Cookie", setSessionCookie(token, env.isProduction));
-  return response;
+  // Незнакомое устройство: пароля мало, нужен код из письма. Если письмо не
+  // ушло (почта не настроена), пускаем по паролю и предупреждаем владельца.
+  if (login?.isNew) {
+    const challenge = await startLoginChallenge(user, login).catch(() => null);
+    if (challenge) {
+      return Response.json({ needsCode: true, challenge: challenge.challenge, sentTo: challenge.sentTo, device: login.device });
+    }
+  }
+  return finishLogin(user, login, { method: "password" });
 });
