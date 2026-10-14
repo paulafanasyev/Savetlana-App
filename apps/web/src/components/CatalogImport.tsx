@@ -118,6 +118,7 @@ export function CatalogImport() {
       <div className="card space-y-3 p-6 text-sm text-ink-soft">
         <h2 className="text-base font-bold text-ink">Откуда взять файл</h2>
         <ul className="list-disc space-y-1 pl-5">
+          <li><b className="text-ink">Яндекс Маркет:</b> в кабинете продавца, в разделе «Товары», скачайте каталог в Excel (.xlsx). Лист с инструкцией не мешает: товары найдём сами. Если у магазина есть свой сайт, подойдёт и его фид YML.</li>
           <li><b className="text-ink">Ozon и Wildberries:</b> в личном кабинете, в разделе с товарами, скачайте список товаров в Excel (.xlsx).</li>
           <li><b className="text-ink">1С и учётные программы:</b> сохраните прайс-лист или список номенклатуры в Excel (.xlsx) или CSV.</li>
           <li><b className="text-ink">Сайт на InSales, Тильде, Битриксе и других:</b> подойдёт фид для Яндекс Маркета (YML, .xml).</li>
@@ -139,6 +140,12 @@ export function CatalogImport() {
               В файле «{fileName}» нашли товаров: <b>{parsed.items.length}</b>
               {parsed.problems.length > 0 && <>, не разобрали строк: <b>{parsed.problems.length}</b></>}.
             </p>
+            {(parsed.source || parsed.sheet) && (
+              <p className="text-ink-soft">
+                {parsed.source && <>Похоже на выгрузку: {parsed.source}. </>}
+                {parsed.sheet && <>Товары взяли с листа «{parsed.sheet}».</>}
+              </p>
+            )}
             {Object.keys(parsed.columns).length > 0 && (
               <p className="text-ink-soft">
                 Узнали колонки: {Object.entries(parsed.columns).map(([f, h]) => `${FIELD_LABELS[f as keyof typeof FIELD_LABELS]} ← «${h}»`).join(", ")}.
