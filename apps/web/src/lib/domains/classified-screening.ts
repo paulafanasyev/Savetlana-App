@@ -14,6 +14,7 @@ import { audit } from "./audit";
 import { notify } from "./notifications";
 import { UserFacingError } from "./engagement-rules";
 import { explainClassified, scanClassified, type ClassifiedForScan, type ClassifiedVerdict } from "./classified-guard";
+import { photoDigests } from "../classified-fields";
 
 const COMPARABLES_LIMIT = 300;
 
@@ -52,7 +53,10 @@ export async function screenClassified(input: ScreenInput): Promise<ClassifiedVe
         }),
     input.images && input.images.length > 0
       ? prisma.classified.count({
-          where: { authorId: { not: input.authorId }, images: { some: { url: { in: input.images } } } },
+          where: {
+            authorId: { not: input.authorId },
+            images: { some: { OR: [{ url: { in: input.images } }, ...photoDigests(input.images).map((d) => ({ url: { contains: d } }))] } },
+          },
         })
       : Promise.resolve(0),
   ]);
