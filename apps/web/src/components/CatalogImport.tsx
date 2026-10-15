@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { FIELD_LABELS, IMPORT_MAX_ITEMS, parseCatalogFile, type ImportItem, type ParseResult } from "@/lib/catalog-import-parse";
 import { ImportPhotoCopy } from "@/components/ImportPhotoCopy";
+import { YandexMarketConnect } from "@/components/YandexMarketConnect";
 
 const CHUNK = 100;
 
@@ -68,15 +69,31 @@ export function CatalogImport() {
     if (file.size > 30 * 1024 * 1024) { setError("Файл больше 30 МБ. Разделите его на несколько частей."); return; }
     setBusy("Читаем файл…");
     try {
-      const res = await parseCatalogFile(file.name, await file.arrayBuffer());
-      setParsed(res);
-      if (res.items.length > IMPORT_MAX_ITEMS) { setError(`В файле ${res.items.length} товаров, за раз можно до ${IMPORT_MAX_ITEMS}. Разделите файл.`); return; }
-      if (res.items.length > 0) {
-        setBusy("Проверяем товары…");
-        setCheck(await sendChunks(res.items, true, () => undefined));
-      }
+      await review(await parseCatalogFile(file.name, await file.arrayBuffer()));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось прочитать файл");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** Общая проверка товаров: из файла или с Маркета по ключу. */
+  const review = async (res: ParseResult) => {
+    setParsed(res);
+    if (res.items.length > IMPORT_MAX_ITEMS) { setError(`Товаров ${res.items.length}, за раз можно до ${IMPORT_MAX_ITEMS}. Разделите файл.`); return; }
+    if (res.items.length > 0) {
+      setBusy("Проверяем товары…");
+      setCheck(await sendChunks(res.items, true, () => undefined));
+    }
+  };
+
+  const onMarket = async (res: ParseResult) => {
+    setParsed(null); setCheck(null); setResult(null); setError(null);
+    setFileName("Яндекс Маркет");
+    try {
+      await review(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось проверить товары");
     } finally {
       setBusy(null);
     }
@@ -128,6 +145,8 @@ export function CatalogImport() {
         <p>Нужны хотя бы колонки с названием и ценой. Артикул, описание, остаток, фото, бренд и штрихкод подхватим, если они есть.</p>
       </div>
 
+      <YandexMarketConnect disabled={Boolean(busy)} onLoaded={(res) => void onMarket(res)} />
+
       <ImportPhotoCopy />
 
       <div className="card space-y-4 p-6">
@@ -141,7 +160,7 @@ export function CatalogImport() {
         {parsed && (
           <div className="space-y-3 text-sm">
             <p className="text-ink">
-              В файле «{fileName}» нашли товаров: <b>{parsed.items.length}</b>
+              {fileName === "Яндекс Маркет" ? "На Маркете" : <>В файле «{fileName}»</>} нашли товаров: <b>{parsed.items.length}</b>
               {parsed.problems.length > 0 && <>, не разобрали строк: <b>{parsed.problems.length}</b></>}.
             </p>
             {(parsed.source || parsed.sheet) && (
