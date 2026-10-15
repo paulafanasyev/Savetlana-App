@@ -2,6 +2,7 @@ import Link from "next/link";
 import { searchClassifieds, getGeoTree } from "@/lib/domains/classifieds";
 import { DEAL_TYPE_LABELS, VERTICAL_LABELS, dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
 import { rub } from "@/lib/format";
+import { priceText } from "@/lib/classified-fields";
 import { resolveSearchParams } from "@/lib/page-params";
 
 export const dynamic = "force-dynamic";
@@ -28,8 +29,18 @@ export default async function ClassifiedsPage({
       <header className="mb-6">
         <h1 className="text-2xl font-bold">Объявления</h1>
         <p className="mt-1 text-sm text-zinc-600">
-          Недвижимость, автомобили и услуги с реальной геопривязкой
+          Недвижимость, автомобили, услуги и работа с реальной геопривязкой
         </p>
+        <nav className="mt-3 flex flex-wrap gap-2 text-sm" aria-label="Разделы объявлений">
+          <Link href="/classifieds" className={`rounded-full border px-3 py-1 ${!query.vertical ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300"}`}>
+            Все
+          </Link>
+          {Object.entries(VERTICAL_LABELS).map(([k, v]) => (
+            <Link key={k} href={`/classifieds?vertical=${k}`} className={`rounded-full border px-3 py-1 ${query.vertical === k ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300"}`}>
+              {verticalEmoji(k)} {v}
+            </Link>
+          ))}
+        </nav>
       </header>
 
       <form className="mb-6 grid gap-3 rounded-xl border border-zinc-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -117,7 +128,7 @@ export default async function ClassifiedsPage({
                   <h3 className="line-clamp-2 font-semibold hover:underline">{ad.title}</h3>
                 </Link>
                 {ad.priceKopecks > 0 ? (
-                  <p className="mt-1 font-bold">{rub(ad.priceKopecks)}</p>
+                  <p className="mt-1 font-bold">{priceText(ad.dealType, ad.attrs, rub(ad.priceKopecks))}</p>
                 ) : (
                   <p className="mt-1 font-bold text-zinc-500">Цена не указана</p>
                 )}

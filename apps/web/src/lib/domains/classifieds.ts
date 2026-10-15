@@ -1,5 +1,5 @@
 /**
- * Classifieds domain — real estate, auto and services in one unified model.
+ * Classifieds domain — real estate, auto, services and jobs in one unified model.
  *
  * Vertical-specific structured data lives in `attrs` and is validated here by
  * per-vertical schemas. A classified is NOT a Product: it has no stock and no
@@ -148,11 +148,17 @@ const SERVICE_ATTRS = new Set([
   "warranty", "prepayment",
 ]);
 
+const JOB_ATTRS = new Set([
+  "companyName", "employment", "schedule", "workFormat", "experience",
+  "salaryTo", "salaryPeriod", "salaryTax", "contract", "education",
+]);
+
 function validateAttrs(vertical: string, attrs: ClassifiedAttrs): ClassifiedAttrs {
   const allowed =
     vertical === "REAL_ESTATE" ? REAL_ESTATE_ATTRS :
     vertical === "AUTO" ? AUTO_ATTRS :
-    vertical === "SERVICE" ? SERVICE_ATTRS : new Set<string>();
+    vertical === "SERVICE" ? SERVICE_ATTRS :
+    vertical === "JOB" ? JOB_ATTRS : new Set<string>();
 
   const clean: ClassifiedAttrs = {};
   for (const [k, v] of Object.entries(attrs)) {

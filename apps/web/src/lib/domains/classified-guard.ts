@@ -9,7 +9,10 @@
  *   подозрительно маленький пробег для возраста (скрученный одометр);
  * - работа: «оплатите обучение / форму / медкнижку», «лёгкий заработок»,
  *   набор дропов и курьеров для забора наличных у пострадавших;
- * - чужие фотографии: те же снимки уже есть в объявлении другого человека.
+ * - чужие фотографии: те же снимки уже есть в объявлении другого человека;
+ * - вакансии: зарплата в разы выше рынка, большие деньги «без опыта»,
+ *   просьба прислать фото паспорта до собеседования (на чужой паспорт
+ *   оформляют займы и сим-карты), работа без оформления.
  *
  * Чистые правила без базы: block — объявление не публикуется; review —
  * уходит на проверку модератору и не видно в поиске; warn — публикуется.
@@ -67,6 +70,11 @@ const RENT_DEALS = new Set(["RENT", "LONG_RENT", "DAILY_RENT"]);
 export const LOW_PRICE_RATIO = 0.5;
 /** Сколько похожих объявлений нужно, чтобы судить о рыночной цене. */
 export const MIN_COMPARABLES = 5;
+/** Во сколько раз выше обычной зарплаты в городе считаем приманкой. */
+export const HIGH_SALARY_RATIO = 3;
+/** Зарплата «без опыта», от которой вакансия уходит на проверку, ₽ в месяц и за смену. */
+export const NO_EXPERIENCE_MONTH_RUB = 300_000;
+export const NO_EXPERIENCE_SHIFT_RUB = 25_000;
 
 function num(v: unknown): number | null {
   const n = typeof v === "string" ? Number(v.replace(",", ".")) : typeof v === "number" ? v : NaN;
@@ -121,6 +129,21 @@ export function marketReference(ad: ClassifiedForScan, comparables: ComparableAd
   return null;
 }
 
+/** «в 3 раза», «в 5 раз». */
+function times(ratio: number): string {
+  const n = Math.floor(ratio);
+  return n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? `${n} раза` : `${n} раз`;
+}
+
+/** Обычная зарплата для вакансии: медиана похожих вакансий города за тот же период. */
+export function salaryReference(ad: ClassifiedForScan, comparables: ComparableAd[]): { own: number; market: number; count: number } | null {
+  if (ad.vertical !== "JOB" || ad.priceKopecks <= 0) return null;
+  const period = str(ad.attrs.salaryPeriod) || "month";
+  const same = comparables.filter((c) => c.priceKopecks > 0 && (str(c.attrs.salaryPeriod) || "month") === period);
+  const m = median(same.map((c) => c.priceKopecks));
+  return m !== null && m > 0 && same.length >= MIN_COMPARABLES ? { own: ad.priceKopecks, market: m, count: same.length } : null;
+}
+
 export function scanClassified(ad: ClassifiedForScan, ctx: ClassifiedScanContext = {}): ClassifiedVerdict {
   const findings: ClassifiedFinding[] = [];
   const add = (code: string, severity: ClassifiedSeverity, reason: string) => {
@@ -147,6 +170,26 @@ export function scanClassified(ad: ClassifiedForScan, ctx: ClassifiedScanContext
   }
   if (/(легк(ий|ие|ая) (заработок|деньги|работа)|быстр(ый|ые) (заработок|деньги)|пассивн(ый|ого) доход|без вложений.{0,30}доход|доход от \d[\d\s]*(000|тыс|к)?\s?(₽|р|руб)?\S*\s?(в|за) (день|час|сутки)|от \d[\d\s]*(000|тыс)\s?(₽|р|руб)?\S*\s?(в|за) (день|сутки) без опыта)/.test(text)) {
     add("EASY_MONEY", "review", "Обещание лёгкого заработка без опыта. Так часто заманивают в схемы с вложениями или дропами");
+  }
+
+  // --- Вакансии -------------------------------------------------------------
+  if (ad.vertical === "JOB" && /(пришлите|присылайте|отправьте|отправь|скиньте|скинь|сфотографируйте|прикрепите|загрузите)\s.{0,40}(паспорт|снилс|(?:^|[^а-яa-z])инн(?:$|[^а-яa-z])|водительск(ое|ого|их) (удостоверени|прав))|(фото|скан|копи|селфи)\S* (с )?(паспорт|снилс)\S* (до|перед) (собеседовани|встреч|звонк)/.test(text)) {
+    add("PASSPORT_REQUEST", "review", "Просят прислать фото паспорта или СНИЛС заранее. На чужие документы оформляют займы и сим-карты: документы показывают только при оформлении на работу");
+  }
+  if (ad.vertical === "JOB" && ad.dealType === "VACANCY") {
+    const period = str(ad.attrs.salaryPeriod) || "month";
+    const salaryRub = ad.priceKopecks / 100;
+    if (str(ad.attrs.experience) === "none" && salaryRub > 0 &&
+        ((period === "month" && salaryRub >= NO_EXPERIENCE_MONTH_RUB) || (period === "shift" && salaryRub >= NO_EXPERIENCE_SHIFT_RUB))) {
+      add("EASY_MONEY", "review", `Зарплата от ${salaryRub.toLocaleString("ru-RU")} ₽ без опыта работы. Так часто заманивают в схемы с вложениями или дропами`);
+    }
+    const ref = salaryReference(ad, ctx.comparables ?? []);
+    if (ref && ref.own >= ref.market * HIGH_SALARY_RATIO) {
+      add("SALARY_TOO_HIGH", "review", `Зарплата в ${times(ref.own / ref.market)} выше, чем в похожих вакансиях города. Слишком щедрое предложение часто оказывается приманкой`);
+    }
+    if (ad.attrs.contract === "none") {
+      add("JOB_NO_CONTRACT", "warn", "Работа без оформления: если зарплату не заплатят, добиться её будет трудно");
+    }
   }
 
   // --- Предоплата до встречи -------------------------------------------------
@@ -226,6 +269,9 @@ export const CLASSIFIED_FINDING_LABEL: Record<string, string> = {
   MILEAGE_SUSPICIOUS: "Подозрительный пробег",
   PRICE_TOO_LOW: "Цена сильно ниже рынка",
   DUPLICATE_PHOTOS: "Чужие фото",
+  PASSPORT_REQUEST: "Просят фото паспорта",
+  SALARY_TOO_HIGH: "Зарплата сильно выше рынка",
+  JOB_NO_CONTRACT: "Без оформления",
   PHISHING_LINK: "Фишинговая ссылка",
   SHORT_LINK: "Сокращённая ссылка",
   PAYMENT_LINK: "Ссылка на оплату",

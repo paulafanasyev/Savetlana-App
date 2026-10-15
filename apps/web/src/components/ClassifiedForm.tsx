@@ -32,12 +32,24 @@ const DEALS: Record<string, { value: string; label: string }[]> = {
     { value: "SERVICE_OFFER", label: "Предлагаю услугу" },
     { value: "SERVICE_REQUEST", label: "Нужна услуга" },
   ],
+  JOB: [
+    { value: "VACANCY", label: "Вакансия: ищу сотрудника" },
+    { value: "RESUME", label: "Резюме: ищу работу" },
+  ],
 };
 
 const CATEGORY_HINT: Record<string, string> = {
   REAL_ESTATE: "Например: Квартиры",
   AUTO: "Например: Автомобили",
   SERVICE: "Например: Ремонт и отделка",
+  JOB: "Например: Продажи, Склад, IT",
+};
+
+const TITLE_HINT: Record<string, string> = {
+  REAL_ESTATE: "Например: 2-комнатная квартира у метро",
+  AUTO: "Например: Toyota Camry 2019, один владелец",
+  SERVICE: "Например: Ремонт ванной под ключ",
+  JOB: "Например: Продавец-консультант в магазин техники",
 };
 
 const input = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm";
@@ -157,6 +169,7 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
             <option value="REAL_ESTATE">Недвижимость</option>
             <option value="AUTO">Авто</option>
             <option value="SERVICE">Услуги</option>
+            <option value="JOB">Работа</option>
           </select>
         </div>
         <div>
@@ -173,7 +186,7 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
 
       <div>
         <label className="mb-1 block text-sm font-medium" htmlFor="title">Заголовок</label>
-        <input id="title" name="title" required minLength={5} maxLength={120} placeholder="Например: 2-комнатная квартира у метро" className={input} />
+        <input id="title" name="title" required minLength={5} maxLength={120} placeholder={TITLE_HINT[vertical]} className={input} />
       </div>
 
       <div>
@@ -199,6 +212,12 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
         <label className="mb-1 block text-sm font-medium" htmlFor="priceRub">{priceLabel(dealType)}</label>
         <input id="priceRub" name="priceRub" type="number" min={0} step={1} inputMode="numeric" className={input} />
       </div>
+
+      {vertical === "JOB" && (
+        <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
+          Вакансии с платой за обучение, форму или оформление, а также набор «курьеров за наличными» и «держателей карт» не публикуются. Не просите у соискателей фото паспорта до собеседования.
+        </p>
+      )}
 
       <div>
         <span className="mb-1 block text-sm font-medium">Фото (до {MAX_PHOTOS})</span>

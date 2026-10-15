@@ -85,8 +85,8 @@ export type EvidenceVerification = (typeof EvidenceVerification_VALUES)[number];
 export const PendingActionStatus_VALUES = ["PENDING", "CONSUMED", "EXPIRED"] as const;
 export type PendingActionStatus = (typeof PendingActionStatus_VALUES)[number];
 
-// --- Classifieds verticals (real estate / auto / services) -------------------
-export const ClassifiedVertical_VALUES = ["REAL_ESTATE", "AUTO", "SERVICE"] as const;
+// --- Classifieds verticals (real estate / auto / services / jobs) ------------
+export const ClassifiedVertical_VALUES = ["REAL_ESTATE", "AUTO", "SERVICE", "JOB"] as const;
 export type ClassifiedVertical = (typeof ClassifiedVertical_VALUES)[number];
 
 export const ClassifiedDealType_VALUES = [
@@ -97,6 +97,8 @@ export const ClassifiedDealType_VALUES = [
   "BUY_REQUEST",
   "SERVICE_OFFER",
   "SERVICE_REQUEST",
+  "VACANCY",
+  "RESUME",
 ] as const;
 export type ClassifiedDealType = (typeof ClassifiedDealType_VALUES)[number];
 

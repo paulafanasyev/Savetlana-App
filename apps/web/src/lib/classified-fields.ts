@@ -147,10 +147,81 @@ export const SERVICE_FIELDS: FieldDef[] = [
   { key: "warranty", label: "Гарантия на работу", type: "select", options: yesNo },
 ];
 
+/** Работа: одинаковые поля для вакансии и резюме, зарплата «от» в поле цены. */
+export const JOB_FIELDS: FieldDef[] = [
+  { key: "companyName", label: "Компания", type: "text", maxLength: 80, placeholder: "Для резюме можно не заполнять" },
+  {
+    key: "employment", label: "Занятость", type: "select", options: [
+      { value: "full", label: "Полная" },
+      { value: "part", label: "Частичная" },
+      { value: "project", label: "Проектная работа" },
+      { value: "internship", label: "Стажировка" },
+      { value: "rotation", label: "Вахта" },
+    ],
+  },
+  {
+    key: "schedule", label: "График", type: "select", options: [
+      { value: "5/2", label: "5/2" },
+      { value: "2/2", label: "2/2" },
+      { value: "shift", label: "Сменный" },
+      { value: "flexible", label: "Гибкий" },
+      { value: "night", label: "Ночные смены" },
+    ],
+  },
+  {
+    key: "workFormat", label: "Где работать", type: "select", options: [
+      { value: "office", label: "На месте работодателя" },
+      { value: "remote", label: "Удалённо" },
+      { value: "hybrid", label: "Гибрид" },
+      { value: "travel", label: "Разъездная работа" },
+    ],
+  },
+  {
+    key: "experience", label: "Опыт", type: "select", options: [
+      { value: "none", label: "Без опыта" },
+      { value: "1-3", label: "От 1 до 3 лет" },
+      { value: "3-6", label: "От 3 до 6 лет" },
+      { value: "6+", label: "Больше 6 лет" },
+    ],
+  },
+  { key: "salaryTo", label: "Зарплата до", type: "number", unit: "₽", min: 0, max: 100000000 },
+  {
+    key: "salaryPeriod", label: "Зарплата за", type: "select", options: [
+      { value: "month", label: "Месяц" },
+      { value: "shift", label: "Смену" },
+      { value: "hour", label: "Час" },
+      { value: "piece", label: "Сдельно" },
+    ],
+  },
+  {
+    key: "salaryTax", label: "Сумма", type: "select", options: [
+      { value: "net", label: "На руки" },
+      { value: "gross", label: "До вычета налогов" },
+    ],
+  },
+  {
+    key: "contract", label: "Оформление", type: "select", options: [
+      { value: "tk", label: "Трудовой договор (ТК РФ)" },
+      { value: "gph", label: "Договор ГПХ" },
+      { value: "self", label: "Для самозанятых" },
+      { value: "none", label: "Без оформления" },
+    ],
+  },
+  {
+    key: "education", label: "Образование", type: "select", options: [
+      { value: "any", label: "Не важно" },
+      { value: "secondary", label: "Среднее" },
+      { value: "vocational", label: "Среднее профессиональное" },
+      { value: "higher", label: "Высшее" },
+    ],
+  },
+];
+
 export function fieldsFor(vertical: string): FieldDef[] {
   if (vertical === "REAL_ESTATE") return REAL_ESTATE_FIELDS;
   if (vertical === "AUTO") return AUTO_FIELDS;
   if (vertical === "SERVICE") return SERVICE_FIELDS;
+  if (vertical === "JOB") return JOB_FIELDS;
   return [];
 }
 
@@ -208,7 +279,18 @@ export function priceLabel(dealType: string): string {
   if (dealType === "LONG_RENT" || dealType === "RENT") return "Цена в месяц, ₽";
   if (dealType === "DAILY_RENT") return "Цена за сутки, ₽";
   if (dealType === "BUY_REQUEST") return "Бюджет, ₽";
+  if (dealType === "VACANCY") return "Зарплата от, ₽";
+  if (dealType === "RESUME") return "Желаемая зарплата, ₽";
   return "Цена, ₽";
+}
+
+/** Как показать цену в карточке: у вакансии это зарплата «от». */
+export function priceText(dealType: string, attrs: Record<string, unknown>, formatted: string): string {
+  if (dealType !== "VACANCY" && dealType !== "RESUME") return formatted;
+  const period: Record<string, string> = { month: " в месяц", shift: " за смену", hour: " в час" };
+  const salaryTo = attrs.salaryTo;
+  const to = typeof salaryTo === "number" && salaryTo > 0 ? ` до ${salaryTo.toLocaleString("ru-RU")} ₽` : "";
+  return `${dealType === "VACANCY" ? "от " : ""}${formatted}${to}${period[String(attrs.salaryPeriod)] ?? ""}`;
 }
 
 export const MAX_PHOTOS = 10;

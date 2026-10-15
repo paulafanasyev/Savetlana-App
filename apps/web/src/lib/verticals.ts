@@ -1,5 +1,5 @@
 /**
- * Display labels for the classified verticals (real estate, auto, services).
+ * Display labels for the classified verticals (real estate, auto, services, jobs).
  *
  * Both the list and the detail page render these, and both previously carried
  * their own hand-written copy. The two drifted apart and both used keys that
@@ -14,6 +14,7 @@ export const VERTICAL_LABELS: Record<ClassifiedVertical, string> = {
   REAL_ESTATE: "Недвижимость",
   AUTO: "Авто",
   SERVICE: "Услуги",
+  JOB: "Работа",
 };
 
 export const DEAL_TYPE_LABELS: Record<ClassifiedDealType, string> = {
@@ -24,6 +25,8 @@ export const DEAL_TYPE_LABELS: Record<ClassifiedDealType, string> = {
   BUY_REQUEST: "Куплю",
   SERVICE_OFFER: "Предлагаю услугу",
   SERVICE_REQUEST: "Нужна услуга",
+  VACANCY: "Вакансия",
+  RESUME: "Резюме",
 };
 
 /** Placeholder glyph shown when a listing has no photo. */
@@ -31,6 +34,7 @@ export const VERTICAL_EMOJI: Record<ClassifiedVertical, string> = {
   REAL_ESTATE: "🏠",
   AUTO: "🚗",
   SERVICE: "🛠",
+  JOB: "💼",
 };
 
 /** Both columns are stored as plain strings, so an unexpected value falls back
