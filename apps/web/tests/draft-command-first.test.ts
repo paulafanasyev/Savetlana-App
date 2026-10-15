@@ -42,6 +42,14 @@ describe("просьба создать карточку важнее други
     expect(r.toolCalls?.[0]?.arguments).toMatchObject({ priceRub: 990 });
   });
 
+  it("составляет резюме прямо в чате", async () => {
+    const r = await provider.complete(ask("Составь резюме: ищу работу водителем, опыт 7 лет, хочу от 80 тыс на руки, 5/2"));
+    expect(r.toolCalls).toBeUndefined();
+    expect(r.content).toContain("• Должность: Водитель");
+    expect(r.content).toContain("/classifieds/new?resume=");
+    expect((await provider.complete(ask("составь резюме"))).content).toContain("Расскажите о себе");
+  });
+
   it("без описания товара просит его, а не создаёт пустой черновик", async () => {
     const r = await provider.complete(ask("создай карточку"));
     expect(r.toolCalls).toBeUndefined();

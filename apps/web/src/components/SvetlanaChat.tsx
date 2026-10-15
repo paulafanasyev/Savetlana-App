@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState, useReducer } from "react";
 import { rub } from "@/lib/format";
 import { SvetlanaAvatar } from "@/components/SvetlanaAvatar";
+import { ChatText } from "@/components/ChatText";
+import { stripChatLinks } from "@/lib/chat-links";
 import {
   avatarReducer,
   initialAvatarState,
@@ -197,7 +199,7 @@ export function SvetlanaChat({ side = "buyer", className = "", title = "Свет
       setMessages((items) => [...items, { role: "assistant", content: parsed.text, emotion: parsed.emotion, steps: data.steps, pending: data.pendingConfirmation, verification: data.verification }]);
       dispatch({ type: "RESPONSE", emotion: parsed.emotion });
       resetEmotionSoon();
-      speakText(parsed.text, voiceEnabled);
+      speakText(stripChatLinks(parsed.text), voiceEnabled);
     } catch {
       const errorMessage = "Не удалось получить ответ. Попробуйте переформулировать: каталог и корзина работают и без меня.";
       setMessages((items) => [...items, { role: "assistant", content: errorMessage, emotion: "sad" }]);
@@ -257,7 +259,7 @@ export function SvetlanaChat({ side = "buyer", className = "", title = "Свет
       setMessages((items) => [...items, { role: "assistant", content: parsed.text, emotion: parsed.emotion, steps: data.steps, verification: data.verification }]);
       dispatch({ type: "RESPONSE", emotion: parsed.emotion });
       resetEmotionSoon();
-      speakText(parsed.text, voiceEnabled);
+      speakText(stripChatLinks(parsed.text), voiceEnabled);
     } catch {
       setMessages((items) => [...items, { role: "assistant", content: "Действие не выполнено. Попробуйте ещё раз.", emotion: "sad" }]);
       dispatch({ type: "RESPONSE_ERROR" });
@@ -279,7 +281,7 @@ export function SvetlanaChat({ side = "buyer", className = "", title = "Свет
           <div className={message.role === "user" ? "flex justify-end" : "flex justify-start"}><div className={`sv-bubble ${message.role === "user" ? "sv-bubble-user" : "sv-bubble-assistant"}`}>
             {message.role === "assistant" && message.emotion && <span className="mb-1 block text-xs" role="img" aria-label={EMOTION_LABELS[message.emotion] ?? "Светлана"}>{emotionIcon(message.emotion)}</span>}
             <span className="sr-only">{message.role === "user" ? "Вы: " : "Светлана: "}</span>
-            <span className="whitespace-pre-line">{message.content}</span>
+            <ChatText text={message.content} />
             {message.loginPrompt && <a href={loginHref()} className="btn btn-primary mt-2 inline-flex px-3 py-1.5 text-xs">Войти</a>}
           </div></div>
           {message.steps && message.steps.length > 0 && <div className="prose-steps">{message.steps.map((step, stepIndex) => <div key={stepIndex} className="flex items-center gap-1.5"><span aria-hidden="true">{step.ok ? "✓" : "✕"}</span><span className="sr-only">{step.ok ? "Готово: " : "Не получилось: "}</span><span className="font-medium text-ink">{TOOL_LABELS[step.tool] ?? step.tool}</span>{step.summary && <span className="truncate text-ink-faint">· {step.summary}</span>}</div>)}</div>}

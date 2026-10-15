@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ATTR_PREFIX,
   MAX_PHOTOS,
@@ -119,6 +119,16 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const [resumeText, setResumeText] = useState("");
+
+  // Ссылка из чата со Светланой: /classifieds/new?resume=… открывает резюме с уже вставленным текстом.
+  useEffect(() => {
+    const text = new URLSearchParams(window.location.search).get("resume")?.trim() ?? "";
+    if (text.length < 15) return;
+    setVertical("JOB");
+    setDealType("RESUME");
+    setResumeText(text.slice(0, 2000));
+  }, []);
 
   /** Черновик Светланы в поля формы. Поля остаются обычными: человек правит что угодно. */
   const applyDraft = (d: VacancyDraftResult) => {
@@ -201,7 +211,14 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
         </div>
       </div>
 
-      {vertical === "JOB" && <VacancyDraftHelper key={dealType} kind={dealType === "RESUME" ? "resume" : "vacancy"} onDraft={applyDraft} />}
+      {vertical === "JOB" && (
+        <VacancyDraftHelper
+          key={`${dealType}-${resumeText.length}`}
+          kind={dealType === "RESUME" ? "resume" : "vacancy"}
+          initialText={dealType === "RESUME" ? resumeText : ""}
+          onDraft={applyDraft}
+        />
+      )}
 
       <div>
         <label className="mb-1 block text-sm font-medium" htmlFor="title">Заголовок</label>

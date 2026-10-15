@@ -7,11 +7,13 @@
  * начинается с просьбы создать карточку, сразу идёт в создание черновика.
  * Просьбу понимаем и в конце сообщения («Вот кроссовки…, оформи карточку»),
  * а «как добавить товар?» и «сделай товар дешевле» сюда не попадают
- * (lib/ai/draft-command.ts).
+ * (lib/ai/draft-command.ts). Так же сразу разбирается «Составь резюме: …»
+ * (lib/ai/resume-command.ts).
  */
 import type { AiCompleteRequest, AiCompleteResponse, AiProvider } from "../types";
 import { draftArgs } from "./mock";
 import { parseDraftCommand } from "../draft-command";
+import { parseResumeCommand, RESUME_ASK, resumeChatReply } from "../resume-command";
 
 export function isDraftCommand(text: string): boolean {
   return parseDraftCommand(text) !== null;
@@ -38,7 +40,16 @@ export function draftCommandFirst(inner: AiProvider): AiProvider {
     embed: inner.embed?.bind(inner),
     async complete(request: AiCompleteRequest): Promise<AiCompleteResponse> {
       const last = request.messages[request.messages.length - 1];
-      const command = request.jsonMode || last?.role !== "user" ? null : parseDraftCommand(last.content);
+      const userText = request.jsonMode || last?.role !== "user" ? null : last.content;
+      // «Составь резюме: …»: разбираем тем же составителем, что и в форме объявления.
+      const resume = userText === null ? null : parseResumeCommand(userText);
+      if (resume !== null) {
+        if (resume.length < 15) return respond(RESUME_ASK);
+        // Динамический импорт: составитель резюме сам обращается к шлюзу, статический импорт замкнул бы круг.
+        const { parseResumeText } = await import("../../domains/resume-draft");
+        return respond(resumeChatReply(parseResumeText(resume), resume));
+      }
+      const command = userText === null ? null : parseDraftCommand(userText);
       if (!command) return inner.complete(request);
       // Просьба может стоять в конце: разбираем только текст о товаре.
       const args = draftArgs(command.product ? `карточка ${command.product}` : "");
