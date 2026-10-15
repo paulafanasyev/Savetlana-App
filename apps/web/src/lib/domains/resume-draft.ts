@@ -7,12 +7,15 @@
  * вакансией, поэтому разбор условий тот же (parseVacancyText), а сверху
  * резюме: должность из «ищу работу водителем», стаж в годах, раздельное
  * описание. Компания из текста это прежнее место работы, в поле «Компания»
- * её не ставим. Черновик попадает в форму, соискатель проверяет его и
- * публикует сам.
+ * её не ставим. Телефон, почту, мессенджеры, паспорт и СНИЛС из текста
+ * убираем (lib/domains/contact-scrub.ts): резюме видят все, а работодатель
+ * пишет через сообщения площадки. Черновик попадает в форму, соискатель
+ * проверяет его и публикует сам.
  */
 import { JOB_FIELDS } from "../classified-fields";
 import { aiGateway, aiMode, newTraceId } from "../ai/gateway";
 import { mergeModelDraft, parseVacancyText, type VacancyDraft } from "./vacancy-draft";
+import { scrubContacts, type ContactKind } from "./contact-scrub";
 
 export const MAX_RESUME_INPUT = 2000;
 
@@ -92,7 +95,7 @@ export function resumeExperience(text: string): string | undefined {
 
 /** Правила без модели: только то, что есть в тексте. */
 export function parseResumeText(raw: string): VacancyDraft {
-  const text = raw.replace(/\r/g, "").trim().slice(0, MAX_RESUME_INPUT);
+  const text = scrubContacts(raw.replace(/\r/g, "").trim().slice(0, MAX_RESUME_INPUT)).text;
   const base = parseVacancyText(text);
   const attrs = { ...base.attrs };
   delete attrs.companyName;
@@ -116,9 +119,11 @@ function optionList(): string {
     .join("\n");
 }
 
-export async function draftResume(raw: string): Promise<{ draft: VacancyDraft; source: "model" | "rules" }> {
+export async function draftResume(input: string): Promise<{ draft: VacancyDraft; source: "model" | "rules"; removed: ContactKind[] }> {
+  // Контакты не уходят ни в объявление, ни внешней модели.
+  const { text: raw, removed } = scrubContacts(input.replace(/\r/g, "").trim().slice(0, MAX_RESUME_INPUT));
   const base = parseResumeText(raw);
-  if (aiMode().mode !== "LIVE") return { draft: base, source: "rules" };
+  if (aiMode().mode !== "LIVE") return { draft: base, source: "rules", removed };
   try {
     const result = await aiGateway.complete({
       taskClass: "conversation",
@@ -143,15 +148,17 @@ export async function draftResume(raw: string): Promise<{ draft: VacancyDraft; s
         { role: "user", content: raw.slice(0, MAX_RESUME_INPUT) },
       ],
     });
-    if (result.response.sandbox) return { draft: base, source: "rules" };
+    if (result.response.sandbox) return { draft: base, source: "rules", removed };
     const parsed = JSON.parse(result.response.content) as Record<string, unknown>;
     const merged = mergeModelDraft(base, { ...parsed, companyName: null });
     // Стаж только из текста: модель не может его придумать.
     if (base.attrs.experience) merged.attrs.experience = base.attrs.experience;
     else delete merged.attrs.experience;
     delete merged.attrs.companyName;
-    return { draft: merged, source: "model" };
+    // Модель могла вернуть контакт в описании: чистим и её текст.
+    merged.description = scrubContacts(merged.description).text;
+    return { draft: merged, source: "model", removed };
   } catch {
-    return { draft: base, source: "rules" };
+    return { draft: base, source: "rules", removed };
   }
 }
