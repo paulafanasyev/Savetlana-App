@@ -20,6 +20,8 @@ interface TrackingResponse {
     payment: { status: string; sandbox: boolean } | null;
   };
   reviewedProductIds: string[];
+  /** Отзывы, которые антифрод скрыл до проверки модератором. */
+  moderatedProductIds?: string[];
   shipment: {
     id: string;
     carrierName: string;
@@ -176,7 +178,7 @@ export default function OrderDetailPage() {
       {delivered && (
         <section className="card mt-3 p-5">
           <h2 className="text-lg font-bold text-ink">Отзыв о товаре</h2>
-          <p className="mt-1 text-sm text-ink-soft">Отзыв увидят другие покупатели. Он будет отмечен как «покупка подтверждена».</p>
+          <p className="mt-1 text-sm text-ink-soft">Отзыв будет отмечен как «покупка подтверждена». Подозрительные отзывы сначала проверяет модератор.</p>
           {order.items.map((item) => (
             <ReviewForm
               key={item.id}
@@ -184,6 +186,7 @@ export default function OrderDetailPage() {
               productId={item.productId}
               title={item.titleSnapshot}
               already={data.reviewedProductIds.includes(item.productId)}
+              moderation={(data.moderatedProductIds ?? []).includes(item.productId)}
               onDone={load}
             />
           ))}
@@ -233,14 +236,26 @@ function CancelButton({ orderId, onDone }: { orderId: string; onDone: () => void
   );
 }
 
-function ReviewForm({ orderId, productId, title, already, onDone }: { orderId: string; productId: string; title: string; already: boolean; onDone: () => void }) {
+function ReviewForm({ orderId, productId, title, already, moderation, onDone }: { orderId: string; productId: string; title: string; already: boolean; moderation: boolean; onDone: () => void }) {
   const [rating, setRating] = useState(5);
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  if (already && moderation) {
+    return (
+      <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+        Отзыв на «{title}» на проверке у модератора. Другие покупатели увидят его после проверки, обычно в течение суток. Писать его заново не нужно.
+      </div>
+    );
+  }
   if (already) {
-    return <div className="mt-4 rounded-lg bg-surface-muted p-3 text-sm text-ink-soft">Отзыв на «{title}» уже оставлен. Спасибо!</div>;
+    return (
+      <div className="mt-4 rounded-lg bg-surface-muted p-3 text-sm text-ink-soft">
+        Отзыв на «{title}» опубликован. Спасибо!{" "}
+        <Link href={`/product/${productId}`} className="text-svetlana-700 hover:underline">Посмотреть на странице товара</Link>
+      </div>
+    );
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -262,7 +277,7 @@ function ReviewForm({ orderId, productId, title, already, onDone }: { orderId: s
         setMessage(json?.error ?? "Не удалось отправить отзыв");
         return;
       }
-      setMessage("Спасибо за отзыв!");
+      setMessage(json?.status === "moderation" ? "Спасибо! Отзыв на проверке у модератора." : "Спасибо за отзыв!");
       onDone();
     } catch {
       setMessage("Нет связи с сервером");
@@ -273,7 +288,7 @@ function ReviewForm({ orderId, productId, title, already, onDone }: { orderId: s
 
   return (
     <form className="mt-4 border-t border-line pt-4" onSubmit={submit}>
-      <div className="text-sm font-medium text-ink">{title}</div>
+      <Link href={`/product/${productId}`} className="text-sm font-medium text-ink hover:underline">{title}</Link>
       <label className="mt-2 block text-sm">
         Оценка{" "}
         <select className="input mt-1" value={rating} onChange={(e) => setRating(Number(e.target.value))}>
