@@ -56,28 +56,33 @@ const PROMO_SCAN_PAGE = 500;
 /** Не больше 10 000 товаров со старой ценой за один подсчёт. */
 const PROMO_SCAN_PAGES = 20;
 
+/** Товары магазина со скидкой, которая закончится в ближайшие сутки (для кнопки «Продлить»). */
+export async function sellerEndingPromoIds(sellerId: string, now: Date = new Date()): Promise<string[]> {
+  const out: string[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < PROMO_SCAN_PAGES; page++) {
+    const rows = await prisma.product.findMany({
+      where: { sellerId, status: "ACTIVE", oldPriceKopecks: { not: null } },
+      select: { id: true, priceKopecks: true, oldPriceKopecks: true },
+      orderBy: { id: "asc" },
+      take: PROMO_SCAN_PAGE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    const ids = rows.filter((p) => promoState(p).onPromo).map((p) => p.id);
+    if (ids.length > 0) {
+      const ends = await promotionEndDates(ids);
+      for (const [id, end] of ends) if (endingSoon([end], now) === 1) out.push(id);
+    }
+    if (rows.length < PROMO_SCAN_PAGE) break;
+    cursor = rows[rows.length - 1].id;
+  }
+  return out;
+}
+
 /** Сколько опубликованных товаров магазина со скидкой, которая закончится в ближайшие сутки. */
 export async function sellerEndingPromos(sellerId: string, now: Date = new Date()): Promise<number> {
   try {
-    let count = 0;
-    let cursor: string | undefined;
-    for (let page = 0; page < PROMO_SCAN_PAGES; page++) {
-      const rows = await prisma.product.findMany({
-        where: { sellerId, status: "ACTIVE", oldPriceKopecks: { not: null } },
-        select: { id: true, priceKopecks: true, oldPriceKopecks: true },
-        orderBy: { id: "asc" },
-        take: PROMO_SCAN_PAGE,
-        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      });
-      const ids = rows.filter((p) => promoState(p).onPromo).map((p) => p.id);
-      if (ids.length > 0) {
-        const ends = await promotionEndDates(ids);
-        count += endingSoon([...ends.values()], now);
-      }
-      if (rows.length < PROMO_SCAN_PAGE) break;
-      cursor = rows[rows.length - 1].id;
-    }
-    return count;
+    return (await sellerEndingPromoIds(sellerId, now)).length;
   } catch {
     return 0;
   }
