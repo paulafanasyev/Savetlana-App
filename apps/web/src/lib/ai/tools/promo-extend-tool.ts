@@ -2,7 +2,8 @@
  * Светлана продлевает скидку: тот же расчёт, что и кнопка «Продлить» в
  * разделе «Акции». Цены не меняются, сдвигается только дата окончания.
  * Перед подтверждением продавец видит, до какого числа скидка идёт сейчас
- * и до какого будет идти.
+ * и до какого будет идти. С ending: true продлеваются только скидки, которые
+ * закончатся в течение суток (без срока на неделю).
  */
 import { prisma } from "../../prisma";
 import { extendPromotion } from "../../domains/promo-extend";
@@ -10,6 +11,8 @@ import { extendReasonText, extendedEnd } from "../../domains/promo-extend-rules"
 import { extractPromoDuration, matchProducts, promoDateText, promoMark, promoState, UserFacingError } from "../../domains/engagement-rules";
 import type { ToolContext, ToolDefinition, ToolResult } from "./registry";
 import { looseObjectSchema } from "./registry";
+import { sellerEndingPromoIds } from "../../domains/seller-badges";
+import { PROMO_EXTEND_DAYS } from "../../seller-todo";
 
 const MAX_LINES = 5;
 
@@ -50,12 +53,16 @@ async function planExtend(ctx: ToolContext, args: Record<string, unknown>): Prom
   if (!ctx.sellerProfileId || ctx.role !== "seller") return { ok: false, error: "скидки управляются в кабинете продавца" };
   const parsed = extractPromoDuration(typeof args.query === "string" ? args.query.trim() : "");
   const query = parsed.rest.replace(/^(?:для|на|с|со)\s+/i, "").trim();
-  const days = Number(args.days ?? parsed.days);
+  const ending = args.ending === true;
+  const days = Number(args.days ?? parsed.days ?? (ending ? PROMO_EXTEND_DAYS : undefined));
   if (!Number.isInteger(days) || days < 1) {
     return { ok: false, error: "не поняла, на сколько дней продлить. Напишите, например: «продли скидку на кроссовки на 7 дней»" };
   }
+  // «Всё, что заканчивается»: ровно те товары, что и в блоке «Что сделать сегодня».
+  const endingIds = ending ? await sellerEndingPromoIds(ctx.sellerProfileId) : null;
+  if (endingIds && endingIds.length === 0) return { ok: false, error: "скидок, которые закончатся в течение суток, сейчас нет" };
   const products = await prisma.product.findMany({
-    where: { sellerId: ctx.sellerProfileId, status: "ACTIVE", oldPriceKopecks: { not: null } },
+    where: { sellerId: ctx.sellerProfileId, status: "ACTIVE", oldPriceKopecks: { not: null }, ...(endingIds ? { id: { in: endingIds } } : {}) },
     orderBy: { updatedAt: "desc" },
     take: 200,
     select: { id: true, title: true, priceKopecks: true, oldPriceKopecks: true },
@@ -116,11 +123,11 @@ export async function extendPromotionPreview(
 
 export const extendPromotionTool: ToolDefinition = {
   name: "extend_promotion",
-  description: "Продлить идущую скидку со сроком на несколько дней (days, 1–30): на товары по названию (query) или на все товары со скидкой. Цены не меняются. Вся акция не дольше 30 дней с запуска. Требует подтверждения.",
+  description: "Продлить идущую скидку со сроком на несколько дней (days, 1–30): на товары по названию (query), на все товары со скидкой или (ending: true) только на те, что закончатся в течение суток. Цены не меняются. Вся акция не дольше 30 дней с запуска. Требует подтверждения.",
   permission: "CHANGE_PRICE",
   riskLevel: "FINANCIAL",
   needsConfirmation: true,
-  parameters: looseObjectSchema({ query: { type: "string" }, days: { type: "number", description: "на сколько дней продлить, 1–30" } }),
+  parameters: looseObjectSchema({ query: { type: "string" }, days: { type: "number", description: "на сколько дней продлить, 1–30" }, ending: { type: "boolean", description: "только скидки, которые закончатся в течение суток" } }),
   async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
     const plan = await planExtend(ctx, args);
     if (!plan.ok) return { ok: false, error: plan.error, verification: "NOT_PROVEN" };

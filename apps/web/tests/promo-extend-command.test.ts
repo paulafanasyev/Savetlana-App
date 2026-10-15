@@ -18,6 +18,15 @@ describe("просьба продлить скидку", () => {
     expect(parsePromoExtendCommand("верни обычную цену")).toBeNull();
   });
 
+  it("продлевает всё, что заканчивается", () => {
+    expect(parsePromoExtendCommand("Продли всё, что заканчивается")).toEqual({ query: "", ending: true });
+    expect(parsePromoExtendCommand("продли скидки, которые скоро закончатся, на 3 дня")).toEqual({ query: "", days: 3, ending: true });
+    expect(parsePromoExtendCommand("продлите акции, которые истекают, на неделю")).toEqual({ query: "", days: 7, ending: true });
+    expect(parsePromoExtendCommand("продли размещение, которое заканчивается")).toBeNull();
+    expect(parsePromoExtendCommand("скидка заканчивается завтра")).toBeNull();
+    expect(promoExtendReply({ query: "", ending: true })).toBe("Проверю, какие скидки закончатся в течение суток, и покажу новые даты.");
+  });
+
   it("отвечает по-русски", () => {
     expect(PROMO_EXTEND_ASK).toContain("На сколько дней");
     expect(promoExtendReply({ query: "кроссовки", days: 7 })).toBe("Проверю, какие скидки на «кроссовки» можно продлить, и покажу новые даты.");
