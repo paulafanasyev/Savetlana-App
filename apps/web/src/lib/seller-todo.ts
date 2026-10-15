@@ -3,6 +3,7 @@
  * из счётчиков делает список дел со ссылками. Сначала споры (у них сроки),
  * потом заказы, потом сообщения, в конце товары, которые закончились
  * или скоро закончатся, и скидки, которые закончатся в течение суток.
+ * Список сам обновляется раз в минуту (components/SellerTodo.tsx).
  */
 import { badgeLabel, type BadgeKind } from "./badge-text";
 
@@ -79,4 +80,26 @@ export function sellerTodo(counts: TodoCounts, stock?: { out: number; low: numbe
   const promo = promoEndingText(stock?.promoEnding ?? 0);
   if (promo) items.push({ kind: "promo_ending", href: PROMO_HREF, text: promo });
   return items;
+}
+
+const TODO_KINDS: readonly string[] = ["disputes", "orders", "messages", "stock_out", "stock_low", "promo_ending"];
+
+/**
+ * Проверка ответа /api/seller/todo перед показом: только известные дела и
+ * только ссылки внутри кабинета. Что-то не так: null, остаётся прежний список.
+ */
+export function parseTodoItems(value: unknown): TodoItem[] | null {
+  if (!value || typeof value !== "object") return null;
+  const items = (value as { items?: unknown }).items;
+  if (!Array.isArray(items) || items.length > TODO_KINDS.length) return null;
+  const out: TodoItem[] = [];
+  for (const raw of items) {
+    if (!raw || typeof raw !== "object") return null;
+    const { kind, href, text } = raw as Record<string, unknown>;
+    if (typeof kind !== "string" || !TODO_KINDS.includes(kind)) return null;
+    if (typeof href !== "string" || !/^\/seller(?:\/[a-z-]+)*$/.test(href)) return null;
+    if (typeof text !== "string" || !text.trim() || text.length > 120) return null;
+    out.push({ kind: kind as TodoKind, href, text });
+  }
+  return out;
 }
