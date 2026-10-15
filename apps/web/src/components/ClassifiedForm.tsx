@@ -126,7 +126,7 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
     if (!form) return;
     const put = (name: string, value: string) => {
       const el = form.elements.namedItem(name);
-      if (el && "value" in el) (el as HTMLInputElement).value = value;
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) el.value = value;
     };
     if (d.title) put("title", d.title.slice(0, 120));
     if (d.category) put("category", d.category.slice(0, 80));
