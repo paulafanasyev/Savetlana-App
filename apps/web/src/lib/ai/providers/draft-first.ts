@@ -17,6 +17,7 @@ import { parseDraftCommand } from "../draft-command";
 import { parseResumeCommand, RESUME_ASK, resumeChatReply } from "../resume-command";
 import { scrubContacts } from "../../domains/contact-scrub";
 import { parsePromoExtendCommand, PROMO_EXTEND_ASK, promoExtendReply } from "../promo-extend-command";
+import { PROMO_EXTEND_DAYS } from "../../seller-todo";
 import { isTodayQuestion, TODAY_REPLY } from "../today-command";
 
 export function isDraftCommand(text: string): boolean {
@@ -58,10 +59,12 @@ export function draftCommandFirst(inner: AiProvider): AiProvider {
       // «Продли скидку на кроссовки на 7 дней»: без срока сначала спрашиваем, на сколько.
       const extend = userText === null ? null : parsePromoExtendCommand(userText);
       if (extend !== null) {
-        if (!extend.days) return respond(PROMO_EXTEND_ASK);
-        return respond(promoExtendReply(extend), [
-          { id: `call_promo_extend_${Date.now()}`, name: "extend_promotion", arguments: { query: extend.query, days: extend.days } },
-        ]);
+        // «Продли всё, что заканчивается» без срока: на неделю, как кнопка в блоке дел.
+        if (!extend.days && !extend.ending) return respond(PROMO_EXTEND_ASK);
+        const args = extend.ending
+          ? { query: "", days: extend.days ?? PROMO_EXTEND_DAYS, ending: true }
+          : { query: extend.query, days: extend.days };
+        return respond(promoExtendReply(extend), [{ id: `call_promo_extend_${Date.now()}`, name: "extend_promotion", arguments: args }]);
       }
       // «Что мне сделать сегодня?»: тот же список, что на главной кабинета продавца.
       if (userText !== null && isTodayQuestion(userText)) {
