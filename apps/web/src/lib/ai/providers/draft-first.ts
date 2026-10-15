@@ -8,7 +8,8 @@
  * Просьбу понимаем и в конце сообщения («Вот кроссовки…, оформи карточку»),
  * а «как добавить товар?» и «сделай товар дешевле» сюда не попадают
  * (lib/ai/draft-command.ts). Так же сразу разбирается «Составь резюме: …»
- * (lib/ai/resume-command.ts) и «Продли скидку на 7 дней» (lib/ai/promo-extend-command.ts).
+ * (lib/ai/resume-command.ts), «Продли скидку на 7 дней» (lib/ai/promo-extend-command.ts)
+ * и «Что мне сделать сегодня?» (lib/ai/today-command.ts).
  */
 import type { AiCompleteRequest, AiCompleteResponse, AiProvider } from "../types";
 import { draftArgs } from "./mock";
@@ -16,6 +17,7 @@ import { parseDraftCommand } from "../draft-command";
 import { parseResumeCommand, RESUME_ASK, resumeChatReply } from "../resume-command";
 import { scrubContacts } from "../../domains/contact-scrub";
 import { parsePromoExtendCommand, PROMO_EXTEND_ASK, promoExtendReply } from "../promo-extend-command";
+import { isTodayQuestion, TODAY_REPLY } from "../today-command";
 
 export function isDraftCommand(text: string): boolean {
   return parseDraftCommand(text) !== null;
@@ -60,6 +62,10 @@ export function draftCommandFirst(inner: AiProvider): AiProvider {
         return respond(promoExtendReply(extend), [
           { id: `call_promo_extend_${Date.now()}`, name: "extend_promotion", arguments: { query: extend.query, days: extend.days } },
         ]);
+      }
+      // «Что мне сделать сегодня?»: тот же список, что на главной кабинета продавца.
+      if (userText !== null && isTodayQuestion(userText)) {
+        return respond(TODAY_REPLY, [{ id: `call_seller_today_${Date.now()}`, name: "seller_today", arguments: {} }]);
       }
       const command = userText === null ? null : parseDraftCommand(userText);
       if (!command) return inner.complete(request);
