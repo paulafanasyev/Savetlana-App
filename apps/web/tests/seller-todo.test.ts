@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sellerTodo, stockText, STOCK_HREF } from "../src/lib/seller-todo";
+import { endingSoon, PROMO_HREF, promoEndingText, sellerTodo, stockText, STOCK_HREF } from "../src/lib/seller-todo";
 
 describe("что сделать сегодня в кабинете продавца", () => {
   it("споры первыми, потом заказы и сообщения, со ссылками", () => {
@@ -40,5 +40,20 @@ describe("что сделать сегодня в кабинете продав�
     expect(stockText("stock_low", 5)).toBe("5 товаров скоро закончатся");
     expect(stockText("stock_low", 0)).toBe("");
     expect(stockText("stock_out", Number.NaN)).toBe("");
+  });
+
+  it("напоминает о скидках, которые закончатся в течение суток", () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    const h = (n: number) => new Date(now.getTime() + n * 3_600_000);
+    expect(endingSoon([h(1), h(23), h(24), h(25), h(-1), new Date("x")], now)).toBe(3);
+    expect(endingSoon([], now)).toBe(0);
+    expect(promoEndingText(1)).toBe("Скидка закончится в течение суток: 1 товар");
+    expect(promoEndingText(3)).toBe("Скидка закончится в течение суток: 3 товара");
+    expect(promoEndingText(0)).toBe("");
+    expect(sellerTodo({ orders: 0, messages: 0, disputes: 0 }, { out: 1, low: 0, promoEnding: 5 })).toEqual([
+      { kind: "stock_out", href: STOCK_HREF, text: "1 товар закончился" },
+      { kind: "promo_ending", href: PROMO_HREF, text: "Скидка закончится в течение суток: 5 товаров" },
+    ]);
+    expect(PROMO_HREF).toBe("/seller/promotions");
   });
 });

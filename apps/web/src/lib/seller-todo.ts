@@ -2,7 +2,7 @@
  * Блок «Что сделать сегодня» на главной кабинета продавца. Чистый модуль:
  * из счётчиков делает список дел со ссылками. Сначала споры (у них сроки),
  * потом заказы, потом сообщения, в конце товары, которые закончились
- * или скоро закончатся.
+ * или скоро закончатся, и скидки, которые закончатся в течение суток.
  */
 import { badgeLabel, type BadgeKind } from "./badge-text";
 
@@ -12,7 +12,7 @@ export interface TodoCounts {
   disputes: number;
 }
 
-export type TodoKind = BadgeKind | "stock_out" | "stock_low";
+export type TodoKind = BadgeKind | "stock_out" | "stock_low" | "promo_ending";
 
 export interface TodoItem {
   kind: TodoKind;
@@ -46,7 +46,28 @@ export function stockText(kind: "stock_out" | "stock_low", count: number): strin
   return `${n} ${goodsWord(n)} ${verb}`;
 }
 
-export function sellerTodo(counts: TodoCounts, stock?: { out: number; low: number } | null): TodoItem[] {
+/** Раздел «Акции»: там продлевают или завершают скидку. */
+export const PROMO_HREF = "/seller/promotions";
+/** «Скоро закончится»: до конца скидки осталось не больше суток. */
+export const PROMO_ENDING_HOURS = 24;
+
+/** Сколько скидок закончится в ближайшие сутки (уже закончившиеся не считаем). */
+export function endingSoon(ends: readonly Date[], now: Date = new Date(), hours = PROMO_ENDING_HOURS): number {
+  const from = now.getTime();
+  const to = from + hours * 3_600_000;
+  return ends.filter((d) => {
+    const t = d.getTime();
+    return Number.isFinite(t) && t > from && t <= to;
+  }).length;
+}
+
+/** «Скидка закончится в течение суток: 3 товара». */
+export function promoEndingText(count: number): string {
+  const n = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+  return n === 0 ? "" : `Скидка закончится в течение суток: ${n} ${goodsWord(n)}`;
+}
+
+export function sellerTodo(counts: TodoCounts, stock?: { out: number; low: number; promoEnding?: number } | null): TodoItem[] {
   const items: TodoItem[] = ORDER.flatMap(({ kind, href }) => {
     const text = badgeLabel(kind, counts[kind]);
     return text ? [{ kind, href, text }] : [];
@@ -55,5 +76,7 @@ export function sellerTodo(counts: TodoCounts, stock?: { out: number; low: numbe
     const text = stockText(kind, n);
     if (text) items.push({ kind, href: STOCK_HREF, text });
   }
+  const promo = promoEndingText(stock?.promoEnding ?? 0);
+  if (promo) items.push({ kind: "promo_ending", href: PROMO_HREF, text: promo });
   return items;
 }

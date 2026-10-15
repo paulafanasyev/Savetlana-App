@@ -5,6 +5,9 @@
  */
 import { prisma } from "../prisma";
 import { DISPUTE_ACTION_STATUSES, ORDER_ACTION_STATUSES } from "../badge-text";
+import { endingSoon } from "../seller-todo";
+import { promoState } from "./engagement-rules";
+import { promotionEndDates } from "./seller-promotions";
 
 export interface SellerBadges {
   orders: number;
@@ -45,5 +48,21 @@ export async function sellerStockCounts(sellerId: string): Promise<StockCounts> 
     return { out, low };
   } catch {
     return { out: 0, low: 0 };
+  }
+}
+
+/** Сколько опубликованных товаров магазина со скидкой, которая закончится в ближайшие сутки. */
+export async function sellerEndingPromos(sellerId: string, now: Date = new Date()): Promise<number> {
+  try {
+    const rows = await prisma.product.findMany({
+      where: { sellerId, status: "ACTIVE", oldPriceKopecks: { not: null } },
+      select: { id: true, priceKopecks: true, oldPriceKopecks: true },
+      take: 500,
+    });
+    const ids = rows.filter((p) => promoState(p).onPromo).map((p) => p.id);
+    const ends = await promotionEndDates(ids);
+    return endingSoon([...ends.values()], now);
+  } catch {
+    return 0;
   }
 }
