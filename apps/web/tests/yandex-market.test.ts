@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fetchOfferPage, listBusinesses, mapOffer, MARKET_API, MarketError, validApiKey } from "../src/lib/domains/yandex-market";
 
-const KEY = "ACMA:secret-key-1234567890";
+const KEY = "test-key-not-real-00000";
 
 function fakeFetch(handler: (url: string, init: RequestInit) => { status?: number; body?: unknown }) {
   const calls: { url: string; init: RequestInit }[] = [];
