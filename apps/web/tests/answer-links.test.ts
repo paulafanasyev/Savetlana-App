@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answerWithLinks, linkProducts, shownProducts } from "../src/lib/ai/answer-links";
+import { answerWithLinks, confirmedAnswerWithLinks, linkProducts, shownProducts } from "../src/lib/ai/answer-links";
 import { chatDraftReport, draftProductId } from "../src/lib/domains/chat-product-draft";
 import { splitChatLinks } from "../src/lib/chat-links";
 
@@ -29,6 +29,17 @@ describe("ссылки на карточки в ответах Светланы"
     expect(shownProducts([step("create_product_draft", { productId: "d1", title: "Кружка" })])).toEqual([]);
     expect(shownProducts([step("get_product", { productId: "x1", title: "Кружка" }, false)])).toEqual([]);
     expect(shownProducts([step("get_product", { productId: "x1", title: "Кружка" })])).toEqual([{ productId: "x1", title: "Кружка" }]);
+  });
+
+  it("после подтверждения публикации даёт ссылку на карточку", () => {
+    const published = [step("publish_product", { productId: "p_mug", status: "ACTIVE" })];
+    expect(confirmedAnswerWithLinks("Карточка «Кружка» опубликована и видна покупателям.", published)).toBe(
+      "Карточка «Кружка» опубликована и видна покупателям. [Открыть карточку](/product/p_mug)",
+    );
+    expect(confirmedAnswerWithLinks("Не получилось", [step("publish_product", { productId: "p_mug" }, false)])).toBe("Не получилось");
+    expect(confirmedAnswerWithLinks("Цена изменена.", [step("change_price", { productId: "p_mug" })])).toBe("Цена изменена.");
+    const cart = [step("cart_add", { productId: "p_k", title: "Чайник Bosch" })];
+    expect(confirmedAnswerWithLinks("«Чайник Bosch» в корзине", cart)).toBe("«[Чайник Bosch](/product/p_k)» в корзине");
   });
 
   it("черновик из чата открывается по ссылке", () => {

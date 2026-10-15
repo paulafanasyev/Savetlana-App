@@ -30,8 +30,11 @@ const MAX_LINKS = 8;
 
 interface StepLike {
   toolName: string;
-  result: { ok: boolean };
+  result: { ok: boolean; data?: unknown };
 }
+
+/** Подтверждённые действия, после которых у товара есть открытая карточка. */
+const OPENS_PRODUCT = new Set(["publish_product"]);
 
 /** Товары из успешных шагов этого ответа, без повторов. */
 export function shownProducts(steps: StepLike[]): ShownItem[] {
@@ -82,4 +85,27 @@ export function linkProducts(answer: string, items: ShownItem[]): string {
 
 export function answerWithLinks(answer: string, steps: StepLike[]): string {
   return linkProducts(answer, shownProducts(steps));
+}
+
+function productIdOf(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const id = (data as Record<string, unknown>).productId;
+  return typeof id === "string" && SAFE_ID.test(id) ? id : null;
+}
+
+/**
+ * Ответ после кнопки «Подтвердить действие»: те же ссылки на товары, а после
+ * публикации ещё и ссылка на саму карточку, чтобы продавец сразу её увидел.
+ */
+export function confirmedAnswerWithLinks(answer: string, steps: StepLike[]): string {
+  let text = answerWithLinks(answer, steps);
+  for (const step of steps) {
+    if (!step.result.ok || !OPENS_PRODUCT.has(step.toolName)) continue;
+    const id = productIdOf(step.result.data);
+    if (!id) continue;
+    const href = productHref(id);
+    if (text.includes(`](${href})`)) continue;
+    text = `${text} [Открыть карточку](${href})`;
+  }
+  return text;
 }
