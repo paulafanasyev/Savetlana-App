@@ -67,5 +67,9 @@ describe("ссылки на карточки в ответах Светланы"
     expect(confirmedAnswerWithLinks("Уже есть [Акции](/seller/promotions)", [step("end_promotion", {})])).toBe("Уже есть [Акции](/seller/promotions)");
     expect(confirmedAnswerWithLinks("x", [step("constructor", {})])).toBe("x");
     expect(PROMO_PAGE).toBe("/seller/promotions");
+    const extended = [step("extend_promotion", { extended: [{ id: "p_sn", title: "Кроссовки Nike", endsAt: "2026-10-22T12:00:00.000Z" }], skipped: [] })];
+    expect(confirmedAnswerWithLinks("Скидка продлена: 1 товар.\n• «Кроссовки Nike»: до 22 октября", extended)).toBe(
+      "Скидка продлена: 1 товар.\n• «[Кроссовки Nike](/product/p_sn)»: до 22 октября\n[Все товары со скидкой](/seller/promotions)",
+    );
   });
 });
