@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ATTR_PREFIX,
   MAX_PHOTOS,
@@ -9,6 +9,7 @@ import {
   priceLabel,
   type FieldDef,
 } from "@/lib/classified-fields";
+import { VacancyDraftHelper, type VacancyDraftResult } from "@/components/VacancyDraftHelper";
 
 export interface GeoOption {
   id: string;
@@ -117,6 +118,22 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
   const [photos, setPhotos] = useState<{ file: File; url: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  /** Черновик Светланы в поля формы. Поля остаются обычными: человек правит что угодно. */
+  const applyDraft = (d: VacancyDraftResult) => {
+    const form = formRef.current;
+    if (!form) return;
+    const put = (name: string, value: string) => {
+      const el = form.elements.namedItem(name);
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) el.value = value;
+    };
+    if (d.title) put("title", d.title.slice(0, 120));
+    if (d.category) put("category", d.category.slice(0, 80));
+    if (d.description) put("description", d.description.slice(0, 5000));
+    if (d.salaryFrom) put("priceRub", String(d.salaryFrom));
+    for (const [key, value] of Object.entries(d.attrs)) put(ATTR_PREFIX + key, value);
+  };
 
   const deals = DEALS[vertical] ?? [];
   const changeVertical = (v: string) => {
@@ -161,7 +178,7 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
   };
 
   return (
-    <form onSubmit={submit} className="space-y-4">
+    <form ref={formRef} onSubmit={submit} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-sm font-medium" htmlFor="vertical">Раздел</label>
@@ -183,6 +200,8 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
           </select>
         </div>
       </div>
+
+      {vertical === "JOB" && dealType === "VACANCY" && <VacancyDraftHelper onDraft={applyDraft} />}
 
       <div>
         <label className="mb-1 block text-sm font-medium" htmlFor="title">Заголовок</label>
