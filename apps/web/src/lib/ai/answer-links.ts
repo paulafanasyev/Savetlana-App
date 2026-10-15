@@ -86,13 +86,19 @@ export function linkProducts(answer: string, items: ShownItem[]): string {
 
 /** Акции продавца: товары, на которые скидку запустили или сняли. */
 const PROMO_TOOLS: Record<string, string> = { start_promotion: "started", end_promotion: "endedItems" };
+/** Раздел «Акции»: там все товары со скидкой, даже те, что не влезли в ответ. */
+export const PROMO_PAGE = "/seller/promotions";
+
+function isPromoTool(name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(PROMO_TOOLS, name);
+}
 
 /** Товары из успешных запусков и снятий скидки в этом ответе. */
 export function promoProducts(steps: StepLike[]): ShownItem[] {
   const out: ShownItem[] = [];
   for (const step of steps) {
+    if (!step.result.ok || !isPromoTool(step.toolName)) continue;
     const key = PROMO_TOOLS[step.toolName];
-    if (!step.result.ok || !key) continue;
     const data = step.result.data;
     if (!data || typeof data !== "object") continue;
     const list = (data as Record<string, unknown>)[key];
@@ -126,6 +132,8 @@ function productIdOf(data: unknown): string | null {
 /**
  * Ответ после кнопки «Подтвердить действие»: те же ссылки на товары, а после
  * публикации ещё и ссылка на саму карточку, чтобы продавец сразу её увидел.
+ * После запуска или снятия скидки добавляем ссылку на раздел «Акции»: в ответе
+ * показаны не больше пяти товаров, а там видны все.
  */
 export function confirmedAnswerWithLinks(answer: string, steps: StepLike[]): string {
   let text = answerWithLinks(answer, steps);
@@ -137,5 +145,7 @@ export function confirmedAnswerWithLinks(answer: string, steps: StepLike[]): str
     if (text.includes(`](${href})`)) continue;
     text = `${text} [Открыть карточку](${href})`;
   }
+  const promo = steps.some((step) => step.result.ok && isPromoTool(step.toolName));
+  if (promo && !text.includes(`](${PROMO_PAGE})`)) text = `${text}\n[Все товары со скидкой](${PROMO_PAGE})`;
   return text;
 }
