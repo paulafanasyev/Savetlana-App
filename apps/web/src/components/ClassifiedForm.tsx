@@ -10,6 +10,7 @@ import {
   type FieldDef,
 } from "@/lib/classified-fields";
 import { VacancyDraftHelper, type VacancyDraftResult } from "@/components/VacancyDraftHelper";
+import { removedNote, scrubResumeListing } from "@/lib/domains/contact-scrub";
 
 export interface GeoOption {
   id: string;
@@ -118,6 +119,7 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
   const [photos, setPhotos] = useState<{ file: File; url: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [resumeText, setResumeText] = useState("");
 
@@ -164,6 +166,22 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
     if (busy) return;
     setBusy(true);
     setError(null);
+    setNotice(null);
+    // Резюме: телефон и почту в открытом объявлении собирают мошенники. Убираем и показываем, что изменилось.
+    if (vertical === "JOB" && dealType === "RESUME") {
+      const titleEl = e.currentTarget.elements.namedItem("title");
+      const descEl = e.currentTarget.elements.namedItem("description");
+      if (titleEl instanceof HTMLInputElement && descEl instanceof HTMLTextAreaElement) {
+        const cleaned = scrubResumeListing({ vertical, dealType, title: titleEl.value, description: descEl.value });
+        if (cleaned.removed.length) {
+          titleEl.value = cleaned.title;
+          descEl.value = cleaned.description;
+          setNotice(`${removedNote(cleaned.removed)} Проверьте текст и нажмите «Опубликовать» ещё раз.`);
+          setBusy(false);
+          return;
+        }
+      }
+    }
     try {
       const data = new FormData(e.currentTarget);
       data.delete("photos");
@@ -313,6 +331,12 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
           <input id="addressLine" name="addressLine" maxLength={200} className={input} />
         </div>
       </div>
+
+      {notice && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+          {notice}
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
