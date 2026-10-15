@@ -5,6 +5,8 @@ import { sharedRateLimit } from "@/lib/domains/rate-limits";
 import { requestIp } from "@/lib/client-ip";
 import { numberWordsToDigits } from "@/lib/ai/number-words";
 import { prisma } from "@/lib/prisma";
+import { answerWithLinks } from "@/lib/ai/answer-links";
+import { stripChatLinks } from "@/lib/chat-links";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +16,14 @@ export const dynamic = "force-dynamic";
  *
  * Лимит частоты считается в базе, поэтому он общий для всех копий сервера,
  * а адрес гостя берётся тот, что поставил наш прокси, а не браузер.
+ *
+ * Найденные товары в ответе становятся ссылками на их страницы
+ * (lib/ai/answer-links.ts). В строке шага ссылка не нужна: там только подпись.
  */
+function stepView(s: { toolName: string; result: { ok: boolean; summary?: string } }) {
+  return { tool: s.toolName, ok: s.result.ok, summary: s.result.summary ? stripChatLinks(s.result.summary) : s.result.summary };
+}
+
 export const POST = apiRoute(async (request) => {
   const { user } = await resolveSession(request);
   if (user?.isBlocked) throw new ApiError(403, "Аккаунт заблокирован");
@@ -43,12 +52,12 @@ export const POST = apiRoute(async (request) => {
   if (!user) {
     const result = await masterAgent.run({ userId: "", message, role: "guest" });
     return Response.json({
-      answer: result.answer,
+      answer: answerWithLinks(result.answer, result.steps),
       conversationId: null,
       agent: result.agent,
       guest: true,
       verification: result.verification,
-      steps: result.steps.map((s) => ({ tool: s.toolName, ok: s.result.ok, summary: s.result.summary })),
+      steps: result.steps.map(stepView),
       traceId: result.traceId,
     });
   }
@@ -69,17 +78,13 @@ export const POST = apiRoute(async (request) => {
   });
 
   return Response.json({
-    answer: result.answer,
+    answer: answerWithLinks(result.answer, result.steps),
     conversationId: result.conversationId,
     agent: result.agent,
     /** The user-facing brand is always Svetlana; internal agent name only. */
     verification: result.verification,
     pendingConfirmation: result.pendingConfirmation,
-    steps: result.steps.map((s) => ({
-      tool: s.toolName,
-      ok: s.result.ok,
-      summary: s.result.summary,
-    })),
+    steps: result.steps.map(stepView),
     traceId: result.traceId,
   });
 });

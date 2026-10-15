@@ -93,12 +93,19 @@ export function chatDraftArgs(args: Record<string, unknown>, source: ChatDraftSo
   return next;
 }
 
+/** Идентификатор созданного черновика из результата инструмента. */
+export function draftProductId(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const id = (data as Record<string, unknown>).productId;
+  return typeof id === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(id) ? id : null;
+}
+
 function rubles(n: number): string {
   return `${n.toLocaleString("ru-RU")} ₽`;
 }
 
 /** Что Светлана заполнила и чего не хватает для публикации. */
-export function chatDraftReport(args: Record<string, unknown>, categoryName: string | null): string {
+export function chatDraftReport(args: Record<string, unknown>, categoryName: string | null, productId: string | null = null): string {
   const title = str(args.title);
   const price = typeof args.priceRub === "number" && args.priceRub > 0 ? args.priceRub : null;
   const attributes = args.attributes && typeof args.attributes === "object" ? Object.entries(args.attributes as Record<string, string>) : [];
@@ -117,7 +124,9 @@ export function chatDraftReport(args: Record<string, unknown>, categoryName: str
     `Черновик «${title}» создан, покупатели его пока не видят.`,
     filled.length ? `Заполнила: ${filled.join("; ")}.` : "",
     `Добавьте ${missing.slice(0, -1).join(", ")} и ${missing[missing.length - 1]}: без них карточку опубликовать нельзя.`,
-    "Черновик в кабинете продавца, раздел «Товары». Проверьте его и опубликуйте, когда всё будет готово.",
+    productId
+      ? `[Открыть черновик](/seller/products/${productId}/edit): там можно добавить фото, проверить поля и опубликовать.`
+      : "Черновик в кабинете продавца, раздел «Товары». Проверьте его и опубликуйте, когда всё будет готово.",
   ]
     .filter(Boolean)
     .join(" ");
