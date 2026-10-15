@@ -24,7 +24,10 @@ describe("просьба продлить скидку", () => {
     expect(parsePromoExtendCommand("продлите акции, которые истекают, на неделю")).toEqual({ query: "", days: 7, ending: true });
     expect(parsePromoExtendCommand("продли размещение, которое заканчивается")).toBeNull();
     expect(parsePromoExtendCommand("скидка заканчивается завтра")).toBeNull();
+    expect(parsePromoExtendCommand("продли скидку на кроссовки, она заканчивается")).toEqual({ query: "кроссовки", ending: true });
+    expect(parsePromoExtendCommand("продли скидку на чайники, которая скоро закончится, на 5 дней")).toEqual({ query: "чайники", days: 5, ending: true });
     expect(promoExtendReply({ query: "", ending: true })).toBe("Проверю, какие скидки закончатся в течение суток, и покажу новые даты.");
+    expect(promoExtendReply({ query: "кроссовки", ending: true })).toBe("Проверю, какие скидки на «кроссовки» закончатся в течение суток, и покажу новые даты.");
   });
 
   it("отвечает по-русски", () => {

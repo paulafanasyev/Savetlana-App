@@ -62,7 +62,7 @@ export function draftCommandFirst(inner: AiProvider): AiProvider {
         // «Продли всё, что заканчивается» без срока: на неделю, как кнопка в блоке дел.
         if (!extend.days && !extend.ending) return respond(PROMO_EXTEND_ASK);
         const args = extend.ending
-          ? { query: "", days: extend.days ?? PROMO_EXTEND_DAYS, ending: true }
+          ? { query: extend.query, days: extend.days ?? PROMO_EXTEND_DAYS, ending: true }
           : { query: extend.query, days: extend.days };
         return respond(promoExtendReply(extend), [{ id: `call_promo_extend_${Date.now()}`, name: "extend_promotion", arguments: args }]);
       }

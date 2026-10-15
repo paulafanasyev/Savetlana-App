@@ -68,3 +68,25 @@ export function buyerTodo(orders: readonly BuyerOrderLike[], reviewed: ReadonlyS
   }
   return items;
 }
+
+const BUYER_TODO_KINDS: readonly string[] = GROUPS.map((g) => g.kind);
+
+/**
+ * Проверка ответа /api/orders/todo перед показом: только известные дела и
+ * только ссылки на заказы и споры покупателя. Что-то не так: null.
+ */
+export function parseBuyerTodoItems(value: unknown): BuyerTodoItem[] | null {
+  if (!value || typeof value !== "object") return null;
+  const items = (value as { items?: unknown }).items;
+  if (!Array.isArray(items) || items.length > BUYER_TODO_KINDS.length) return null;
+  const out: BuyerTodoItem[] = [];
+  for (const raw of items) {
+    if (!raw || typeof raw !== "object") return null;
+    const { kind, href, text } = raw as Record<string, unknown>;
+    if (typeof kind !== "string" || !BUYER_TODO_KINDS.includes(kind)) return null;
+    if (typeof href !== "string" || !/^\/(?:orders(?:\/[A-Za-z0-9_-]{1,80})?|disputes)$/.test(href)) return null;
+    if (typeof text !== "string" || !text.trim() || text.length > 160) return null;
+    out.push({ kind: kind as BuyerTodoKind, href, text });
+  }
+  return out;
+}

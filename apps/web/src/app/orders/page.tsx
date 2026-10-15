@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { rub, timeAgo } from "@/lib/format";
 import { orderStatusLabel, paymentStatusLabel, shipmentStatusLabel } from "@/lib/labels";
+import { BuyerTodo } from "@/components/BuyerTodo";
 
 interface OrderRow {
   id: string;
@@ -84,6 +85,7 @@ export default function OrdersPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
       <h1 className="mb-4 text-2xl font-bold">Мои заказы</h1>
+      <BuyerTodo />
       <ul className="space-y-3">
         {state.orders.map((o) => (
           <li key={o.id} className="card p-4">
