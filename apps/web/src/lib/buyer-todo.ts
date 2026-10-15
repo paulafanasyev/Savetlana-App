@@ -90,3 +90,8 @@ export function parseBuyerTodoItems(value: unknown): BuyerTodoItem[] | null {
   }
   return out;
 }
+
+/** Сколько дел ждут покупателя: для значка в шапке. Заказы в пути не считаем, там делать нечего. */
+export function buyerTodoCount(items: readonly BuyerTodoItem[]): number {
+  return items.filter((item) => item.kind !== "in_transit").length;
+}
