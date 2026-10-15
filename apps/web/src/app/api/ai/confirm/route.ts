@@ -3,6 +3,8 @@ import { requireUser } from "@/lib/auth";
 import { masterAgent } from "@/lib/ai/agents/master";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit, AUTH_LIMITS, tooMany } from "@/lib/domains/rate-limits";
+import { confirmedAnswerWithLinks } from "@/lib/ai/answer-links";
+import { stripChatLinks } from "@/lib/chat-links";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +18,9 @@ export const dynamic = "force-dynamic";
  * PENDING and unexpired, stored args re-hashed against the stored digest, and
  * the row is consumed before execution. A forged confirm with attacker-chosen
  * (toolName, args) is impossible; a replay of a used handle is rejected.
+ *
+ * Товары в ответе становятся ссылками, после публикации появляется ссылка на
+ * карточку (lib/ai/answer-links.ts). В строке шага остаётся только подпись.
  */
 export const POST = apiRoute(async (request) => {
   const { user } = await requireUser(request);
@@ -54,13 +59,13 @@ export const POST = apiRoute(async (request) => {
   );
 
   return Response.json({
-    answer: result.answer,
+    answer: confirmedAnswerWithLinks(result.answer, result.steps),
     conversationId: result.conversationId,
     verification: result.verification,
     steps: result.steps.map((s) => ({
       tool: s.toolName,
       ok: s.result.ok,
-      summary: s.result.summary,
+      summary: s.result.summary ? stripChatLinks(s.result.summary) : s.result.summary,
     })),
     traceId: result.traceId,
   });
