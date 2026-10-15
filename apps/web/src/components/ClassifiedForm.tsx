@@ -201,7 +201,7 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
         </div>
       </div>
 
-      {vertical === "JOB" && dealType === "VACANCY" && <VacancyDraftHelper onDraft={applyDraft} />}
+      {vertical === "JOB" && <VacancyDraftHelper key={dealType} kind={dealType === "RESUME" ? "resume" : "vacancy"} onDraft={applyDraft} />}
 
       <div>
         <label className="mb-1 block text-sm font-medium" htmlFor="title">Заголовок</label>
