@@ -4,7 +4,7 @@ import { requireUserServer } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { BecomeSellerButton } from "@/components/BecomeSellerButton";
 import { sellerBadges } from "@/lib/domains/seller-badges";
-import { badgeLabel, badgeText } from "@/lib/badge-text";
+import { badgeLabel, badgeText, type BadgeKind } from "@/lib/badge-text";
 
 export const dynamic = "force-dynamic";
 const NAV = [
@@ -42,10 +42,11 @@ export default async function SellerLayout({ children }: { children: ReactNode }
     );
   }
   const badges = await sellerBadges(seller.id, user.id);
-  // Значок у пункта меню: сколько заказов ждут действия и сколько сообщений не прочитано.
-  const counts: Record<string, { n: number; kind: "orders" | "messages" }> = {
+  // Значок у пункта меню: заказы и споры, где ход за продавцом, и непрочитанные сообщения.
+  const counts: Record<string, { n: number; kind: BadgeKind }> = {
     "/seller/orders": { n: badges.orders, kind: "orders" },
     "/seller/messages": { n: badges.messages, kind: "messages" },
+    "/seller/disputes": { n: badges.disputes, kind: "disputes" },
   };
   return (
     <div className="min-h-screen">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { badgeLabel, badgeText, ORDER_ACTION_STATUSES } from "../src/lib/badge-text";
+import { badgeLabel, badgeText, DISPUTE_ACTION_STATUSES, ORDER_ACTION_STATUSES } from "../src/lib/badge-text";
 
 describe("счётчики в меню кабинета продавца", () => {
   it("показывает число, пусто для нуля и 99+ для больших", () => {
@@ -19,9 +19,13 @@ describe("счётчики в меню кабинета продавца", () =>
     expect(badgeLabel("messages", 2)).toBe("2 непрочитанных сообщения");
     expect(badgeLabel("messages", 5)).toBe("5 непрочитанных сообщений");
     expect(badgeLabel("messages", 0)).toBe("");
+    expect(badgeLabel("disputes", 1)).toBe("1 спор ждёт ответа");
+    expect(badgeLabel("disputes", 4)).toBe("4 спора ждут ответа");
+    expect(badgeLabel("disputes", 11)).toBe("11 споров ждут ответа");
   });
 
-  it("считает только заказы, где нужен продавец", () => {
+  it("считает только заказы и споры, где нужен продавец", () => {
     expect([...ORDER_ACTION_STATUSES]).toEqual(["PAID", "RETURN_REQUESTED", "RETURNING"]);
+    expect([...DISPUTE_ACTION_STATUSES]).toEqual(["OPEN", "EVIDENCE_COLLECTION"]);
   });
 });
