@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AikoLogo } from "@/components/AikoLogo";
+import { badgeText, totalUnread, type UnreadCounts } from "@/lib/unread";
 
 const PRIMARY = [
   { href: "/", label: "Главная" },
@@ -24,20 +25,36 @@ const USER_MENU: [string, string][] = [
   ["/privacy", "Конфиденциальность"],
 ];
 
+/** Красный кружок с числом непрочитанного. Пусто, если ничего нового. */
+function Badge({ n, label }: { n: number; label: string }) {
+  const text = badgeText(n);
+  if (!text) return null;
+  return (
+    <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-semibold leading-5 text-white" aria-label={`${label}: ${text}`}>
+      {text}
+    </span>
+  );
+}
+
 const navLink = "rounded-lg px-3 py-2 text-sm font-medium text-ink-soft hover:bg-surface-muted hover:text-ink";
 
 export function Header() {
   const [user, setUser] = useState<{ name?: string; email: string; role: string } | null>(null);
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [unread, setUnread] = useState<UnreadCounts | null>(null);
   const pathname = usePathname();
 
+  // Перечитываем при каждом переходе: прочитал сообщения, и цифра в шапке сразу уменьшилась.
   useEffect(() => {
     void fetch("/api/auth/me")
       .then((r) => r.json())
-      .then((d) => setUser(d.user ?? null))
+      .then((d) => {
+        setUser(d.user ?? null);
+        setUnread(d.unread ?? null);
+      })
       .catch(() => setUser(null));
-  }, []);
+  }, [pathname]);
 
   // Close menus on navigation and on Escape.
   useEffect(() => {
@@ -99,18 +116,22 @@ export function Header() {
                 aria-expanded={open}
                 aria-haspopup="menu"
               >
-                {user.name ?? user.email.split("@")[0]} ▾
+                {user.name ?? user.email.split("@")[0]}
+                <Badge n={totalUnread(unread)} label="Новых" /> ▾
               </button>
               {open && (
                 <div className="card absolute right-0 mt-2 w-52 overflow-hidden p-1 shadow-float" role="menu">
                   {USER_MENU.map(([href, label]) => (
-                    <Link key={href} href={href} role="menuitem" className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
+                    <Link key={href} href={href} role="menuitem" className="flex items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
                       {label}
+                      {href === "/messages" && <Badge n={unread?.messages ?? 0} label="Новых сообщений" />}
+                      {href === "/notifications" && <Badge n={unread?.other ?? 0} label="Новых уведомлений" />}
                     </Link>
                   ))}
                   {(user.role === "SELLER" || user.role === "ADMIN") && (
-                    <Link href="/seller" role="menuitem" className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
+                    <Link href={(unread?.sellerMessages ?? 0) > 0 ? "/seller/messages" : "/seller"} role="menuitem" className="flex items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
                       Кабинет продавца
+                      <Badge n={unread?.sellerMessages ?? 0} label="Новых сообщений от покупателей" />
                     </Link>
                   )}
                   <button
