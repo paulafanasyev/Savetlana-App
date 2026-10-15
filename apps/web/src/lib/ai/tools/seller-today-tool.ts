@@ -7,7 +7,7 @@
  */
 import { prisma } from "../../prisma";
 import { sellerTodoItems } from "../../domains/seller-badges";
-import { BUYER_TODO_STATUSES, buyerTodo } from "../../buyer-todo";
+import { BUYER_TODO_STATUSES, buyerTodo, fullyReviewedOrders } from "../../buyer-todo";
 import { BUYER_TODAY_EMPTY, todayAnswer } from "../today-command";
 import type { ToolContext, ToolDefinition, ToolResult } from "./registry";
 import { looseObjectSchema } from "./registry";
@@ -32,9 +32,17 @@ export const sellerTodayTool: ToolDefinition = {
       where: { buyerId: ctx.userId, status: { in: [...BUYER_TODO_STATUSES] } },
       orderBy: { createdAt: "desc" },
       take: BUYER_ORDERS_MAX,
-      select: { id: true, number: true, status: true },
+      select: { id: true, number: true, status: true, items: { select: { productId: true } } },
     });
-    const items = buyerTodo(orders);
+    // Про отзыв не напоминаем, если покупатель уже написал его на все товары заказа.
+    const delivered = orders.filter((o) => o.status === "DELIVERED");
+    const reviews = delivered.length
+      ? await prisma.review.findMany({
+          where: { authorId: ctx.userId, orderId: { in: delivered.map((o) => o.id) } },
+          select: { orderId: true, productId: true },
+        })
+      : [];
+    const items = buyerTodo(orders, fullyReviewedOrders(delivered, reviews));
     return { ok: true, data: { todo: items }, summary: todayAnswer(items, BUYER_TODAY_EMPTY), verification: "VERIFIED" };
   },
 };

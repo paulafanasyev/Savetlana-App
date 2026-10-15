@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BUYER_TODO_STATUSES, buyerTodo } from "../src/lib/buyer-todo";
+import { BUYER_TODO_STATUSES, buyerTodo, fullyReviewedOrders } from "../src/lib/buyer-todo";
 import { BUYER_TODAY_EMPTY, todayAnswer } from "../src/lib/ai/today-command";
 
 const order = (id: string, status: string, number = `SV-${id}`) => ({ id, number, status });
@@ -30,5 +30,24 @@ describe("покупатель: что сделать сегодня", () => {
   it("отвечает списком или говорит, что дел нет", () => {
     expect(todayAnswer(buyerTodo([order("o1", "CREATED")]), BUYER_TODAY_EMPTY)).toBe("Вот что стоит сделать сегодня, по порядку:\n1. [Оплатите заказ SV-o1](/orders/o1)");
     expect(todayAnswer([], BUYER_TODAY_EMPTY)).toBe(BUYER_TODAY_EMPTY);
+  });
+
+  it("не напоминает про отзыв, если он уже написан на все товары", () => {
+    const delivered = [
+      { id: "d1", items: [{ productId: "p1" }, { productId: "p2" }] },
+      { id: "d2", items: [{ productId: "p3" }] },
+    ];
+    const reviewed = fullyReviewedOrders(delivered, [
+      { orderId: "d1", productId: "p1" },
+      { orderId: "d1", productId: "p2" },
+      { orderId: "d2", productId: "p9" },
+      { orderId: null, productId: "p3" },
+    ]);
+    expect([...reviewed]).toEqual(["d1"]);
+    expect(buyerTodo([order("d1", "DELIVERED"), order("d2", "DELIVERED")], reviewed)).toEqual([
+      { kind: "review", href: "/orders/d2", text: "Заказ SV-d2 доставлен: проверьте товар и оставьте отзыв" },
+    ]);
+    expect(buyerTodo([order("d1", "DELIVERED")], reviewed)).toEqual([]);
+    expect(fullyReviewedOrders([{ id: "e", items: [] }], []).size).toBe(0);
   });
 });
