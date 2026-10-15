@@ -28,6 +28,7 @@ import { ExternalAiProvider } from "./providers/external";
 import { MockAiProvider, MockEmbeddingProvider } from "./providers/mock";
 import { SvetlanaModelProvider } from "./providers/svetlana";
 import { SvetlanaCoreProvider } from "./providers/core";
+import { draftCommandFirst } from "./providers/draft-first";
 import { classifyText, logOutboundPayload, redactForModel } from "./privacy";
 
 // --- Provider registry ----------------------------------------------------
@@ -35,7 +36,8 @@ import { classifyText, logOutboundPayload, redactForModel } from "./privacy";
 // passes the evaluation suite (see providers/svetlana.ts).
 const coreProvider = new SvetlanaCoreProvider();
 const externalProvider = new ExternalAiProvider();
-const mockProvider = new MockAiProvider();
+// Явная просьба продавца «создай карточку: …» разбирается раньше остальных правил.
+const mockProvider = draftCommandFirst(new MockAiProvider());
 const mockEmbedding = new MockEmbeddingProvider();
 
 /**
