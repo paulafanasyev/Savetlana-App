@@ -8,7 +8,7 @@
  */
 import { notify } from "./notifications";
 
-export type PasswordChangeWay = "reset" | "admin_recovery";
+export type PasswordChangeWay = "reset" | "admin_recovery" | "change";
 
 export const PASSWORD_CHANGED_TITLE = "Пароль изменён";
 
@@ -25,7 +25,12 @@ export function moscowTime(at: Date): string {
 }
 
 export function passwordChangedMessage(way: PasswordChangeWay, at: Date): { title: string; body: string } {
-  const how = way === "reset" ? "по ссылке из письма для сброса пароля" : "через аварийное восстановление администратора";
+  const how =
+    way === "reset"
+      ? "по ссылке из письма для сброса пароля"
+      : way === "change"
+        ? "в настройках профиля"
+        : "через аварийное восстановление администратора";
   const parts = [
     `Пароль от вашего аккаунта АИКО изменён ${moscowTime(at)} (время московское) ${how}.`,
     "Все входы на других устройствах завершены.",
