@@ -64,12 +64,14 @@ async function planExtend(ctx: ToolContext, args: Record<string, unknown>): Prom
   const products = await prisma.product.findMany({
     where: { sellerId: ctx.sellerProfileId, status: "ACTIVE", oldPriceKopecks: { not: null }, ...(endingIds ? { id: { in: endingIds } } : {}) },
     orderBy: { updatedAt: "desc" },
-    take: 200,
+    // Заканчивающиеся берём все (их список уже ограничен), остальные: последние 200.
+    take: endingIds ? Math.max(endingIds.length, 1) : 200,
     select: { id: true, title: true, priceKopecks: true, oldPriceKopecks: true },
   });
   const onPromo = matchProducts(products.filter((p) => promoState(p).onPromo), query);
   if (onPromo.length === 0) {
-    return { ok: false, error: query ? `среди товаров со скидкой нет «${query}»` : "сейчас ни на один ваш товар скидка не идёт" };
+    const where = endingIds ? "среди скидок, которые закончатся в течение суток," : "среди товаров со скидкой";
+    return { ok: false, error: query ? `${where} нет «${query}»` : "сейчас ни на один ваш товар скидка не идёт" };
   }
   const rows: Planned[] = [];
   const skipped: string[] = [];
