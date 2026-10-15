@@ -10,8 +10,32 @@ export interface VacancyDraftResult {
   attrs: Record<string, string>;
 }
 
-/** «Светлана составит вакансию»: текст своими словами превращается в заполненную форму. */
-export function VacancyDraftHelper({ onDraft }: { onDraft: (draft: VacancyDraftResult) => void }) {
+const COPY = {
+  vacancy: {
+    endpoint: "/api/classifieds/vacancy-draft",
+    heading: "Светлана составит вакансию",
+    hint: "Напишите своими словами: кого ищете, что делать, сколько платите, какой график и как оформляете. Например: «Ищем курьера на авто компании, 80-100 тыс на руки, 5/2, без опыта, по ТК».",
+    aria: "Вакансия своими словами",
+    login: "Войдите в аккаунт, чтобы Светлана помогла с вакансией",
+    fail: "Не получилось составить вакансию",
+    model: "Светлана заполнила форму ниже. Проверьте каждое поле: она брала условия только из вашего текста.",
+    rules: "Светлана разложила ваш текст по полям формы ниже. Проверьте их и допишите, чего не хватает.",
+  },
+  resume: {
+    endpoint: "/api/classifieds/resume-draft",
+    heading: "Светлана составит резюме",
+    hint: "Напишите своими словами: кем хотите работать, какой у вас опыт и что умеете, какую зарплату и график хотите. Например: «Ищу работу водителем, опыт 7 лет, права B и C, хочу от 80 тыс на руки, 5/2». Телефон и паспортные данные сюда писать не нужно.",
+    aria: "Резюме своими словами",
+    login: "Войдите в аккаунт, чтобы Светлана помогла с резюме",
+    fail: "Не получилось составить резюме",
+    model: "Светлана заполнила форму ниже. Проверьте каждое поле: она брала опыт и условия только из вашего текста.",
+    rules: "Светлана разложила ваш текст по полям формы ниже. Проверьте их и допишите, чего не хватает.",
+  },
+} as const;
+
+/** «Светлана составит вакансию» или «…резюме»: текст своими словами превращается в заполненную форму. */
+export function VacancyDraftHelper({ onDraft, kind = "vacancy" }: { onDraft: (draft: VacancyDraftResult) => void; kind?: "vacancy" | "resume" }) {
+  const copy = COPY[kind];
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -22,22 +46,20 @@ export function VacancyDraftHelper({ onDraft }: { onDraft: (draft: VacancyDraftR
     setError(null);
     setNote(null);
     try {
-      const res = await fetch("/api/classifieds/vacancy-draft", {
+      const res = await fetch(copy.endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.status === 401) throw new Error("Войдите в аккаунт, чтобы Светлана помогла с вакансией");
-      if (!res.ok || !data.draft) throw new Error(data.error ?? "Не получилось составить вакансию");
+      if (res.status === 401) throw new Error(copy.login);
+      if (!res.ok || !data.draft) throw new Error(data.error ?? copy.fail);
       onDraft(data.draft as VacancyDraftResult);
       setNote(
-        data.source === "model"
-          ? "Светлана заполнила форму ниже. Проверьте каждое поле: она брала условия только из вашего текста."
-          : "Светлана разложила ваш текст по полям формы ниже. Проверьте их и допишите, чего не хватает.",
+        data.source === "model" ? copy.model : copy.rules,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не получилось составить вакансию");
+      setError(e instanceof Error ? e.message : copy.fail);
     } finally {
       setBusy(false);
     }
@@ -45,17 +67,15 @@ export function VacancyDraftHelper({ onDraft }: { onDraft: (draft: VacancyDraftR
 
   return (
     <div className="space-y-2 rounded-lg border border-violet-200 bg-violet-50 p-4">
-      <p className="text-sm font-semibold">Светлана составит вакансию</p>
-      <p className="text-xs text-zinc-600">
-        Напишите своими словами: кого ищете, что делать, сколько платите, какой график и как оформляете. Например: «Ищем курьера на авто компании, 80-100 тыс на руки, 5/2, без опыта, по ТК».
-      </p>
+      <p className="text-sm font-semibold">{copy.heading}</p>
+      <p className="text-xs text-zinc-600">{copy.hint}</p>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={3}
         maxLength={2000}
         className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-        aria-label="Вакансия своими словами"
+        aria-label={copy.aria}
       />
       <button
         type="button"
