@@ -10,8 +10,16 @@
  * что ключом нельзя заставить нас сходить куда-то ещё.
  *
  * Отсюда берём: артикул (offerId), название, описание, цену и цену до скидки,
- * фото, бренд, штрихкод. Остатки Маркет отдаёт по каждому магазину отдельно,
- * их не переносим: продавец подтверждает наличие у нас сам.
+ * фото, бренд, штрихкод и остатки.
+ *
+ * Остатки берём осторожно, чтобы не продать то, чего нет:
+ * - только магазины, которые возят со своего склада (FBS, DBS, Экспресс).
+ *   Товар на складе Маркета (FBY) продавец отправить нашему покупателю не может;
+ * - по складу берём «доступно к заказу», а если его нет, «годный» остаток;
+ * - если склад или магазин в ответе не один, берём наибольшее число по одному
+ *   складу, а не сумму: при группах складов Маркет повторяет один остаток.
+ * Если остатки получить не удалось, количество остаётся пустым, и продавец
+ * указывает наличие сам. Подтверждение наличия у нас всё равно за продавцом.
  */
 import type { ImportItem } from "../catalog-import-parse";
 
@@ -145,4 +153,75 @@ export async function fetchOfferPage(apiKey: string, businessId: number, pageTok
   }
   const next = data.result?.paging?.nextPageToken;
   return { items, problems, nextPageToken: typeof next === "string" && next ? next : null };
+}
+
+/** Магазины, которые отгружают со склада продавца. */
+const OWN_WAREHOUSE_PLACEMENTS = new Set(["FBS", "DBS", "EXPRESS"]);
+const MAX_CAMPAIGNS = 10;
+
+/** Магазины (кампании) кабинета, где остатки лежат у самого продавца. */
+export async function ownWarehouseCampaigns(apiKey: string, businessId: number, deps: Deps = {}): Promise<number[]> {
+  const data = (await call("/v2/campaigns?page=1&pageSize=50", apiKey, { method: "GET" }, deps)) as {
+    campaigns?: { id?: unknown; placementType?: unknown; business?: { id?: unknown } }[];
+  };
+  const ids: number[] = [];
+  for (const c of data.campaigns ?? []) {
+    const id = Number(c.id);
+    if (Number(c.business?.id) !== businessId || !Number.isSafeInteger(id) || id <= 0) continue;
+    if (typeof c.placementType !== "string" || !OWN_WAREHOUSE_PLACEMENTS.has(c.placementType)) continue;
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return ids.slice(0, MAX_CAMPAIGNS);
+}
+
+interface StockResponse {
+  result?: { warehouses?: { offers?: { offerId?: unknown; stocks?: { type?: unknown; count?: unknown }[] }[] }[] };
+}
+
+function countOf(stocks: { type?: unknown; count?: unknown }[] | undefined, type: string): number | undefined {
+  const row = (stocks ?? []).find((s) => s.type === type);
+  const n = Number(row?.count);
+  return row && Number.isFinite(n) && n >= 0 ? Math.floor(n) : undefined;
+}
+
+/** Ответы Маркета по магазинам в «артикул → остаток». Чистая функция. */
+export function combineStocks(responses: StockResponse[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of responses) {
+    for (const w of r.result?.warehouses ?? []) {
+      for (const o of w.offers ?? []) {
+        const id = typeof o.offerId === "string" ? o.offerId.trim() : "";
+        if (!id) continue;
+        const n = countOf(o.stocks, "AVAILABLE") ?? countOf(o.stocks, "FIT");
+        if (n === undefined) continue;
+        out.set(id, Math.max(out.get(id) ?? 0, n));
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Остатки для страницы товаров. null, если Маркет их не отдал: тогда
+ * количество не трогаем. Ошибка отдельного магазина не ломает перенос.
+ */
+export async function fetchStocks(apiKey: string, businessId: number, offerIds: string[], deps: Deps = {}): Promise<Map<string, number> | null> {
+  const ids = [...new Set(offerIds.map((id) => id.trim()).filter(Boolean))].slice(0, 500);
+  if (ids.length === 0) return null;
+  const campaigns = await ownWarehouseCampaigns(apiKey, businessId, deps);
+  const responses: StockResponse[] = [];
+  for (const campaignId of campaigns) {
+    try {
+      responses.push((await call(`/v2/campaigns/${campaignId}/offers/stocks`, apiKey, { method: "POST", body: { offerIds: ids } }, deps)) as StockResponse);
+    } catch {
+      // Магазин без доступа к остаткам или временная ошибка: пропускаем.
+    }
+  }
+  return responses.length > 0 ? combineStocks(responses) : null;
+}
+
+/** Проставляет остатки в строки переноса. Неизвестный остаток не трогаем. */
+export function withStocks(items: ImportItem[], stocks: Map<string, number> | null): ImportItem[] {
+  if (!stocks) return items;
+  return items.map((it) => (stocks.has(it.article) ? { ...it, quantity: stocks.get(it.article) } : it));
 }

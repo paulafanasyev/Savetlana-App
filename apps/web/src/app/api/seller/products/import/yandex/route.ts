@@ -1,14 +1,14 @@
 import { apiRoute, jsonBody } from "@/lib/api-helpers";
 import { requireSeller } from "@/lib/auth";
 import { consumeRateLimit, tooMany } from "@/lib/domains/rate-limits";
-import { fetchOfferPage, listBusinesses, MarketError, validApiKey } from "@/lib/domains/yandex-market";
+import { fetchOfferPage, fetchStocks, listBusinesses, MarketError, validApiKey, withStocks } from "@/lib/domains/yandex-market";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 /**
  * Перенос с Маркета по ключу. Без businessId: список кабинетов продавца.
- * С businessId: одна страница товаров. Ключ нигде не сохраняется.
+ * С businessId: одна страница товаров с остатками. Ключ нигде не сохраняется.
  */
 export const POST = apiRoute(async (request) => {
   const { sellerId } = await requireSeller(request);
@@ -23,7 +23,10 @@ export const POST = apiRoute(async (request) => {
       return Response.json({ businesses: await listBusinesses(apiKey) });
     }
     const pageToken = typeof body.pageToken === "string" && /^[\w.~=+/-]{1,500}$/.test(body.pageToken) ? body.pageToken : null;
-    return Response.json(await fetchOfferPage(apiKey, businessId, pageToken));
+    const page = await fetchOfferPage(apiKey, businessId, pageToken);
+    // Без остатков перенос всё равно идёт: наличие продавец укажет сам.
+    const stocks = await fetchStocks(apiKey, businessId, page.items.map((i) => i.article)).catch(() => null);
+    return Response.json({ ...page, items: withStocks(page.items, stocks), stocksLoaded: stocks !== null });
   } catch (e) {
     if (e instanceof MarketError) return Response.json({ error: e.message, code: "market_error" }, { status: e.status });
     throw e;
