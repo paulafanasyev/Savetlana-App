@@ -36,6 +36,12 @@ describe("просьба создать карточку важнее други
     expect(r.toolCalls?.[0]?.arguments).toMatchObject({ priceRub: 990 });
   });
 
+  it("понимает просьбу в конце сообщения", async () => {
+    const r = await provider.complete(ask("Термокружка 450 мл, доставка по России, за 990, оформи карточку"));
+    expect(r.toolCalls?.[0]?.name).toBe("create_product_draft");
+    expect(r.toolCalls?.[0]?.arguments).toMatchObject({ priceRub: 990 });
+  });
+
   it("без описания товара просит его, а не создаёт пустой черновик", async () => {
     const r = await provider.complete(ask("создай карточку"));
     expect(r.toolCalls).toBeUndefined();

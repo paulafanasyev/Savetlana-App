@@ -12,11 +12,9 @@
  * публикует его продавец.
  */
 import { inventedNumbers, parseProductText, valueInText, type CategoryOption } from "./product-compose";
+import { parseDraftCommand } from "../ai/draft-command";
 
 const MAX_ATTRS = 15;
-
-const COMMAND =
-  /^[\s\S]*?(?:созда(?:й|йте|ть)|сдела(?:й|йте|ть)|оформ(?:и|ите|ить)|вылож(?:и|ите|ить)|состав(?:ь|ьте|ить)|добав(?:ь|ьте|ить))\s+(?:мне\s+|пожалуйста\s+)?(?:нов(?:ую|ый|ое)\s+)?(?:карточк[а-яё]*|товар[а-яё]*|объявлени[а-яё]*)(?:\s+(?:товара|на|для))?\s*[:—–-]?\s*/i;
 
 export interface ChatDraftSource {
   /** Текст о товаре без самой просьбы. */
@@ -25,15 +23,15 @@ export interface ChatDraftSource {
   command: boolean;
 }
 
-/** «Светлана, создай карточку: чайник Bosch, 2990 ₽» → «чайник Bosch, 2990 ₽». */
+/**
+ * «Светлана, создай карточку: чайник Bosch, 2990 ₽» и «Чайник Bosch, 2990 ₽,
+ * оформи карточку» → «чайник Bosch, 2990 ₽».
+ */
 export function chatDraftSource(message: string): ChatDraftSource | null {
   const raw = message.replace(/\r/g, "").trim();
   if (!raw) return null;
-  const m = COMMAND.exec(raw);
-  if (m) {
-    const text = raw.slice(m[0].length).trim();
-    return text.length >= 3 ? { text, command: true } : null;
-  }
+  const command = parseDraftCommand(raw);
+  if (command) return command.product.length >= 3 ? { text: command.product, command: true } : null;
   return { text: raw, command: false };
 }
 

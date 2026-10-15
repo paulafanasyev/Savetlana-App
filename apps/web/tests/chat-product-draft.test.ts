@@ -12,6 +12,7 @@ describe("карточка из чата со Светланой", () => {
     expect(chatDraftSource("Оформи карточку товара чайник Bosch за 2990")).toEqual({ text: "чайник Bosch за 2990", command: true });
     expect(chatDraftSource("создай карточку")).toBeNull();
     expect(chatDraftSource("да, давай")).toEqual({ text: "да, давай", command: false });
+    expect(chatDraftSource("Вот кроссовки Nike, 42 размер, 7990 ₽, оформи карточку")).toEqual({ text: "кроссовки Nike, 42 размер, 7990 ₽", command: true });
   });
 
   it("заполняет цену, категорию и характеристики из сообщения", () => {

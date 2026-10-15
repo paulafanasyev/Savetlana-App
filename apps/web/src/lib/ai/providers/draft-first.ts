@@ -5,18 +5,16 @@
  * раньше уходила в правило про доставку или подарки, потому что они
  * проверяются первыми, и черновик не создавался. Теперь сообщение, которое
  * начинается с просьбы создать карточку, сразу идёт в создание черновика.
- * Просьба должна стоять в начале: «как добавить товар?» и «сделай товар
- * дешевле» сюда не попадают.
+ * Просьбу понимаем и в конце сообщения («Вот кроссовки…, оформи карточку»),
+ * а «как добавить товар?» и «сделай товар дешевле» сюда не попадают
+ * (lib/ai/draft-command.ts).
  */
 import type { AiCompleteRequest, AiCompleteResponse, AiProvider } from "../types";
 import { draftArgs } from "./mock";
-
-const DRAFT_COMMAND =
-  /^(?:светлана[\s,!.:]*)?(?:пожалуйста[\s,]*)?(?:(?:созда(?:й|йте)|оформ(?:и|ите)|вылож(?:и|ите)|состав(?:ь|ьте))\s+(?:мне\s+|пожалуйста\s+)?(?:нов(?:ую|ый|ое)\s+)?(?:карточк|товар|объявлени)|сдела(?:й|йте)\s+(?:мне\s+|пожалуйста\s+)?(?:нов(?:ую|ое)\s+)?(?:карточк|объявлени))/i;
+import { parseDraftCommand } from "../draft-command";
 
 export function isDraftCommand(text: string): boolean {
-  const t = text.trim();
-  return DRAFT_COMMAND.test(t) && !/в корзин|в избранн/i.test(t);
+  return parseDraftCommand(text) !== null;
 }
 
 const ASK_DETAILS =
@@ -40,8 +38,10 @@ export function draftCommandFirst(inner: AiProvider): AiProvider {
     embed: inner.embed?.bind(inner),
     async complete(request: AiCompleteRequest): Promise<AiCompleteResponse> {
       const last = request.messages[request.messages.length - 1];
-      if (request.jsonMode || last?.role !== "user" || !isDraftCommand(last.content)) return inner.complete(request);
-      const args = draftArgs(last.content);
+      const command = request.jsonMode || last?.role !== "user" ? null : parseDraftCommand(last.content);
+      if (!command) return inner.complete(request);
+      // Просьба может стоять в конце: разбираем только текст о товаре.
+      const args = draftArgs(command.product ? `карточка ${command.product}` : "");
       if (!args.title) return respond(ASK_DETAILS);
       return respond(`Готовлю черновик карточки «${args.title}». Публикация останется за вами.`, [
         { id: `call_draft_first_${Date.now()}`, name: "create_product_draft", arguments: args },
