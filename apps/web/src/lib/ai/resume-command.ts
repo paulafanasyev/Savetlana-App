@@ -7,6 +7,7 @@
  */
 import { describeAttrs } from "../classified-fields";
 import type { VacancyDraft } from "../domains/vacancy-draft";
+import { removedNote, type ContactKind } from "../domains/contact-scrub";
 
 const COMMAND =
   /(?:^|[\s,.!?;:—–-]+)(?:пожалуйста[\s,]+)?(?:состав(?:ь|ьте)|созда(?:й|йте)|напиш(?:и|ите)|сдела(?:й|йте)|оформ(?:и|ите)|помоги(?:те)?\s+(?:составить|написать|сделать|оформить))\s+(?:мне\s+|пожалуйста\s+)?(?:моё\s+|мое\s+)?резюме(?:[\s,]+пожалуйста)?\s*[:—–-]?\s*/i;
@@ -38,7 +39,7 @@ export function resumeFormLink(text: string): string {
 }
 
 /** Ответ Светланы: что она разложила по полям и как опубликовать. */
-export function resumeChatReply(draft: VacancyDraft, text: string): string {
+export function resumeChatReply(draft: VacancyDraft, text: string, removed: ContactKind[] = []): string {
   const lines = ["Составила резюме по вашим словам:"];
   if (draft.title) lines.push(`• Должность: ${draft.title}`);
   if (draft.category && draft.category !== "Другое") lines.push(`• Раздел: ${draft.category}`);
@@ -53,6 +54,8 @@ export function resumeChatReply(draft: VacancyDraft, text: string): string {
   if (!draft.salaryFrom) missing.push("желаемую зарплату");
   if (!draft.attrs.schedule) missing.push("график");
   if (missing.length) lines.push(`Не нашла в тексте: ${missing.join(", ")}. Их можно дописать в форме.`);
+  const note = removedNote(removed);
+  if (note) lines.push(note);
   lines.push(
     text.length <= MAX_LINK_TEXT
       ? `Чтобы опубликовать: [Открыть форму резюме](${resumeFormLink(text)}). Там уже выбран раздел «Работа → Резюме» и вставлен ваш текст. Нажмите «Заполнить форму», проверьте поля, выберите город и опубликуйте.`
