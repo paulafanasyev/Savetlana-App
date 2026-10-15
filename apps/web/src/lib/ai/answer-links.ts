@@ -85,7 +85,7 @@ export function linkProducts(answer: string, items: ShownItem[]): string {
 }
 
 /** Акции продавца: товары, на которые скидку запустили или сняли. */
-const PROMO_TOOLS: Record<string, string> = { start_promotion: "started", end_promotion: "endedItems" };
+const PROMO_TOOLS: Record<string, string> = { start_promotion: "started", end_promotion: "endedItems", extend_promotion: "extended" };
 /** Раздел «Акции»: там все товары со скидкой, даже те, что не влезли в ответ. */
 export const PROMO_PAGE = "/seller/promotions";
 
@@ -132,7 +132,7 @@ function productIdOf(data: unknown): string | null {
 /**
  * Ответ после кнопки «Подтвердить действие»: те же ссылки на товары, а после
  * публикации ещё и ссылка на саму карточку, чтобы продавец сразу её увидел.
- * После запуска или снятия скидки добавляем ссылку на раздел «Акции»: в ответе
+ * После запуска, продления или снятия скидки добавляем ссылку на раздел «Акции»: в ответе
  * показаны не больше пяти товаров, а там видны все.
  */
 export function confirmedAnswerWithLinks(answer: string, steps: StepLike[]): string {

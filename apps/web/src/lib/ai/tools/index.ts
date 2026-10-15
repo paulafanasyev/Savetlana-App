@@ -12,7 +12,8 @@ import { publishProblems, publishProblemsMessage } from "../../domains/publish-c
 import { getSellerOnboardingGate } from "../../domains/seller-onboarding";
 import { searchProducts } from "../../domains/catalog";
 import { sellerCustomerReport, SEGMENT_LABELS } from "../../domains/seller-crm";
-import { startPromotionTool, endPromotionTool, sellerMessagesTool } from "./engagement";
+import { startPromotionTool, endPromotionTool, sellerMessagesTool, confirmPreview as engagementPreview } from "./engagement";
+import { extendPromotionTool, extendPromotionPreview } from "./promo-extend-tool";
 import { promoState } from "../../domains/engagement-rules";
 import { ruText } from "../ru-text";
 
@@ -316,6 +317,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   sellerMessagesTool,
   startPromotionTool,
   endPromotionTool,
+  verifiedOnly(extendPromotionTool, "продлевать акции"),
   verifiedOnly(confirmInventoryTool, "подтверждать наличие и выставлять товар"),
   extendListingTool,
   // Из чата: сообщение продавца разбирается составителем карточек.
@@ -370,4 +372,8 @@ export function registerAllTools(): void {
 registerAllTools();
 
 export { toolRegistry };
-export { confirmPreview } from "./engagement";
+
+/** Текст перед «Подтвердить действие»: продление скидки описывает свой инструмент, остальное engagement. */
+export async function confirmPreview(toolName: string, ctx: ToolContext, args: Record<string, unknown>) {
+  return (await extendPromotionPreview(toolName, ctx, args)) ?? engagementPreview(toolName, ctx, args);
+}
