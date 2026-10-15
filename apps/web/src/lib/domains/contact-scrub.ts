@@ -69,3 +69,20 @@ export function removedNote(removed: ContactKind[]): string | null {
   if (!removed.length) return null;
   return `Убрала из текста ${describeRemoved(removed)}: объявление видят все, а такие данные собирают мошенники. Работодатели напишут вам через сообщения на сайте.`;
 }
+
+/**
+ * Резюме (раздел «Работа», «ищу работу»): чистим заголовок и описание. У вакансий
+ * телефон обычно рабочий, а не личный, его оставляем: там его видит антифрод.
+ */
+export function scrubResumeListing<D extends string | null | undefined>(ad: {
+  vertical: string;
+  dealType: string;
+  title: string;
+  description: D;
+}): { title: string; description: D; removed: ContactKind[] } {
+  if (ad.vertical !== "JOB" || ad.dealType !== "RESUME") return { title: ad.title, description: ad.description, removed: [] };
+  const title = scrubContacts(ad.title);
+  const description = ad.description ? scrubContacts(ad.description) : null;
+  const removed = ORDER.filter((k) => title.removed.includes(k) || (description?.removed.includes(k) ?? false));
+  return { title: title.text, description: (description ? description.text : ad.description) as D, removed };
+}
