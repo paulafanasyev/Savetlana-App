@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answerWithLinks, confirmedAnswerWithLinks, linkProducts, shownProducts } from "../src/lib/ai/answer-links";
+import { answerWithLinks, confirmedAnswerWithLinks, linkProducts, promoProducts, shownProducts } from "../src/lib/ai/answer-links";
 import { chatDraftReport, draftProductId } from "../src/lib/domains/chat-product-draft";
 import { splitChatLinks } from "../src/lib/chat-links";
 
@@ -49,5 +49,19 @@ describe("ссылки на карточки в ответах Светланы"
     const report = chatDraftReport({ title: "Кружка", priceRub: 300 }, null, "d_123");
     expect(report).toContain("[Открыть черновик](/seller/products/d_123/edit)");
     expect(chatDraftReport({ title: "Кружка" }, null)).toContain("раздел «Товары»");
+  });
+  it("в ответах про скидки названия товаров ведут на карточки", () => {
+    const started = [step("start_promotion", { started: [{ id: "p_sn", title: "Кроссовки Nike", fromKopecks: 500000, toKopecks: 425000 }], skipped: [], notified: 0, endsAt: null })];
+    expect(promoProducts(started)).toEqual([{ productId: "p_sn", title: "Кроссовки Nike" }]);
+    expect(confirmedAnswerWithLinks("Скидка 15% запущена на 1 товар:\n• «Кроссовки Nike»: 5 000 ₽ → 4 250 ₽", started)).toBe(
+      "Скидка 15% запущена на 1 товар:\n• «[Кроссовки Nike](/product/p_sn)»: 5 000 ₽ → 4 250 ₽",
+    );
+    const ended = [step("end_promotion", { ended: ["Кроссовки Nike"], endedItems: [{ id: "p_sn", title: "Кроссовки Nike" }] })];
+    expect(confirmedAnswerWithLinks("Обычная цена возвращена: 1 товар.\n• «Кроссовки Nike»", ended)).toBe(
+      "Обычная цена возвращена: 1 товар.\n• «[Кроссовки Nike](/product/p_sn)»",
+    );
+    expect(promoProducts([step("end_promotion", { ended: ["Кроссовки Nike"] })])).toEqual([]);
+    expect(promoProducts([step("start_promotion", { started: [{ id: "p_sn", title: "Кроссовки Nike" }] }, false)])).toEqual([]);
+    expect(confirmedAnswerWithLinks("«Кроссовки Nike»", [step("start_promotion", { started: [{ id: "../x", title: "Кроссовки Nike" }] })])).toBe("«Кроссовки Nike»");
   });
 });

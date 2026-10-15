@@ -5,6 +5,7 @@
  * Ссылку ставим только на товар из результата инструмента этого же ответа,
  * а не на то, что модель назвала сама: так ссылка всегда ведёт на настоящую
  * карточку. Работает одинаково для встроенной Светланы и внешней модели.
+ * Товары из акций продавца (запуск и снятие скидки) тоже получают ссылки.
  */
 import { extractShownItems, type ShownItem } from "./references";
 import { splitChatLinks, type ChatPart } from "../chat-links";
@@ -83,8 +84,37 @@ export function linkProducts(answer: string, items: ShownItem[]): string {
   return parts.map((p) => ("href" in p ? `[${p.text}](${p.href})` : p.text)).join("");
 }
 
+/** Акции продавца: товары, на которые скидку запустили или сняли. */
+const PROMO_TOOLS: Record<string, string> = { start_promotion: "started", end_promotion: "endedItems" };
+
+/** Товары из успешных запусков и снятий скидки в этом ответе. */
+export function promoProducts(steps: StepLike[]): ShownItem[] {
+  const out: ShownItem[] = [];
+  for (const step of steps) {
+    const key = PROMO_TOOLS[step.toolName];
+    if (!step.result.ok || !key) continue;
+    const data = step.result.data;
+    if (!data || typeof data !== "object") continue;
+    const list = (data as Record<string, unknown>)[key];
+    if (!Array.isArray(list)) continue;
+    for (const row of list) {
+      if (!row || typeof row !== "object") continue;
+      const { id, title } = row as Record<string, unknown>;
+      if (typeof id === "string" && typeof title === "string") out.push({ productId: id, title });
+    }
+  }
+  return out;
+}
+
 export function answerWithLinks(answer: string, steps: StepLike[]): string {
-  return linkProducts(answer, shownProducts(steps));
+  const items = shownProducts(steps);
+  const seen = new Set(items.map((i) => i.productId));
+  for (const item of promoProducts(steps)) {
+    if (seen.has(item.productId)) continue;
+    seen.add(item.productId);
+    items.push(item);
+  }
+  return linkProducts(answer, items);
 }
 
 function productIdOf(data: unknown): string | null {

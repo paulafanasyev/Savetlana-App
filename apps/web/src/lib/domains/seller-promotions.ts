@@ -119,6 +119,8 @@ export async function endPromotion(input: { sellerId: string; actorId: string; p
     select: { id: true, title: true, priceKopecks: true, oldPriceKopecks: true },
   });
   const ended: string[] = [];
+  // С id: по ним Светлана ставит в ответе ссылки на карточки.
+  const endedItems: { id: string; title: string }[] = [];
   for (const p of products) {
     if (!promoState(p).onPromo || !p.oldPriceKopecks) continue;
     try {
@@ -130,9 +132,10 @@ export async function endPromotion(input: { sellerId: string; actorId: string; p
     }
     await prisma.product.update({ where: { id: p.id }, data: { oldPriceKopecks: null } });
     ended.push(p.title);
+    endedItems.push({ id: p.id, title: p.title });
   }
   if (ended.length === 0) throw new UserFacingError("Среди выбранных товаров нет товаров со скидкой", 400);
-  return { ended };
+  return { ended, endedItems };
 }
 
 /**
