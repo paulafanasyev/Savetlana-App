@@ -6,6 +6,7 @@ import { isVkLive } from "@/lib/domains/vk";
 import { isEsiaLive } from "@/lib/domains/esia";
 import { VerifyEmailButton } from "./verify-email-button";
 import { LogoutAllButton } from "./logout-all-button";
+import { ChangePasswordForm } from "./change-password-form";
 
 export const dynamic = "force-dynamic";
 
@@ -185,11 +186,15 @@ function SecuritySection() {
     <section className="card mb-6 p-6">
       <h2 className="mb-2 text-lg font-semibold text-ink">Безопасность аккаунта</h2>
       <p className="mb-4 text-xs text-ink-soft">
-        Управление сеансами и восстановление доступа.
+        Пароль, сеансы и восстановление доступа.
       </p>
       <ul className="space-y-3 text-sm">
+        <li className="flex flex-wrap items-center justify-between gap-x-4 rounded-lg bg-surface-muted px-4 py-3">
+          <span className="font-medium text-ink">Сменить пароль</span>
+          <ChangePasswordForm />
+        </li>
         <li className="flex items-center justify-between gap-4 rounded-lg bg-surface-muted px-4 py-3">
-          <span className="font-medium text-ink">Сбросить пароль</span>
+          <span className="font-medium text-ink">Забыли пароль</span>
           <a href="/password-reset" className="text-xs font-medium text-svetlana-700 hover:underline">
             Восстановить
           </a>
