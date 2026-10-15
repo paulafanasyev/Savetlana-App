@@ -15,18 +15,21 @@ describe("что сделать сегодня в кабинете продав�
       { kind: "messages", href: "/seller/messages", text: "5 непрочитанных сообщений" },
     ]);
     expect(sellerTodo({ orders: 0, messages: 0, disputes: 0 })).toEqual([]);
-    expect(sellerTodo({ orders: 0, messages: 0, disputes: 0 }, [])).toEqual([]);
+    expect(sellerTodo({ orders: 0, messages: 0, disputes: 0 }, { out: 0, low: 0 })).toEqual([]);
     expect(sellerTodo({ orders: 0, messages: 0, disputes: 0 }, null)).toEqual([]);
   });
 
   it("в конце товары, которые закончились или скоро закончатся", () => {
-    const stock = [{ quantity: 0 }, { quantity: 2 }, { quantity: 1 }, { quantity: 3 }];
-    expect(sellerTodo({ orders: 1, messages: 0, disputes: 0 }, stock)).toEqual([
+    expect(sellerTodo({ orders: 1, messages: 0, disputes: 0 }, { out: 1, low: 3 })).toEqual([
       { kind: "orders", href: "/seller/orders", text: "1 заказ ждёт действия" },
       { kind: "stock_out", href: STOCK_HREF, text: "1 товар закончился" },
       { kind: "stock_low", href: STOCK_HREF, text: "3 товара скоро закончатся" },
     ]);
     expect(STOCK_HREF).toBe("/seller/products/bulk");
+    // больше десяти: считаются все, а не только первые 10 из списка на главной
+    expect(sellerTodo({ orders: 0, messages: 0, disputes: 0 }, { out: 0, low: 25 })).toEqual([
+      { kind: "stock_low", href: STOCK_HREF, text: "25 товаров скоро закончатся" },
+    ]);
   });
 
   it("склоняет слово «товар»", () => {
