@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getClassifiedPublic, incrementViews } from "@/lib/domains/classifieds";
-import { replyWording } from "@/lib/domains/classified-replies";
+import { replyCountsByAd, replyWording } from "@/lib/domains/classified-replies";
+import { resolveSession, serverRequest } from "@/lib/auth";
 import { describeAttrs, priceText } from "@/lib/classified-fields";
 import { rub, timeAgo } from "@/lib/format";
 import { dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
@@ -19,6 +20,10 @@ export default async function ClassifiedDetailPage({
   await incrementViews(id).catch(() => {});
   const ad = await getClassifiedPublic(id);
   if (!ad) notFound();
+  // Автору вместо «Откликнуться» показываем его отклики.
+  const { user: viewer } = await resolveSession(await serverRequest()).catch(() => ({ user: null }));
+  const isAuthor = Boolean(viewer && viewer.id === ad.authorId);
+  const myReplies = isAuthor && viewer ? (await replyCountsByAd(viewer.id)).get(ad.id) : undefined;
 
   // Характеристики с русскими подписями; VIN показываем не целиком.
   const isJob = ad.vertical === "JOB";
@@ -113,9 +118,16 @@ export default async function ClassifiedDetailPage({
             <p className="mt-1 text-zinc-500">Опубликовано {timeAgo(ad.createdAt)}</p>
           </div>
 
-          <Link href={`/classifieds/${ad.id}/chat`} className="btn btn-primary mt-4 inline-block">
-            {replyWording(ad).button}
-          </Link>
+          {isAuthor ? (
+            <Link href={`/classifieds/${ad.id}/replies`} className="btn btn-primary mt-4 inline-block">
+              {ad.vertical === "JOB" ? "Отклики" : "Сообщения"}: {myReplies?.threads ?? 0}
+              {myReplies && myReplies.unread > 0 ? `, новых ${myReplies.unread}` : ""}
+            </Link>
+          ) : (
+            <Link href={`/classifieds/${ad.id}/chat`} className="btn btn-primary mt-4 inline-block">
+              {replyWording(ad).button}
+            </Link>
+          )}
 
           {isJob ? (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
