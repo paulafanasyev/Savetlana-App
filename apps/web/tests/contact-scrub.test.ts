@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeRemoved, removedNote, scrubContacts } from "../src/lib/domains/contact-scrub";
+import { describeRemoved, removedNote, scrubContacts, scrubResumeListing } from "../src/lib/domains/contact-scrub";
 import { resumeChatReply } from "../src/lib/ai/resume-command";
 
 describe("контакты не попадают в текст резюме", () => {
@@ -33,5 +33,18 @@ describe("контакты не попадают в текст резюме", ()
     const reply = resumeChatReply({ title: "Водитель", category: "Транспорт", description: "x", attrs: {} }, "ищу работу водителем", ["phone"]);
     expect(reply).toContain("Убрала из текста телефон");
     expect(reply).toContain("напишут вам через сообщения на сайте");
+  });
+
+  it("при публикации чистит только резюме", () => {
+    const resume = scrubResumeListing({
+      vertical: "JOB",
+      dealType: "RESUME",
+      title: "Водитель категории C, тел. 89123456789",
+      description: "Опыт 7 лет. Пишите на ivan@mail.ru",
+    });
+    expect(resume).toEqual({ title: "Водитель категории C", description: "Опыт 7 лет.", removed: ["phone", "email"] });
+    const vacancy = { vertical: "JOB", dealType: "VACANCY", title: "Нужен водитель", description: "Звоните 89123456789" };
+    expect(scrubResumeListing(vacancy)).toEqual({ title: vacancy.title, description: vacancy.description, removed: [] });
+    expect(scrubResumeListing({ vertical: "JOB", dealType: "RESUME", title: "Курьер на авто", description: undefined }).description).toBeUndefined();
   });
 });

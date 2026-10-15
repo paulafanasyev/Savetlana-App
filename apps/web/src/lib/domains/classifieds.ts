@@ -13,6 +13,10 @@
  *
  * Антифрод (шаг 2): каждое объявление перед публикацией проходит проверку
  * classified-guard. Опасное не публикуется, подозрительное уходит модератору.
+ *
+ * Резюме видят все, поэтому телефон, почту, мессенджеры, паспорт и СНИЛС из
+ * его текста убираем ещё до проверки (lib/domains/contact-scrub.ts):
+ * работодатель пишет соискателю через сообщения площадки.
  */
 import { prisma } from "../prisma";
 import { readObject, writeJson } from "../db/json";
@@ -29,6 +33,7 @@ import {
 import { audit } from "./audit";
 import type { ClassifiedVerdict } from "./classified-guard";
 import { recordSentToModeration, rejectIfBlocked, screenClassified } from "./classified-screening";
+import { scrubResumeListing } from "./contact-scrub";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -272,6 +277,10 @@ export async function createClassified(
 
   const attrs = validateAttrs(input.vertical, input.attrs ?? {});
   const priceKopecks = Math.max(0, Math.floor(input.priceKopecks ?? 0));
+  const cleaned = scrubResumeListing({ vertical: input.vertical, dealType: input.dealType, title: input.title.trim(), description: input.description });
+  const title = cleaned.title.trim();
+  const description = cleaned.description;
+  if (title.length < 5) throw new Error("title_too_short");
 
   // Антифрод: опасное объявление не создаётся, подозрительное ждёт модератора.
   const screening = await screenClassified({
@@ -279,8 +288,8 @@ export async function createClassified(
     cityId: city.id,
     vertical: input.vertical,
     dealType: input.dealType,
-    title: input.title.trim(),
-    description: input.description ?? null,
+    title,
+    description: description ?? null,
     category: input.category,
     priceKopecks,
     attrs,
@@ -295,8 +304,8 @@ export async function createClassified(
       dealType: input.dealType,
       authorId,
       sellerId: opts.sellerId,
-      title: input.title.trim(),
-      description: input.description?.trim() || null,
+      title,
+      description: description?.trim() || null,
       category: input.category,
       attrs: writeJson(attrs),
       priceKopecks,
@@ -332,7 +341,7 @@ export async function createClassified(
     after: { vertical: created.vertical, title: created.title, cityId: created.cityId, status: created.status },
   });
 
-  return Object.assign(created, { screening });
+  return Object.assign(created, { screening, contactsRemoved: cleaned.removed });
 }
 
 export async function publishClassified(classifiedId: string, authorId: string) {
