@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireSellerServer } from "@/lib/auth";
 import { CatalogImport } from "@/components/CatalogImport";
+import { MarketStockSync } from "@/components/MarketStockSync";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export default async function SellerCatalogImportPage() {
         <Link href="/seller/products" className="btn btn-ghost">К товарам</Link>
       </div>
       <CatalogImport />
+      <MarketStockSync />
     </main>
   );
 }
