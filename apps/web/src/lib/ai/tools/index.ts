@@ -66,6 +66,7 @@ import {
   recallMemoryTool,
 } from "./social";
 import { assessOrderRiskTool } from "./risk";
+import { composingProductDraftTool } from "./chat-draft";
 
 /**
  * Публикация через Светлану проходит ту же проверку, что и кнопки продавца:
@@ -317,7 +318,8 @@ const ALL_TOOLS: ToolDefinition[] = [
   endPromotionTool,
   verifiedOnly(confirmInventoryTool, "подтверждать наличие и выставлять товар"),
   extendListingTool,
-  createProductDraftTool,
+  // Из чата: сообщение продавца разбирается составителем карточек.
+  composingProductDraftTool(createProductDraftTool),
   guardedPublishProductTool,
   promoAwareChangePriceTool,
   sellerAwareAdvisePriceTool,
