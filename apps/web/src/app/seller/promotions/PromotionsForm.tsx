@@ -45,6 +45,8 @@ export function PromotionsForm({ products }: { products: Row[] }) {
   const chosen = products.filter((p) => selected.has(p.id));
   const toStart = chosen.filter((p) => !p.onPromo);
   const toEnd = chosen.filter((p) => p.onPromo);
+  // Продлевать можно только скидку со сроком: без срока она и так идёт.
+  const toExtend = toEnd.filter((p) => p.endsAt);
   const percentOk = Number.isInteger(percent) && percent >= 5 && percent <= 70;
 
   function toggle(id: string) {
@@ -57,7 +59,12 @@ export function PromotionsForm({ products }: { products: Row[] }) {
   }
 
   /** Цены меняются для покупателей сразу, поэтому перед запуском показываем итог и просим подтвердить. */
-  function confirmText(action: "start" | "end"): string {
+  function confirmText(action: "start" | "end" | "extend"): string {
+    if (action === "extend") {
+      const lines = toExtend.slice(0, 8).map((p) => `• ${p.title}: сейчас до ${p.endsAt ? dateText(p.endsAt) : "—"}`);
+      if (toExtend.length > 8) lines.push(`• и ещё ${toExtend.length - 8}`);
+      return [`Продлить скидку на ${daysLabel(days)}? Цены не изменятся, сдвинется только дата окончания. Вся акция не дольше 30 дней с запуска.`, ...lines].join("\n");
+    }
     const rows = action === "start" ? toStart : toEnd;
     const lines = rows.slice(0, 8).map((p) =>
       action === "start"
@@ -70,7 +77,7 @@ export function PromotionsForm({ products }: { products: Row[] }) {
     return [head, ...lines].join("\n");
   }
 
-  async function call(action: "start" | "end", ids: string[]) {
+  async function call(action: "start" | "end" | "extend", ids: string[]) {
     if (!window.confirm(confirmText(action))) return;
     setBusy(true);
     setError("");
@@ -88,6 +95,11 @@ export function PromotionsForm({ products }: { products: Row[] }) {
         if (json.endsAt) parts.push(`${dateText(json.endsAt)} обычная цена вернётся сама.`);
         if (json.skipped?.length) parts.push(`Пропущено: ${json.skipped.length} (уже со скидкой или цену недавно поднимали).`);
         parts.push(json.notified ? `Уведомили покупателей: ${json.notified}.` : "Эти товары пока никто не добавлял в избранное.");
+        setMessage(parts.join(" "));
+      } else if (action === "extend") {
+        const last = json.extended?.[json.extended.length - 1]?.endsAt;
+        const parts = [`Скидка продлена, товаров: ${json.extended?.length ?? 0}${last ? `, до ${dateText(last)}` : ""}.`];
+        if (json.skipped?.length) parts.push(`Не продлено: ${json.skipped.length} (${json.skipped[0].reason}).`);
         setMessage(parts.join(" "));
       } else {
         setMessage(`Обычная цена возвращена, товаров: ${json.ended?.length ?? 0}.`);
@@ -129,6 +141,9 @@ export function PromotionsForm({ products }: { products: Row[] }) {
         </button>
         <button className="btn btn-ghost" disabled={busy || toEnd.length === 0} onClick={() => void call("end", toEnd.map((p) => p.id))}>
           Вернуть обычную цену {toEnd.length > 0 ? `(${toEnd.length})` : ""}
+        </button>
+        <button className="btn btn-ghost" disabled={busy || days === 0 || toExtend.length === 0} onClick={() => void call("extend", toExtend.map((p) => p.id))} title={days === 0 ? "Выберите срок, на сколько продлить" : undefined}>
+          Продлить на {days > 0 ? daysLabel(days) : "…"} {toExtend.length > 0 ? `(${toExtend.length})` : ""}
         </button>
         {!percentOk && <span className="text-sm text-red-600">Скидка от 5 до 70%</span>}
       </div>
