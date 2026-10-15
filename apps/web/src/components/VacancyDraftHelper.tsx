@@ -34,9 +34,18 @@ const COPY = {
 } as const;
 
 /** «Светлана составит вакансию» или «…резюме»: текст своими словами превращается в заполненную форму. */
-export function VacancyDraftHelper({ onDraft, kind = "vacancy" }: { onDraft: (draft: VacancyDraftResult) => void; kind?: "vacancy" | "resume" }) {
+export function VacancyDraftHelper({
+  onDraft,
+  kind = "vacancy",
+  initialText = "",
+}: {
+  onDraft: (draft: VacancyDraftResult) => void;
+  kind?: "vacancy" | "resume";
+  /** Текст из чата со Светланой: уже вставлен, остаётся нажать «Заполнить форму». */
+  initialText?: string;
+}) {
   const copy = COPY[kind];
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
