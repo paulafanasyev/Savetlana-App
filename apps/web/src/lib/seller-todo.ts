@@ -62,6 +62,17 @@ export function endingSoon(ends: readonly Date[], now: Date = new Date(), hours 
   }).length;
 }
 
+/** На сколько дней кнопка «Продлить» в блоке дел продлевает заканчивающиеся скидки. */
+export const PROMO_EXTEND_DAYS = 7;
+
+/** Итог кнопки «Продлить»: «Продлено на 7 дней: 3 товара. Не продлено: 1 товар, …». */
+export function extendDoneText(extended: number, skipped: number): string {
+  const ok = Number.isFinite(extended) ? Math.max(0, Math.floor(extended)) : 0;
+  const no = Number.isFinite(skipped) ? Math.max(0, Math.floor(skipped)) : 0;
+  const head = ok > 0 ? `Продлено на ${PROMO_EXTEND_DAYS} дней: ${ok} ${goodsWord(ok)}.` : "Ничего не продлено.";
+  return no > 0 ? `${head} Не продлено: ${no} ${goodsWord(no)}, подробности в разделе «Акции».` : head;
+}
+
 /** «Скидка закончится в течение суток: 3 товара». */
 export function promoEndingText(count: number): string {
   const n = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
