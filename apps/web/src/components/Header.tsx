@@ -26,6 +26,20 @@ const USER_MENU: [string, string][] = [
   ["/privacy", "Конфиденциальность"],
 ];
 
+const TODO_REFRESH_MS = 60_000;
+
+/** Сколько дел по заказам ждут покупателя. null: не удалось узнать. */
+async function loadTodoCount(): Promise<number | null> {
+  try {
+    const r = await fetch("/api/orders/todo", { cache: "no-store" });
+    if (!r.ok) return null;
+    const items = parseBuyerTodoItems(await r.json());
+    return items ? buyerTodoCount(items) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Кружок с числом: красный для непрочитанного, янтарный для дел по заказам. Пусто, если 0. */
 function Badge({ n, label, tone = "red" }: { n: number; label: string; tone?: "red" | "amber" }) {
   const text = badgeText(n);
@@ -47,6 +61,7 @@ export function Header() {
   const [unread, setUnread] = useState<UnreadCounts | null>(null);
   const [todo, setTodo] = useState(0);
   const pathname = usePathname();
+  const signedIn = user !== null;
 
   // Перечитываем при каждом переходе: прочитал сообщения, и цифра в шапке сразу уменьшилась.
   // Дела по заказам спрашиваем только у вошедшего: оплатил заказ, и значок пропал.
@@ -59,9 +74,8 @@ export function Header() {
         setUser(d.user ?? null);
         setUnread(d.unread ?? null);
         if (!d.user) return setTodo(0);
-        const r = await fetch("/api/orders/todo", { cache: "no-store" });
-        const items = r.ok ? parseBuyerTodoItems(await r.json()) : null;
-        if (!cancelled) setTodo(items ? buyerTodoCount(items) : 0);
+        const n = await loadTodoCount();
+        if (!cancelled) setTodo(n ?? 0);
       })
       .catch(() => {
         if (!cancelled) setUser(null);
@@ -70,6 +84,25 @@ export function Header() {
       cancelled = true;
     };
   }, [pathname]);
+
+  // Сидит на одной странице: раз в минуту и при возвращении на вкладку пересчитываем дела.
+  useEffect(() => {
+    if (!signedIn) return;
+    let cancelled = false;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      void loadTodoCount().then((n) => {
+        if (!cancelled && n !== null) setTodo(n);
+      });
+    };
+    const timer = window.setInterval(refresh, TODO_REFRESH_MS);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [signedIn]);
 
   // Close menus on navigation and on Escape.
   useEffect(() => {
