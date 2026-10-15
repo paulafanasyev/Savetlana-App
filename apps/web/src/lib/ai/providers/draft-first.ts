@@ -14,6 +14,7 @@ import type { AiCompleteRequest, AiCompleteResponse, AiProvider } from "../types
 import { draftArgs } from "./mock";
 import { parseDraftCommand } from "../draft-command";
 import { parseResumeCommand, RESUME_ASK, resumeChatReply } from "../resume-command";
+import { scrubContacts } from "../../domains/contact-scrub";
 
 export function isDraftCommand(text: string): boolean {
   return parseDraftCommand(text) !== null;
@@ -47,7 +48,9 @@ export function draftCommandFirst(inner: AiProvider): AiProvider {
         if (resume.length < 15) return respond(RESUME_ASK);
         // Динамический импорт: составитель резюме сам обращается к шлюзу, статический импорт замкнул бы круг.
         const { parseResumeText } = await import("../../domains/resume-draft");
-        return respond(resumeChatReply(parseResumeText(resume), resume));
+        // Телефон и почту убираем и из ответа, и из ссылки на форму.
+        const clean = scrubContacts(resume);
+        return respond(resumeChatReply(parseResumeText(clean.text), clean.text, clean.removed));
       }
       const command = userText === null ? null : parseDraftCommand(userText);
       if (!command) return inner.complete(request);

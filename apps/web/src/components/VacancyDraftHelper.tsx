@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { removedNote, type ContactKind } from "@/lib/domains/contact-scrub";
 
 export interface VacancyDraftResult {
   title: string;
@@ -64,9 +65,8 @@ export function VacancyDraftHelper({
       if (res.status === 401) throw new Error(copy.login);
       if (!res.ok || !data.draft) throw new Error(data.error ?? copy.fail);
       onDraft(data.draft as VacancyDraftResult);
-      setNote(
-        data.source === "model" ? copy.model : copy.rules,
-      );
+      const removed = Array.isArray(data.removed) ? (data.removed as ContactKind[]) : [];
+      setNote([data.source === "model" ? copy.model : copy.rules, removedNote(removed)].filter(Boolean).join(" "));
     } catch (e) {
       setError(e instanceof Error ? e.message : copy.fail);
     } finally {
