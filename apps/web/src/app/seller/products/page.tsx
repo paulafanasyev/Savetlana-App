@@ -36,6 +36,7 @@ export default async function SellerProductsPage() {
           {products.length > 0 && <Link href="/seller/products/new" className="btn btn-primary">Добавить товар</Link>}
           <Link href="/seller/products/import" className="btn btn-ghost">Перенести с Ozon / WB / 1С</Link>
           {products.length > 0 && <Link href="/seller/products/bulk" className="btn btn-ghost">Массовое редактирование</Link>}
+          {products.some((p) => p.status === "DRAFT" && p.images.length === 0) && <Link href="/seller/products/photos" className="btn btn-ghost">Фото к черновикам</Link>}
           <Link href="/seller/products" className="btn btn-ghost">Обновить</Link>
         </div>
       </div>
