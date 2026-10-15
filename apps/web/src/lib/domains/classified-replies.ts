@@ -151,3 +151,29 @@ export async function listReplies(ad: { id: string; authorId: string }) {
   const names = new Map(users.map((u) => [u.id, u.name?.trim() || "Без имени"]));
   return inbox.filter((t) => names.has(t.counterpartId)).map((t) => ({ ...t, name: names.get(t.counterpartId) as string }));
 }
+
+/** Сколько у автора откликов по каждому объявлению: переписок всего и непрочитанных сообщений. */
+export async function replyCountsByAd(authorId: string): Promise<Map<string, { threads: number; unread: number }>> {
+  const rows = await prisma.notification.findMany({
+    where: { userId: authorId, kind: "classified_reply" },
+    orderBy: { createdAt: "desc" },
+    take: 5000,
+    select: { url: true, readAt: true },
+  });
+  const seen = new Map<string, Set<string>>();
+  const out = new Map<string, { threads: number; unread: number }>();
+  for (const r of rows) {
+    const m = /^\/classifieds\/([^/]+)\/replies\/([^/]+)$/.exec(r.url ?? "");
+    if (!m) continue;
+    const adId = m[1] as string;
+    const applicantId = m[2] as string;
+    const people = seen.get(adId) ?? new Set<string>();
+    seen.set(adId, people);
+    people.add(applicantId);
+    const c = out.get(adId) ?? { threads: 0, unread: 0 };
+    c.threads = people.size;
+    if (!r.readAt) c.unread += 1;
+    out.set(adId, c);
+  }
+  return out;
+}

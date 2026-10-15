@@ -87,6 +87,12 @@ export default async function ClassifiedsPage({
           >
             Разместить объявление
           </Link>
+          <Link
+            href="/classifieds/my"
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium"
+          >
+            Мои объявления
+          </Link>
         </div>
       </form>
 

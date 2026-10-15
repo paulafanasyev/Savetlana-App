@@ -9,6 +9,7 @@ import {
   authorThreadUrl,
   listReplies,
   loadReplyThread,
+  replyCountsByAd,
   replyWording,
   sendToApplicant,
   sendToAuthor,
@@ -77,6 +78,12 @@ describe("отклики на объявления", () => {
     expect(list).toHaveLength(1);
     expect(list[0].counterpartId).toBe(applicant.id);
     expect(list[0].name).toBe("Соискатель Иван");
+  });
+
+  it("счётчик откликов по объявлению для «Моих объявлений»", async () => {
+    await sendToAuthor(applicant, vacancyId, "Ещё вопрос: есть ли оплата бензина?");
+    const counts = await replyCountsByAd(employerId);
+    expect(counts.get(vacancyId)).toEqual({ threads: 1, unread: 1 });
   });
 
   it("опасное сообщение не уходит", async () => {
