@@ -46,15 +46,12 @@ export function stockText(kind: "stock_out" | "stock_low", count: number): strin
   return `${n} ${goodsWord(n)} ${verb}`;
 }
 
-export function sellerTodo(counts: TodoCounts, lowStock?: readonly { quantity: number }[] | null): TodoItem[] {
+export function sellerTodo(counts: TodoCounts, stock?: { out: number; low: number } | null): TodoItem[] {
   const items: TodoItem[] = ORDER.flatMap(({ kind, href }) => {
     const text = badgeLabel(kind, counts[kind]);
     return text ? [{ kind, href, text }] : [];
   });
-  const stock = lowStock ?? [];
-  const out = stock.filter((s) => s.quantity <= 0).length;
-  const low = stock.length - out;
-  for (const [kind, n] of [["stock_out", out], ["stock_low", low]] as const) {
+  for (const [kind, n] of [["stock_out", stock?.out ?? 0], ["stock_low", stock?.low ?? 0]] as const) {
     const text = stockText(kind, n);
     if (text) items.push({ kind, href: STOCK_HREF, text });
   }

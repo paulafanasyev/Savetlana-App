@@ -24,3 +24,26 @@ export async function sellerBadges(sellerId: string, sellerUserId: string): Prom
     return { orders: 0, messages: 0, disputes: 0 };
   }
 }
+
+/** Сколько штук считается «скоро закончится» (так же, как в отчёте продавца). */
+export const LOW_STOCK_MAX = 3;
+
+export interface StockCounts {
+  /** Опубликованные товары с остатком 0. */
+  out: number;
+  /** Опубликованные товары, которых осталось от 1 до LOW_STOCK_MAX штук. */
+  low: number;
+}
+
+/** Считает все такие товары магазина: список на главной показывает не больше 10. */
+export async function sellerStockCounts(sellerId: string): Promise<StockCounts> {
+  try {
+    const [out, low] = await Promise.all([
+      prisma.product.count({ where: { sellerId, status: "ACTIVE", inventory: { is: { quantity: { lte: 0 } } } } }),
+      prisma.product.count({ where: { sellerId, status: "ACTIVE", inventory: { is: { quantity: { gte: 1, lte: LOW_STOCK_MAX } } } } }),
+    ]);
+    return { out, low };
+  } catch {
+    return { out: 0, low: 0 };
+  }
+}
