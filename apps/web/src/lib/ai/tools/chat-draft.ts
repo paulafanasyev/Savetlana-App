@@ -7,7 +7,7 @@
  */
 import type { ToolContext, ToolDefinition, ToolResult } from "./registry";
 import { prisma } from "../../prisma";
-import { chatDraftArgs, chatDraftReport, chatDraftSource } from "../../domains/chat-product-draft";
+import { chatDraftArgs, chatDraftReport, chatDraftSource, draftProductId } from "../../domains/chat-product-draft";
 
 async function chatMessage(ctx: ToolContext): Promise<string> {
   if (!ctx.traceId || ctx.role === "guest") return "";
@@ -36,7 +36,8 @@ export function composingProductDraftTool(tool: ToolDefinition): ToolDefinition 
       const result = await tool.execute(ctx, next);
       if (!result.ok) return result;
       const categoryName = categories.find((c) => c.slug === next.categorySlug)?.name ?? null;
-      return { ...result, summary: chatDraftReport(next, categoryName) };
+      // Ссылка на черновик: продавец сразу открывает его и добавляет фото.
+      return { ...result, summary: chatDraftReport(next, categoryName, draftProductId(result.data)) };
     },
   };
 }
