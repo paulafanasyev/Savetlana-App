@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getClassifiedPublic, incrementViews } from "@/lib/domains/classifieds";
-import { describeAttrs } from "@/lib/classified-fields";
+import { describeAttrs, priceText } from "@/lib/classified-fields";
 import { rub, timeAgo } from "@/lib/format";
 import { dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
 import { resolveParams } from "@/lib/page-params";
@@ -20,7 +20,10 @@ export default async function ClassifiedDetailPage({
   if (!ad) notFound();
 
   // Характеристики с русскими подписями; VIN показываем не целиком.
-  const attrs = describeAttrs(ad.vertical, ad.attrs);
+  const isJob = ad.vertical === "JOB";
+  const companyName = typeof ad.attrs.companyName === "string" ? ad.attrs.companyName : "";
+  // У вакансии и резюме «зарплата до» и период уже в строке зарплаты, не повторяем их.
+  const attrs = describeAttrs(ad.vertical, ad.attrs).filter((row) => !isJob || (row.label !== "Зарплата до" && row.label !== "Зарплата за"));
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-6">
@@ -64,7 +67,13 @@ export default async function ClassifiedDetailPage({
             <span>{dealTypeLabel(ad.dealType)}</span>
           </div>
           <h1 className="text-xl font-bold">{ad.title}</h1>
-          {ad.priceKopecks > 0 ? (
+          {isJob ? (
+            <p className={`mt-2 font-bold ${ad.priceKopecks > 0 ? "text-2xl" : "text-lg text-zinc-500"}`}>
+              {ad.priceKopecks > 0 ? priceText(ad.dealType, ad.attrs, rub(ad.priceKopecks)) : "Зарплата по договорённости"}
+              {ad.priceKopecks > 0 && ad.attrs.salaryTax === "net" ? <span className="text-base font-medium text-zinc-500">, на руки</span> : null}
+              {ad.priceKopecks > 0 && ad.attrs.salaryTax === "gross" ? <span className="text-base font-medium text-zinc-500">, до вычета налогов</span> : null}
+            </p>
+          ) : ad.priceKopecks > 0 ? (
             <p className="mt-2 text-2xl font-bold">
               {rub(ad.priceKopecks)}
               {ad.dealType === "LONG_RENT" || ad.dealType === "RENT" ? <span className="text-base font-medium text-zinc-500"> в месяц</span> : null}
@@ -90,7 +99,10 @@ export default async function ClassifiedDetailPage({
           </div>
 
           <div className="mt-4 rounded-lg border border-zinc-200 p-3 text-sm">
-            <p className="font-medium">Автор: {ad.authorName ?? "Без имени"}</p>
+            <p className="font-medium">
+              {ad.dealType === "VACANCY" ? "Работодатель" : ad.dealType === "RESUME" ? "Соискатель" : "Автор"}:{" "}
+              {(ad.dealType === "VACANCY" && companyName) || ad.authorName || "Без имени"}
+            </p>
             {ad.sellerDisplayName && (
               <p className="mt-1 text-zinc-600">
                 {ad.sellerDisplayName}
@@ -100,10 +112,18 @@ export default async function ClassifiedDetailPage({
             <p className="mt-1 text-zinc-500">Опубликовано {timeAgo(ad.createdAt)}</p>
           </div>
 
-          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            Не переводите задаток и предоплату до встречи и просмотра. Не переходите по ссылкам «на оплату» и не
-            называйте коды из СМС.
-          </div>
+          {isJob ? (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              Честный работодатель не берёт денег за обучение, форму или оформление. Не отправляйте фото паспорта и
+              СНИЛС до собеседования, не оформляйте на себя банковские карты для других и не соглашайтесь «забирать
+              деньги у клиентов»: это вербовка мошенников.
+            </div>
+          ) : (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              Не переводите задаток и предоплату до встречи и просмотра. Не переходите по ссылкам «на оплату» и не
+              называйте коды из СМС.
+            </div>
+          )}
 
           {ad.vertical === "AUTO" && (
             <form action={`/api/classifieds/${ad.id}/vin-check`} method="POST" className="mt-4">
@@ -140,7 +160,7 @@ export default async function ClassifiedDetailPage({
 
       {attrs.length > 0 && (
         <section className="mt-8">
-          <h2 className="mb-2 text-lg font-semibold">Характеристики</h2>
+          <h2 className="mb-2 text-lg font-semibold">{isJob ? "Условия" : "Характеристики"}</h2>
           <dl className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
             {attrs.map((row) => (
               <div key={row.label} className="flex justify-between border-b border-zinc-100 py-1 text-sm">

@@ -10,7 +10,7 @@ import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-// Public search across real estate / auto / services. Geo filters are
+// Public search across real estate / auto / services / jobs. Geo filters are
 // first-class so a buyer always sees ads they can actually act on.
 export const GET = apiRoute(async (request) => {
   const url = new URL(request.url);
@@ -38,7 +38,7 @@ export const GET = apiRoute(async (request) => {
 
 /** Коды ошибок домена объявлений, которые можно объяснить человеку. */
 const CREATE_ERRORS: Record<string, string> = {
-  unknown_classified_vertical: "Выберите раздел: недвижимость, авто или услуги",
+  unknown_classified_vertical: "Выберите раздел: недвижимость, авто, услуги или работа",
   unknown_deal_type: "Выберите тип сделки",
   title_too_short: "Заголовок должен быть не короче 5 символов",
   unknown_city: "Выберите город из списка",
