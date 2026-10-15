@@ -2,7 +2,8 @@
  * «Что мне сделать сегодня?» для покупателя: что ждёт его действий по
  * заказам. Чистый модуль: из заказов делает список дел со ссылками.
  * Сначала споры, потом оплата, потом готовые к выдаче, доставленные
- * (проверить и оставить отзыв) и в конце заказы в пути.
+ * (проверить и оставить отзыв) и в конце заказы в пути. Доставленный заказ,
+ * на все товары которого покупатель уже написал отзыв, в список не попадает.
  */
 
 export interface BuyerOrderLike {
@@ -41,10 +42,22 @@ export const BUYER_TODO_STATUSES: readonly string[] = GROUPS.flatMap((g) => g.st
 const SAFE_ID = /^[A-Za-z0-9_-]{1,80}$/;
 const SAFE_NUMBER = /^[A-Za-zА-Яа-яЁё0-9 _#№-]{1,40}$/;
 
-export function buyerTodo(orders: readonly BuyerOrderLike[]): BuyerTodoItem[] {
+/**
+ * Доставленные заказы, где отзыв уже есть на каждый товар: напоминать про
+ * отзыв по ним не нужно.
+ */
+export function fullyReviewedOrders(
+  orders: readonly { id: string; items: readonly { productId: string }[] }[],
+  reviews: readonly { orderId: string | null; productId: string }[]
+): Set<string> {
+  const reviewed = new Set(reviews.map((r) => `${r.orderId}:${r.productId}`));
+  return new Set(orders.filter((o) => o.items.length > 0 && o.items.every((i) => reviewed.has(`${o.id}:${i.productId}`))).map((o) => o.id));
+}
+
+export function buyerTodo(orders: readonly BuyerOrderLike[], reviewed: ReadonlySet<string> = new Set()): BuyerTodoItem[] {
   const items: BuyerTodoItem[] = [];
   for (const group of GROUPS) {
-    const matched = orders.filter((o) => group.statuses.includes(o.status));
+    const matched = orders.filter((o) => group.statuses.includes(o.status) && !(group.kind === "review" && reviewed.has(o.id)));
     if (matched.length === 0) continue;
     const only = matched[0];
     if (matched.length === 1 && SAFE_ID.test(only.id) && SAFE_NUMBER.test(only.number)) {
