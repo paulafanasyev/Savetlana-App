@@ -19,6 +19,14 @@ async function post(body: Record<string, unknown>) {
   return data;
 }
 
+/** Пояснение об остатках для экрана проверки. Чистая функция. */
+export function stockSummary(items: ImportItem[], stocksLoaded: boolean): string {
+  const withStock = items.filter((i) => i.quantity !== undefined).length;
+  if (!stocksLoaded || withStock === 0) return "Яндекс Маркет, по ключу. Остатки Маркет не отдал: наличие укажете сами перед публикацией";
+  if (withStock === items.length) return "Яндекс Маркет, по ключу. Остатки со своего склада получены для всех товаров";
+  return `Яндекс Маркет, по ключу. Остатки со своего склада получены для ${withStock} из ${items.length} товаров, у остальных наличие укажете сами`;
+}
+
 /**
  * Перенос с Маркета по ключу API. Ключ хранится только в этой форме и
  * стирается сразу после загрузки товаров.
@@ -35,11 +43,13 @@ export function YandexMarketConnect({ disabled, onLoaded }: { disabled: boolean;
     const items: ImportItem[] = [];
     const problems: string[] = [];
     let pageToken: string | null = null;
+    let stocksLoaded = false;
     try {
       for (let guard = 0; guard < 200; guard++) {
         setBusy(`Загружаем с Маркета: ${items.length}…`);
-        const page = (await post({ apiKey, businessId, pageToken })) as { items: ImportItem[]; problems: string[]; nextPageToken: string | null };
+        const page = (await post({ apiKey, businessId, pageToken })) as { items: ImportItem[]; problems: string[]; nextPageToken: string | null; stocksLoaded?: boolean };
         items.push(...page.items);
+        if (page.stocksLoaded) stocksLoaded = true;
         problems.push(...page.problems);
         if (!page.nextPageToken || items.length > IMPORT_MAX_ITEMS) break;
         pageToken = page.nextPageToken;
@@ -51,7 +61,7 @@ export function YandexMarketConnect({ disabled, onLoaded }: { disabled: boolean;
         problems: problems.map((reason, i) => ({ row: i + 1, reason })),
         columns: {},
         format: "table",
-        source: "Яндекс Маркет, по ключу",
+        source: stockSummary(items, stocksLoaded),
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось загрузить товары с Маркета");
@@ -114,7 +124,7 @@ export function YandexMarketConnect({ disabled, onLoaded }: { disabled: boolean;
       )}
       {busy && <p className="text-ink-soft">{busy}</p>}
       {error && <div className="rounded-xl bg-red-50 p-3 text-bad" role="alert">{error}</div>}
-      <p className="text-xs text-ink-faint">Остатки с Маркета не переносятся: у Маркета они свои для каждого склада. Наличие вы подтвердите у нас перед публикацией.</p>
+      <p className="text-xs text-ink-faint">Остатки берём только со своего склада (FBS, DBS, Экспресс), товар на складе Маркета не считаем. Если складов несколько, берём наибольший остаток одного склада, а не сумму. Наличие вы всё равно подтвердите у нас перед публикацией.</p>
     </div>
   );
 }
