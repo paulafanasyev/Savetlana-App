@@ -25,6 +25,9 @@ export type NotificationKind =
   // Переписка покупателя и продавца (см. seller-messages.ts)
   | "seller_message"
   | "buyer_message"
+  // Отклики на объявления и ответы авторов (см. classified-replies.ts)
+  | "classified_reply"
+  | "classified_answer"
   // Продавцу: товар заканчивается или закончился (см. stock-alerts.ts)
   | "stock_low"
   // Безопасность аккаунта: сброс пароля, подтверждение почты, смена реквизитов.
