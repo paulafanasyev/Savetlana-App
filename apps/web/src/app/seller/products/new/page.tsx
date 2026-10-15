@@ -3,6 +3,7 @@ import { requireSellerServer } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureBaseCategories } from "@/lib/domains/categories";
 import { ProductDraftAssistant } from "@/components/ProductDraftAssistant";
+import { BulkProductCompose } from "@/components/BulkProductCompose";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export default async function NewSellerProductPage() {
         <Link href="/seller/products" className="btn btn-ghost">Все товары</Link>
       </div>
       <ProductDraftAssistant categories={categories} afterPublishHref="/seller/products" />
+      <BulkProductCompose categories={categories} />
       <section className="card space-y-2 p-5 text-sm text-ink-soft">
         <h2 className="text-base font-semibold text-ink">Чтобы товар хорошо продавался</h2>
         <ul className="list-disc space-y-1 pl-5">
