@@ -11,6 +11,7 @@ import {
 } from "@/lib/classified-fields";
 import { VacancyDraftHelper, type VacancyDraftResult } from "@/components/VacancyDraftHelper";
 import { removedNote, scrubResumeListing } from "@/lib/domains/contact-scrub";
+import { cityFromText } from "@/lib/city-from-text";
 
 export interface GeoOption {
   id: string;
@@ -120,6 +121,7 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [cityNote, setCityNote] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [resumeText, setResumeText] = useState("");
 
@@ -145,6 +147,15 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
     if (d.description) put("description", d.description.slice(0, 5000));
     if (d.salaryFrom) put("priceRub", String(d.salaryFrom));
     for (const [key, value] of Object.entries(d.attrs)) put(ATTR_PREFIX + key, value);
+    // «Живу в Казани»: город из текста, если он есть в справочнике. Нет в тексте: поле не трогаем.
+    const cities = tree.flatMap((d) => d.regions.flatMap((r) => r.cities));
+    const city = cityFromText(`${d.title}\n${d.description}`, cities);
+    if (city) {
+      put("cityId", city.id);
+      setCityNote(`Город «${city.name}» взяла из текста. Если не тот, выберите другой.`);
+    } else {
+      setCityNote(null);
+    }
   };
 
   const deals = DEALS[vertical] ?? [];
@@ -306,7 +317,7 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
 
       <div>
         <label className="mb-1 block text-sm font-medium" htmlFor="cityId">Город</label>
-        <select id="cityId" name="cityId" required className={input}>
+        <select id="cityId" name="cityId" required className={input} onChange={() => setCityNote(null)}>
           {tree.map((d) => (
             <optgroup key={d.id} label={d.name}>
               {d.regions.map((r) =>
@@ -319,6 +330,7 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
             </optgroup>
           ))}
         </select>
+        {cityNote && <p className="mt-1 text-xs text-svetlana-700" role="status">{cityNote}</p>}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
