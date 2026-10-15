@@ -52,7 +52,7 @@ export const GET = apiRoute(async (request, { params }) => {
 
   const reviews = await prisma.review.findMany({
     where: { orderId: order.id, authorId: user.id },
-    select: { productId: true },
+    select: { productId: true, isHidden: true },
   });
 
   return Response.json({
@@ -68,6 +68,8 @@ export const GET = apiRoute(async (request, { params }) => {
       payment: order.payment ?? null,
     },
     reviewedProductIds: reviews.map((r) => r.productId),
+    // Отзывы, скрытые антифродом до проверки: автору честно пишем «на проверке».
+    moderatedProductIds: reviews.filter((r) => r.isHidden).map((r) => r.productId),
     shipment: shipment
       ? {
           id: shipment.id,
