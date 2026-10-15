@@ -7,6 +7,9 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 import { summarizeReviews, listReviews } from "@/lib/domains/reviews";
 import { resolveParams } from "@/lib/page-params";
+import { resolveSession, serverRequest } from "@/lib/auth";
+import { loadReviewBox } from "@/lib/domains/review-state";
+import { ReviewForm } from "@/components/ReviewForm";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +45,8 @@ export default async function ProductPage({ params }: PageProps) {
 
   const reviewSummary = await summarizeReviews(product.id);
   const recentReviews = await listReviews(product.id, 6);
+  const { user: viewer } = await resolveSession(await serverRequest()).catch(() => ({ user: null }));
+  const myReview = await loadReviewBox(viewer?.id ?? null, product.id).catch(() => null);
   const attrs = safeJson(product.attributes);
   const outOfStock = !product.inventory || product.inventory.quantity <= 0 || product.inventory.availability === "OUT_OF_STOCK";
   const variants = product.variants.map((v) => ({ id: v.id, name: v.name, priceKopecks: product.priceKopecks + v.priceDelta }));
@@ -209,6 +214,19 @@ export default async function ProductPage({ params }: PageProps) {
             <p className="mt-3 text-xs text-ink-faint">
               Общее впечатление: {reviewSummary.sentimentBasis === "live-model" ? "по текстам отзывов" : reviewSummary.sentimentBasis === "rating-derived" ? "по оценкам покупателей" : "пока мало отзывов для вывода"}
             </p>
+          </div>
+        )}
+
+        {myReview?.kind === "can_review" && (
+          <div className="mt-6 card p-4">
+            <h3 className="mb-3 text-sm font-bold text-ink">Ваш отзыв о товаре</h3>
+            <ReviewForm productId={product.id} orderId={myReview.orderId} />
+          </div>
+        )}
+        {myReview?.kind === "moderation" && (
+          <div className="mt-6 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+            Ваш отзыв на проверке у модератора. Другие покупатели увидят его после проверки, обычно в течение суток.
+            Писать его заново не нужно.
           </div>
         )}
 
