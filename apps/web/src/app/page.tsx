@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
+import { BuyerTodo } from "@/components/BuyerTodo";
 import { prisma } from "@/lib/prisma";
 import { rub } from "@/lib/format";
 
@@ -27,6 +28,8 @@ export default async function Home() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 md:py-10">
+      {/* Дела по заказам: видны только вошедшему покупателю, если что-то ждёт его действия */}
+      <BuyerTodo showAllLink />
       {/* Hero: Светлана is the centrepiece, not a decoration */}
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="card flex flex-col justify-center gap-4 p-6 md:p-10">
