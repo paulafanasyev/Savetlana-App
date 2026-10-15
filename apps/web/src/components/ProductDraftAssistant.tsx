@@ -28,10 +28,51 @@ export function ProductDraftAssistant({ categories, afterPublishHref }: { catego
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [attributes, setAttributes] = useState<Record<string, string>>({});
+  const [rawText, setRawText] = useState("");
+  const [composing, setComposing] = useState(false);
+  const [composeNote, setComposeNote] = useState<string | null>(null);
 
   function reset() {
     setDraft(null); setTitle(""); setDescription(""); setPrice(""); setKeywords(""); setCategorySlug(""); setFiles([]);
+    setAttributes({}); setRawText(""); setComposeNote(null);
     setError(null); setWarning(null);
+  }
+
+  /** Светлана составляет карточку из текста продавца и заполняет поля ниже. */
+  async function compose() {
+    setComposing(true); setError(null); setComposeNote(null); setMessage(null);
+    try {
+      const response = await fetch("/api/seller/products/compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: rawText }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || !json.draft) throw new Error(json?.error ?? "Не получилось составить карточку");
+      const d = json.draft as { title: string; description: string; priceRub?: number; categorySlug: string; keywords: string[]; attributes: Record<string, string> };
+      setTitle(d.title);
+      setDescription(d.description);
+      setPrice(d.priceRub ? String(Math.round(d.priceRub)) : "");
+      setCategorySlug(categories.some((c) => c.slug === d.categorySlug) ? d.categorySlug : "");
+      setKeywords(d.keywords.join(", "));
+      setAttributes(d.attributes ?? {});
+      const missing = [
+        !d.priceRub && "цену",
+        !d.categorySlug && "категорию",
+        "фотографии",
+      ].filter(Boolean).join(", ");
+      setComposeNote(
+        (json.source === "model"
+          ? "Светлана составила карточку из вашего текста. Проверьте каждое поле."
+          : "Светлана разложила ваш текст по полям. Проверьте и при необходимости допишите описание.") +
+          ` Добавьте ${missing}.`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не получилось составить карточку");
+    } finally {
+      setComposing(false);
+    }
   }
 
   function chooseFiles(list: FileList | null) {
@@ -74,6 +115,7 @@ export function ProductDraftAssistant({ categories, afterPublishHref }: { catego
           priceRub: price ? Number(price) : undefined,
           categorySlug: categorySlug || undefined,
           keywords: keywords.split(",").map((item) => item.trim()).filter(Boolean),
+          attributes: Object.keys(attributes).length ? attributes : undefined,
         }),
       });
       const json = await response.json().catch(() => ({}));
@@ -127,6 +169,27 @@ export function ProductDraftAssistant({ categories, afterPublishHref }: { catego
           Перед публикацией проверьте карточку: за её содержание отвечает продавец.
         </p>
       </div>
+      {!draft && (
+        <div className="space-y-2 rounded-lg border border-svetlana-200 bg-svetlana-50 p-4">
+          <p className="text-sm font-semibold text-ink">Светлана составит карточку сама</p>
+          <p className="text-xs text-ink-faint">
+            Напишите о товаре своими словами, как другу: что это, бренд и модель, размер, цвет, состояние, цена.
+            Например: «Кроссовки Nike Air Max 90, белые, 42 размер, новые, 7990 ₽». Светлана берёт сведения только из вашего текста.
+          </p>
+          <textarea
+            value={rawText}
+            onChange={(e) => setRawText(e.target.value)}
+            rows={3}
+            maxLength={2000}
+            className="input w-full"
+            aria-label="Товар своими словами"
+          />
+          <button type="button" onClick={compose} disabled={composing || rawText.trim().length < 5} className="btn btn-primary">
+            {composing ? "Светлана составляет…" : "Составить карточку"}
+          </button>
+          {composeNote && <p className="text-xs text-green-800" role="status">{composeNote}</p>}
+        </div>
+      )}
       <div className="grid gap-3 md:grid-cols-2">
         <label className="md:col-span-2">
           <span className="mb-1 block text-xs text-ink-faint">Название товара *</span>
@@ -151,6 +214,28 @@ export function ProductDraftAssistant({ categories, afterPublishHref }: { catego
           <span className="mb-1 block text-xs text-ink-faint">Ключевые слова через запятую</span>
           <input value={keywords} onChange={(e) => setKeywords(e.target.value)} className="input w-full" disabled={Boolean(draft)} />
         </label>
+        {Object.keys(attributes).length > 0 && (
+          <div className="md:col-span-2">
+            <span className="mb-1 block text-xs text-ink-faint">Характеристики из вашего текста</span>
+            <ul className="flex flex-wrap gap-2">
+              {Object.entries(attributes).map(([key, value]) => (
+                <li key={key} className="chip flex items-center gap-1 text-xs">
+                  {key}: {value}
+                  {!draft && (
+                    <button
+                      type="button"
+                      aria-label={`Убрать «${key}»`}
+                      className="ml-1 text-ink-faint hover:text-ink"
+                      onClick={() => setAttributes(Object.fromEntries(Object.entries(attributes).filter(([k]) => k !== key)))}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <label className="md:col-span-2">
           <span className="mb-1 block text-xs text-ink-faint">Фотографии (до 8, первая главная)</span>
           <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => chooseFiles(e.target.files)} className="input w-full" disabled={Boolean(draft)} />
