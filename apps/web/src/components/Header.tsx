@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AikoLogo } from "@/components/AikoLogo";
 import { badgeText, totalUnread, type UnreadCounts } from "@/lib/unread";
+import { buyerTodoCount, parseBuyerTodoItems } from "@/lib/buyer-todo";
 
 const PRIMARY = [
   { href: "/", label: "Главная" },
@@ -25,12 +26,13 @@ const USER_MENU: [string, string][] = [
   ["/privacy", "Конфиденциальность"],
 ];
 
-/** Красный кружок с числом непрочитанного. Пусто, если ничего нового. */
-function Badge({ n, label }: { n: number; label: string }) {
+/** Кружок с числом: красный для непрочитанного, янтарный для дел по заказам. Пусто, если 0. */
+function Badge({ n, label, tone = "red" }: { n: number; label: string; tone?: "red" | "amber" }) {
   const text = badgeText(n);
   if (!text) return null;
+  const color = tone === "amber" ? "bg-amber-500" : "bg-red-600";
   return (
-    <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-semibold leading-5 text-white" aria-label={`${label}: ${text}`}>
+    <span className={`ml-1 inline-flex min-w-5 items-center justify-center rounded-full ${color} px-1.5 text-[11px] font-semibold leading-5 text-white`} aria-label={`${label}: ${text}`}>
       {text}
     </span>
   );
@@ -43,17 +45,30 @@ export function Header() {
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unread, setUnread] = useState<UnreadCounts | null>(null);
+  const [todo, setTodo] = useState(0);
   const pathname = usePathname();
 
   // Перечитываем при каждом переходе: прочитал сообщения, и цифра в шапке сразу уменьшилась.
+  // Дела по заказам спрашиваем только у вошедшего: оплатил заказ, и значок пропал.
   useEffect(() => {
+    let cancelled = false;
     void fetch("/api/auth/me")
       .then((r) => r.json())
-      .then((d) => {
+      .then(async (d) => {
+        if (cancelled) return;
         setUser(d.user ?? null);
         setUnread(d.unread ?? null);
+        if (!d.user) return setTodo(0);
+        const r = await fetch("/api/orders/todo", { cache: "no-store" });
+        const items = r.ok ? parseBuyerTodoItems(await r.json()) : null;
+        if (!cancelled) setTodo(items ? buyerTodoCount(items) : 0);
       })
-      .catch(() => setUser(null));
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [pathname]);
 
   // Close menus on navigation and on Escape.
@@ -117,13 +132,15 @@ export function Header() {
                 aria-haspopup="menu"
               >
                 {user.name ?? user.email.split("@")[0]}
-                <Badge n={totalUnread(unread)} label="Новых" /> ▾
+                <Badge n={totalUnread(unread)} label="Новых" />
+                <Badge n={todo} label="Дел по заказам" tone="amber" /> ▾
               </button>
               {open && (
                 <div className="card absolute right-0 mt-2 w-52 overflow-hidden p-1 shadow-float" role="menu">
                   {USER_MENU.map(([href, label]) => (
                     <Link key={href} href={href} role="menuitem" className="flex items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
                       {label}
+                      {href === "/orders" && <Badge n={todo} label="Дел по заказам" tone="amber" />}
                       {href === "/messages" && <Badge n={unread?.messages ?? 0} label="Новых сообщений" />}
                       {href === "/notifications" && <Badge n={unread?.other ?? 0} label="Новых уведомлений" />}
                     </Link>
@@ -166,6 +183,12 @@ export function Header() {
               {l.label}
             </Link>
           ))}
+          {user && (
+            <Link href="/orders" className="flex items-center rounded-lg px-3 py-3 text-base font-medium text-ink hover:bg-surface-muted">
+              Мои заказы
+              <Badge n={todo} label="Дел по заказам" tone="amber" />
+            </Link>
+          )}
           {!user && (
             <Link href="/register" className="btn btn-primary mb-1 mt-2 w-full justify-center">
               Регистрация
