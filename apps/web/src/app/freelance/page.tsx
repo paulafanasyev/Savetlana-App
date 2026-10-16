@@ -1,24 +1,38 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { rub, timeAgo } from "@/lib/format";
+import { readCityCookie } from "@/lib/my-city";
 import { FREELANCE_TABS, TAB_DEAL_TYPE, freelanceFormHref, freelanceHref, freelanceTab, pickCategory, type FreelanceTab } from "@/lib/freelance-section";
 
 export const dynamic = "force-dynamic";
 
+/** Добавляет к ссылке фильтр «только мой город». */
+function nearHref(href: string): string {
+  return `${href}${href.includes("?") ? "&" : "?"}near=1`;
+}
+
 /**
  * Раздел «Фриланс»: заказы на услуги (исполнители предлагают цену и срок) и
  * услуги исполнителей, с фильтром по категориям. Оплата через безопасную сделку.
+ *
+ * Многое делается удалённо, поэтому по умолчанию показываем всё. Если человек выбрал
+ * свой город, можно оставить только его (?near=1): ремонт, уборка, фотосъёмка.
  */
-export default async function FreelancePage({ searchParams }: { searchParams?: Promise<{ tab?: string; category?: string }> }) {
+export default async function FreelancePage({ searchParams }: { searchParams?: Promise<{ tab?: string; category?: string; near?: string }> }) {
   const sp = (await searchParams) ?? {};
   const tab = freelanceTab(sp.tab);
+  const myCity = readCityCookie((await headers()).get("cookie"));
+  const near = sp.near === "1" && myCity !== null;
+  const keep = (href: string) => (near ? nearHref(href) : href);
   const now = new Date();
   const base: Prisma.ClassifiedWhereInput = {
     vertical: "SERVICE",
     dealType: TAB_DEAL_TYPE[tab],
     status: "PUBLISHED",
     OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    ...(near && myCity ? { city: { name: myCity } } : {}),
   };
   const groups = await prisma.classified.groupBy({ by: ["category"], where: base, _count: { _all: true } });
   const categories = groups
@@ -32,6 +46,7 @@ export default async function FreelancePage({ searchParams }: { searchParams?: P
     select: { id: true, title: true, priceKopecks: true, createdAt: true, category: true, authorId: true, city: { select: { name: true } } },
   });
   const total = categories.reduce((s, c) => s + c.count, 0);
+  const what = tab === "orders" ? "заказов" : "услуг";
   return (
     <main className="mx-auto max-w-5xl space-y-5 px-4 py-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -45,19 +60,33 @@ export default async function FreelancePage({ searchParams }: { searchParams?: P
         </div>
       </div>
 
-      <nav className="flex gap-2" aria-label="Вкладки раздела">
-        {(Object.keys(FREELANCE_TABS) as FreelanceTab[]).map((t) => (
-          <Link key={t} href={freelanceHref(t)} className={t === tab ? "btn btn-primary px-3 py-2 text-sm" : "btn btn-ghost px-3 py-2 text-sm"} aria-current={t === tab ? "page" : undefined}>
-            {FREELANCE_TABS[t]}
-          </Link>
-        ))}
-      </nav>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <nav className="flex gap-2" aria-label="Вкладки раздела">
+          {(Object.keys(FREELANCE_TABS) as FreelanceTab[]).map((t) => (
+            <Link key={t} href={keep(freelanceHref(t))} className={t === tab ? "btn btn-primary px-3 py-2 text-sm" : "btn btn-ghost px-3 py-2 text-sm"} aria-current={t === tab ? "page" : undefined}>
+              {FREELANCE_TABS[t]}
+            </Link>
+          ))}
+        </nav>
+        {myCity ? (
+          <nav className="flex gap-1 text-sm" aria-label="Где искать">
+            <Link href={freelanceHref(tab, category ?? undefined)} className={!near ? "chip bg-svetlana-600 text-white" : "chip"} aria-current={!near ? "true" : undefined}>
+              Везде
+            </Link>
+            <Link href={nearHref(freelanceHref(tab, category ?? undefined))} className={near ? "chip bg-svetlana-600 text-white" : "chip"} aria-current={near ? "true" : undefined}>
+              Только {myCity}
+            </Link>
+          </nav>
+        ) : (
+          <Link href="/city" className="text-xs text-ink-soft underline">Выбрать свой город</Link>
+        )}
+      </div>
 
       {categories.length > 0 && (
         <nav className="flex flex-wrap gap-2 text-sm" aria-label="Категории">
-          <Link href={freelanceHref(tab)} className={!category ? "chip bg-svetlana-600 text-white" : "chip"}>Все · {total}</Link>
+          <Link href={keep(freelanceHref(tab))} className={!category ? "chip bg-svetlana-600 text-white" : "chip"}>Все · {total}</Link>
           {categories.map((c) => (
-            <Link key={c.name} href={freelanceHref(tab, c.name)} className={c.name === category ? "chip bg-svetlana-600 text-white" : "chip"}>
+            <Link key={c.name} href={keep(freelanceHref(tab, c.name))} className={c.name === category ? "chip bg-svetlana-600 text-white" : "chip"}>
               {c.name} · {c.count}
             </Link>
           ))}
@@ -66,7 +95,16 @@ export default async function FreelancePage({ searchParams }: { searchParams?: P
 
       {ads.length === 0 ? (
         <p className="card p-6 text-sm text-ink-soft">
-          {tab === "orders" ? "Заказов пока нет. Разместите свой: исполнители предложат цену и срок." : "Услуг пока нет."}
+          {near ? (
+            <>
+              В городе {myCity} {what} пока нет.{" "}
+              <Link href={freelanceHref(tab)} className="underline">Посмотреть везде</Link>
+            </>
+          ) : tab === "orders" ? (
+            "Заказов пока нет. Разместите свой: исполнители предложат цену и срок."
+          ) : (
+            "Услуг пока нет."
+          )}
         </p>
       ) : (
         <ul className="card divide-y divide-surface-line">
