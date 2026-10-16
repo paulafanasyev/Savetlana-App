@@ -3,7 +3,7 @@ import { siteUrl } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
-/** Поисковикам открыт каталог и карточки, закрыты кабинеты, корзина и служебные страницы. */
+/** Поисковикам открыт каталог и карточки, закрыты кабинеты, корзина, переписка и служебные страницы. */
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
@@ -31,6 +31,11 @@ export default function robots(): MetadataRoute.Robots {
           "/reset-password",
           "/verify-email",
           "/search",
+          "/promote",
+          "/classifieds/new",
+          "/classifieds/my",
+          "/classifieds/*/chat",
+          "/classifieds/*/replies",
         ],
       },
     ],
