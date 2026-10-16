@@ -4,6 +4,7 @@ import { createClassified, searchClassifieds } from "@/lib/domains/classifieds";
 import { UserFacingError } from "@/lib/domains/engagement-rules";
 import { explainClassified } from "@/lib/domains/classified-guard";
 import { MAX_PHOTOS, MAX_PHOTOS_TOTAL_BYTES, parseAttrs } from "@/lib/classified-fields";
+import { queryNumber } from "@/lib/query-number";
 import { storeUpload } from "@/lib/storage";
 import { sha256Hex } from "@/lib/utils";
 import { redirect } from "next/navigation";
@@ -12,28 +13,26 @@ export const dynamic = "force-dynamic";
 
 // Public search across real estate / auto / services / jobs. Geo filters are
 // first-class so a buyer always sees ads they can actually act on.
+// Пустой или отсутствующий числовой параметр означает «без фильтра», не ноль.
 export const GET = apiRoute(async (request) => {
   const url = new URL(request.url);
-  const toNum = (v: string | null): number | undefined => {
-    const n = Number(v);
-    return Number.isFinite(n) && n >= 0 ? n : undefined;
-  };
+  const p = url.searchParams;
 
   const result = await searchClassifieds({
-    vertical: url.searchParams.get("vertical") ?? undefined,
-    dealType: url.searchParams.get("dealType") ?? undefined,
-    regionId: url.searchParams.get("regionId") ?? undefined,
-    cityId: url.searchParams.get("cityId") ?? undefined,
-    metroId: url.searchParams.get("metroId") ?? undefined,
-    category: url.searchParams.get("category") ?? undefined,
-    priceMin: toNum(url.searchParams.get("priceMin")),
-    priceMax: toNum(url.searchParams.get("priceMax")),
-    query: url.searchParams.get("q") ?? undefined,
-    limit: toNum(url.searchParams.get("limit")) ?? 20,
-    cursor: url.searchParams.get("cursor") ?? undefined,
+    vertical: p.get("vertical") ?? undefined,
+    dealType: p.get("dealType") ?? undefined,
+    regionId: p.get("regionId") ?? undefined,
+    cityId: p.get("cityId") && p.get("cityId") !== "all" ? p.get("cityId") ?? undefined : undefined,
+    metroId: p.get("metroId") ?? undefined,
+    category: p.get("category") ?? undefined,
+    priceMin: queryNumber(p.get("priceMin")),
+    priceMax: queryNumber(p.get("priceMax")),
+    query: p.get("q") ?? undefined,
+    limit: queryNumber(p.get("limit")) ?? 20,
+    cursor: p.get("cursor") ?? undefined,
   });
 
-  return Response.json(result);
+  return Response.json(result, { headers: { "Cache-Control": "no-store" } });
 });
 
 /** Коды ошибок домена объявлений, которые можно объяснить человеку. */
