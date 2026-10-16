@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { rub, timeAgo } from "@/lib/format";
-import { FREELANCE_TABS, TAB_DEAL_TYPE, freelanceHref, freelanceTab, pickCategory, type FreelanceTab } from "@/lib/freelance-section";
+import { FREELANCE_TABS, TAB_DEAL_TYPE, freelanceFormHref, freelanceHref, freelanceTab, pickCategory, type FreelanceTab } from "@/lib/freelance-section";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +39,10 @@ export default async function FreelancePage({ searchParams }: { searchParams?: P
           <h1 className="text-2xl font-semibold">Фриланс</h1>
           <p className="text-sm text-ink-soft">🛡 Деньги за работу хранятся у площадки и приходят исполнителю только после приёмки.</p>
         </div>
-        <Link href="/classifieds/new" className="btn btn-primary">{tab === "orders" ? "Разместить заказ" : "Предложить услугу"}</Link>
+        <div className="flex flex-wrap gap-2">
+          {tab === "offers" && <Link href="/profile/portfolio" className="btn btn-ghost">Моё портфолио</Link>}
+          <Link href={freelanceFormHref(tab)} className="btn btn-primary">{tab === "orders" ? "Разместить заказ" : "Предложить услугу"}</Link>
+        </div>
       </div>
 
       <nav className="flex gap-2" aria-label="Вкладки раздела">

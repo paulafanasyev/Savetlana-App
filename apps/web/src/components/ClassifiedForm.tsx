@@ -12,6 +12,7 @@ import {
 import { VacancyDraftHelper, type VacancyDraftResult } from "@/components/VacancyDraftHelper";
 import { removedNote, scrubResumeListing } from "@/lib/domains/contact-scrub";
 import { cityFromText } from "@/lib/city-from-text";
+import { formPreset } from "@/lib/freelance-section";
 
 export interface GeoOption {
   id: string;
@@ -125,9 +126,17 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [resumeText, setResumeText] = useState("");
 
-  // Ссылка из чата со Светланой: /classifieds/new?resume=… открывает резюме с уже вставленным текстом.
+  // Ссылка из раздела «Фриланс»: /classifieds/new?vertical=SERVICE&deal=SERVICE_REQUEST открывает
+  // форму сразу на нужном типе. Ссылка из чата со Светланой: ?resume=… открывает
+  // резюме с уже вставленным текстом.
   useEffect(() => {
-    const text = new URLSearchParams(window.location.search).get("resume")?.trim() ?? "";
+    const query = new URLSearchParams(window.location.search);
+    const preset = formPreset(query.get("vertical"), query.get("deal"));
+    if (preset) {
+      setVertical(preset.vertical);
+      setDealType(preset.dealType);
+    }
+    const text = query.get("resume")?.trim() ?? "";
     if (text.length < 15) return;
     setVertical("JOB");
     setDealType("RESUME");
