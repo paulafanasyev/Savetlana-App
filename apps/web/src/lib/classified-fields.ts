@@ -284,8 +284,10 @@ export function priceLabel(dealType: string): string {
   return "Цена, ₽";
 }
 
-/** Как показать цену в карточке: у вакансии это зарплата «от». */
+/** Как показать цену в карточке: у аренды период, у вакансии зарплата «от». */
 export function priceText(dealType: string, attrs: Record<string, unknown>, formatted: string): string {
+  if (dealType === "LONG_RENT" || dealType === "RENT") return `${formatted} в месяц`;
+  if (dealType === "DAILY_RENT") return `${formatted} за сутки`;
   if (dealType !== "VACANCY" && dealType !== "RESUME") return formatted;
   const period: Record<string, string> = { month: " в месяц", shift: " за смену", hour: " в час" };
   const salaryTo = attrs.salaryTo;
