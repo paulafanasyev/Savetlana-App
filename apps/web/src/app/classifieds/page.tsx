@@ -21,6 +21,7 @@ interface NearbyAd {
   title: string;
   priceKopecks: number;
   vertical: string;
+  dealType: string;
   cityName: string;
   km: number;
   cover: string | null;
@@ -83,6 +84,7 @@ export default async function ClassifiedsPage({
           title: true,
           priceKopecks: true,
           vertical: true,
+          dealType: true,
           city: { select: { name: true } },
           images: { select: { url: true }, orderBy: { isCover: "desc" }, take: 1 },
         },
@@ -93,6 +95,7 @@ export default async function ClassifiedsPage({
           title: r.title,
           priceKopecks: r.priceKopecks,
           vertical: r.vertical,
+          dealType: r.dealType,
           cityName: r.city.name,
           km: kmByName.get(normalize(r.city.name)) ?? 0,
           cover: r.images[0]?.url ?? null,
@@ -276,7 +279,7 @@ export default async function ClassifiedsPage({
                   )}
                   <div className="p-3">
                     <h3 className="line-clamp-2 text-sm font-semibold hover:underline">{ad.title}</h3>
-                    <p className="mt-1 text-sm font-bold">{ad.priceKopecks > 0 ? rub(ad.priceKopecks) : "Цена не указана"}</p>
+                    <p className="mt-1 text-sm font-bold">{ad.priceKopecks > 0 ? priceText(ad.dealType, {}, rub(ad.priceKopecks)) : "Цена не указана"}</p>
                     <p className="mt-1 text-xs text-zinc-600">{ad.cityName} · ≈ {ad.km} км</p>
                   </div>
                 </Link>
