@@ -11,16 +11,16 @@ import { resolveParams } from "@/lib/page-params";
 import { isBidAd } from "@/lib/freelance-bids";
 import { isDemoAd, locationLine } from "@/lib/location-line";
 import { adMeta } from "@/lib/ad-meta";
-import { isAdActive } from "@/lib/ad-active";
+import { canRenew, expiryLabel, isAdActive, RENEW_DAYS } from "@/lib/ad-active";
 import { prisma } from "@/lib/prisma";
 import { BidForm } from "./BidForm";
 
 export const dynamic = "force-dynamic";
 
-/** Срок объявления истёк (30 дней с публикации): его уже нет в поиске, но ссылка могла остаться. */
-async function adExpired(id: string): Promise<boolean> {
+/** Срок объявления (30 дней с публикации). Истёкшего уже нет в поиске, но ссылка могла остаться. */
+async function adExpiresAt(id: string): Promise<Date | null> {
   const row = await prisma.classified.findUnique({ where: { id }, select: { expiresAt: true } }).catch(() => null);
-  return row ? !isAdActive(row.expiresAt) : false;
+  return row?.expiresAt ?? null;
 }
 
 /** Свой заголовок и описание: для поиска и превью ссылки в мессенджерах. */
@@ -34,7 +34,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     cityName: ad.cityName,
     description: ad.description,
     demo: isDemoAd(ad.attrs),
-    expired: await adExpired(ad.id),
+    expired: !isAdActive(await adExpiresAt(ad.id)),
   });
   return {
     title: { absolute: m.title },
@@ -63,7 +63,12 @@ export default async function ClassifiedDetailPage({
   // Пример от площадки: написать автору нельзя, вместо кнопки честное пояснение.
   const demo = isDemoAd(ad.attrs);
   // Истёкшее объявление: честно говорим, что оно уже не действует, и не зовём писать.
-  const expired = await adExpired(ad.id);
+  const now = new Date();
+  const expiresAt = await adExpiresAt(ad.id);
+  const expired = !isAdActive(expiresAt, now);
+  // Автор видит срок и может продлить объявление прямо здесь.
+  const renewable = isAuthor && !demo && ad.status === "PUBLISHED" && canRenew(expiresAt, now);
+  const term = isAuthor && !expired ? expiryLabel(expiresAt, now) : "";
   const place = locationLine(ad);
 
   // Характеристики с русскими подписями; VIN показываем не целиком.
@@ -153,7 +158,7 @@ export default async function ClassifiedDetailPage({
                 {ad.sellerVerified ? " · верифицированный продавец ✓" : ""}
               </p>
             )}
-            <p className="mt-1 text-zinc-500">Опубликовано {timeAgo(ad.createdAt)}</p>
+            <p className="mt-1 text-zinc-500">Опубликовано {timeAgo(ad.createdAt)}{term ? ` · действует: ${term}` : ""}</p>
           </div>
 
           {demo ? (
@@ -172,11 +177,17 @@ export default async function ClassifiedDetailPage({
             </div>
           ) : isAuthor ? (
             <>
-              {expired && (
-                <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
-                  Срок объявления истёк, его больше не видно в поиске.{" "}
-                  <Link href="/classifieds/my" className="underline">Мои объявления</Link>
-                </p>
+              {(expired || renewable) && (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+                  <p>{expired ? "Срок объявления истёк, его больше не видно в поиске." : "Срок объявления скоро закончится."}</p>
+                  {renewable && (
+                    <form action={`/api/classifieds/${ad.id}/renew`} method="POST" className="mt-2">
+                      <button type="submit" className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white">
+                        Продлить на {RENEW_DAYS} дней
+                      </button>
+                    </form>
+                  )}
+                </div>
               )}
               <Link href={`/classifieds/${ad.id}/replies`} className="btn btn-primary mt-4 inline-block">
                 {ad.vertical === "JOB" ? "Отклики" : bidMode ? "Предложения и сообщения" : "Сообщения"}: {myReplies?.threads ?? 0}
