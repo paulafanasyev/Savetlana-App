@@ -1,15 +1,29 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { searchClassifieds, getGeoTree } from "@/lib/domains/classifieds";
+import { prisma } from "@/lib/prisma";
 import { DEAL_TYPE_LABELS, VERTICAL_LABELS, dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
 import { rub } from "@/lib/format";
 import { priceText } from "@/lib/classified-fields";
 import { resolveSearchParams } from "@/lib/page-params";
 import { readCityCookie } from "@/lib/my-city";
 import { normalize, type PickCity } from "@/lib/city-pick";
+import { nearbyCities } from "@/lib/nearby";
 import { CityFilter } from "./CityFilter";
 
 export const dynamic = "force-dynamic";
+
+const NEARBY_RADIUS_KM = 300;
+
+interface NearbyAd {
+  id: string;
+  title: string;
+  priceKopecks: number;
+  vertical: string;
+  cityName: string;
+  km: number;
+  cover: string | null;
+}
 
 export default async function ClassifiedsPage({
   searchParams,
@@ -42,6 +56,47 @@ export default async function ClassifiedsPage({
     query: query.q,
     limit: 30,
   });
+
+  // В моём городе мало объявлений: добавляем соседние города с расстоянием.
+  let nearbyAds: NearbyAd[] = [];
+  if (myCity && result.items.length < 12) {
+    const near = nearbyCities(myCity.name, NEARBY_RADIUS_KM, 12);
+    const kmByName = new Map(near.map((n) => [normalize(n.name), n.km]));
+    const ids = cities.filter((c) => kmByName.has(normalize(c.name))).map((c) => c.id);
+    const q = query.q?.trim();
+    if (ids.length) {
+      const rows = await prisma.classified.findMany({
+        where: {
+          status: "PUBLISHED",
+          cityId: { in: ids },
+          ...(query.vertical ? { vertical: query.vertical } : {}),
+          ...(query.dealType ? { dealType: query.dealType } : {}),
+          ...(q && q.length >= 2 ? { OR: [{ title: { contains: q } }, { description: { contains: q } }] } : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+        select: {
+          id: true,
+          title: true,
+          priceKopecks: true,
+          vertical: true,
+          city: { select: { name: true } },
+          images: { select: { url: true }, orderBy: { isCover: "desc" }, take: 1 },
+        },
+      });
+      nearbyAds = rows
+        .map((r) => ({
+          id: r.id,
+          title: r.title,
+          priceKopecks: r.priceKopecks,
+          vertical: r.vertical,
+          cityName: r.city.name,
+          km: kmByName.get(normalize(r.city.name)) ?? 0,
+          cover: r.images[0]?.url ?? null,
+        }))
+        .sort((a, b) => a.km - b.km);
+    }
+  }
 
   const everywhere = new URLSearchParams();
   if (query.vertical) everywhere.set("vertical", query.vertical);
@@ -130,7 +185,7 @@ export default async function ClassifiedsPage({
         <div className="rounded-xl border border-dashed border-zinc-300 p-12 text-center text-zinc-500">
           {myCity ? (
             <>
-              В городе {myCity.name} пока ничего не нашлось.{" "}
+              В городе {myCity.name} пока ничего не нашлось.{nearbyAds.length > 0 ? " Ниже объявления из соседних городов." : ""}{" "}
               <Link href={everywhereHref} className="underline">Посмотреть по всей России</Link>
             </>
           ) : (
@@ -200,6 +255,32 @@ export default async function ClassifiedsPage({
             </li>
           ))}
         </ul>
+      )}
+
+      {myCity && nearbyAds.length > 0 && (
+        <section className="mt-8" aria-label="Объявления рядом">
+          <h2 className="mb-1 text-lg font-semibold">Рядом с городом {myCity.name}</h2>
+          <p className="mb-3 text-xs text-zinc-500">Соседние города до {NEARBY_RADIUS_KM} км, расстояние по прямой между центрами городов.</p>
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {nearbyAds.map((ad) => (
+              <li key={ad.id} className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+                <Link href={`/classifieds/${ad.id}`} className="block">
+                  {ad.cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={ad.cover} alt={ad.title} className="h-32 w-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="flex h-32 w-full items-center justify-center bg-zinc-100 text-3xl">{verticalEmoji(ad.vertical)}</div>
+                  )}
+                  <div className="p-3">
+                    <h3 className="line-clamp-2 text-sm font-semibold hover:underline">{ad.title}</h3>
+                    <p className="mt-1 text-sm font-bold">{ad.priceKopecks > 0 ? rub(ad.priceKopecks) : "Цена не указана"}</p>
+                    <p className="mt-1 text-xs text-zinc-600">{ad.cityName} · ≈ {ad.km} км</p>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </main>
   );
