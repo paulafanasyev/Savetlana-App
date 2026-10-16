@@ -8,7 +8,8 @@
  * оформляет заказ (человек в контуре).
  *
  * Два режима: с productId — торг с одним продавцом; с query — запрос цены
- * у нескольких продавцов (реверсивный аукцион), КП уходит лучшему.
+ * у нескольких продавцов (реверсивный аукцион), КП уходит лучшему. К цене
+ * применяются условия: срок поставки, предоплата, отсрочка (negotiation-terms.ts).
  */
 import { looseObjectSchema } from "./registry";
 import type { ToolDefinition, ToolContext, ToolResult } from "./registry";
@@ -16,6 +17,7 @@ import { prisma } from "../../prisma";
 import { negotiate, type NegotiationResult } from "../../negotiation";
 import { getSellerNegotiationPolicy } from "../../domains/negotiation-policy";
 import { createQuote } from "../../domains/b2b-quotes";
+import { applyTerms, PAYMENT_LABEL, type AppliedTerms, type PaymentTerms, type SellerTerms, type TermsRequest } from "../../negotiation-terms";
 
 function positiveRub(v: unknown): number | null {
   const n = Number(v);
@@ -23,6 +25,29 @@ function positiveRub(v: unknown): number | null {
 }
 
 const rub = (k: number) => `${Math.round(k / 100).toLocaleString("ru-RU")} ₽`;
+
+/** Условия, о которых просил покупатель: срок и оплата. Ничего не просил — null. */
+export function termsRequest(args: Record<string, unknown>): TermsRequest | null {
+  const out: TermsRequest = {};
+  const lead = Number(args.leadDays);
+  if (Number.isFinite(lead) && lead > 0) out.leadDays = Math.round(lead);
+  if (args.payment === "PREPAY" || args.payment === "DEFERRAL" || args.payment === "SAFE_DEAL") out.payment = args.payment as PaymentTerms;
+  const def = Number(args.deferralDays);
+  if (Number.isFinite(def) && def > 0) {
+    out.deferralDays = Math.round(def);
+    out.payment = out.payment ?? "DEFERRAL";
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/** Цена после условий поставки и оплаты; без условий — цена торга как есть. */
+function finalTerms(unitKopecks: number, req: TermsRequest | null, terms: SellerTerms): AppliedTerms | null {
+  return req ? applyTerms(unitKopecks, req, terms) : null;
+}
+
+function termsSummary(t: AppliedTerms): string {
+  return ` Условия: ${t.lines.join("; ")}.` + (t.countered ? " Часть просьб сверх правил продавца, агент предложил ближайшее возможное." : "");
+}
 
 /** «800 → 900 → 844 → … → 882 ₽»: ход торга одной строкой для чата. */
 export function negotiationChain(r: NegotiationResult): string {
@@ -50,7 +75,7 @@ export function negotiationSummary(title: string, r: NegotiationResult, listKope
 export const negotiateQuoteTool: ToolDefinition = {
   name: "negotiate_quote",
   description:
-    "B2B-торг за партию товара: агент покупателя и агент продавца договариваются о цене за штуку в пределах правил торга продавца и бюджета покупателя. Возвращает ход переговоров и КП, которое подтверждают люди. Если productId не указан, а указан query, агент запрашивает цену у нескольких продавцов сразу (до 5, реверсивный аукцион), торгуется с каждым и выбирает лучшее предложение. Ничего не покупает и не меняет цены.",
+    "B2B-торг за партию товара: агент покупателя и агент продавца договариваются о цене за штуку в пределах правил торга продавца и бюджета покупателя, а также о сроке поставки и условиях оплаты (предоплата, отсрочка). Возвращает ход переговоров и КП, которое подтверждают люди. Если productId не указан, а указан query, агент запрашивает цену у нескольких продавцов сразу (до 5, реверсивный аукцион), торгуется с каждым и выбирает лучшее предложение. Ничего не покупает и не меняет цены.",
   permission: "READ_PRODUCTS",
   riskLevel: "READ",
   needsConfirmation: false,
@@ -60,6 +85,9 @@ export const negotiateQuoteTool: ToolDefinition = {
     quantity: { type: "number", description: "сколько штук нужно" },
     targetPriceRub: { type: "number", description: "желаемая цена за штуку, ₽" },
     maxPriceRub: { type: "number", description: "потолок бюджета за штуку, ₽" },
+    leadDays: { type: "number", description: "нужный срок поставки, дней" },
+    payment: { type: "string", description: "условия оплаты: SAFE_DEAL (безопасная сделка, по умолчанию), PREPAY (100% предоплата), DEFERRAL (отсрочка)" },
+    deferralDays: { type: "number", description: "отсрочка платежа, дней" },
     note: { type: "string", description: "комментарий покупателя" },
   }),
   async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
@@ -121,10 +149,12 @@ export const negotiateQuoteTool: ToolDefinition = {
         note: typeof args.note === "string" ? args.note.slice(0, 500) : undefined,
       }
     );
+    const applied = result.status === "AGREED" && result.unitPriceKopecks !== null ? finalTerms(result.unitPriceKopecks, termsRequest(args), policy.terms) : null;
+    const finalUnit = applied?.unitPriceKopecks ?? result.unitPriceKopecks;
     // Договорились: сохраняем КП и отправляем продавцу на подтверждение.
     let quoteId: string | null = null;
     let quoteNote = "";
-    if (result.status === "AGREED" && result.unitPriceKopecks !== null && result.totalKopecks !== null && ctx.userId) {
+    if (result.status === "AGREED" && finalUnit !== null && result.totalKopecks !== null && ctx.userId) {
       try {
         const quote = await createQuote({
           productId: product.id,
@@ -132,12 +162,13 @@ export const negotiateQuoteTool: ToolDefinition = {
           buyerId: ctx.userId,
           title: product.title,
           quantity: result.quantity,
-          unitPriceKopecks: result.unitPriceKopecks,
+          unitPriceKopecks: finalUnit,
           listPriceKopecks: list,
-          totalKopecks: result.totalKopecks,
-          discountPercent: result.discountPercent ?? 0,
+          totalKopecks: finalUnit * result.quantity,
+          discountPercent: Math.round((1 - finalUnit / list) * 1000) / 10,
           rounds: result.rounds,
           chain: negotiationChain(result),
+          ...(applied ? { leadDays: applied.leadDays, payment: applied.payment, deferralDays: applied.deferralDays || undefined, termsLines: applied.lines } : {}),
         });
         quoteId = quote.id;
         quoteNote = ` ${quote.number} отправлено продавцу на подтверждение, следить и оформить заказ: [Мои КП](/quotes).`;
@@ -147,8 +178,11 @@ export const negotiateQuoteTool: ToolDefinition = {
     }
     return {
       ok: true,
-      data: { productId: product.id, title: product.title, listPriceKopecks: list, sellerRules: policy.custom ? "seller" : "default", quoteId, ...result },
-      summary: negotiationSummary(product.title, result, list) + quoteNote,
+      data: { productId: product.id, title: product.title, listPriceKopecks: list, sellerRules: policy.custom ? "seller" : "default", quoteId, ...result, terms: applied, finalUnitPriceKopecks: finalUnit },
+      summary:
+        negotiationSummary(product.title, result, list) +
+        (applied ? `${termsSummary(applied)} Цена с условиями: ${rub(applied.unitPriceKopecks)} за штуку, итого ${rub(applied.unitPriceKopecks * result.quantity)}.` : "") +
+        quoteNote,
       verification: "VERIFIED",
     };
   },
@@ -173,11 +207,12 @@ interface RfqOffer {
   seller: string;
   sellerId: string;
   listPriceKopecks: number;
-  /** Цена по итогам торга; если не договорились, цена прайса. */
+  /** Цена по итогам торга с учётом условий; если не договорились, цена прайса. */
   priceKopecks: number;
   status: "AGREED" | "NO_DEAL" | "NEEDS_HUMAN" | "NO_NEGOTIATION";
   rounds: number;
   reason: string;
+  terms: AppliedTerms | null;
 }
 
 /**
@@ -228,7 +263,7 @@ async function rfq(ctx: ToolContext, query: string, args: Record<string, unknown
     const base = { productId: p.id, title: p.title, seller: p.sellerProfile.displayName, sellerId: p.sellerProfile.id, listPriceKopecks: p.priceKopecks };
     const policy = await getSellerNegotiationPolicy(p.sellerProfile.id);
     if (!policy.enabled) {
-      offers.push({ ...base, priceKopecks: p.priceKopecks, status: "NO_NEGOTIATION", rounds: 0, reason: "продавец не торгуется, цена по прайсу" });
+      offers.push({ ...base, priceKopecks: p.priceKopecks, status: "NO_NEGOTIATION", rounds: 0, reason: "продавец не торгуется, цена по прайсу", terms: null });
       continue;
     }
     const invRaw = (p as unknown as { inventory?: unknown }).inventory;
@@ -253,12 +288,17 @@ async function rfq(ctx: ToolContext, query: string, args: Record<string, unknown
       }
     );
     deals.set(p.id, result);
+    const applied = result.status === "AGREED" && result.unitPriceKopecks !== null ? finalTerms(result.unitPriceKopecks, termsRequest(args), policy.terms) : null;
     offers.push({
       ...base,
-      priceKopecks: result.status === "AGREED" && result.unitPriceKopecks !== null ? result.unitPriceKopecks : p.priceKopecks,
+      priceKopecks: result.status === "AGREED" && result.unitPriceKopecks !== null ? applied?.unitPriceKopecks ?? result.unitPriceKopecks : p.priceKopecks,
       status: result.status,
       rounds: result.rounds,
-      reason: result.status === "AGREED" ? `договорились за ${result.rounds} раунд.` : result.reason,
+      reason:
+        result.status === "AGREED"
+          ? `договорились за ${result.rounds} раунд.${applied ? `, поставка ${applied.leadDays} дн., ${applied.payment === "DEFERRAL" ? `отсрочка ${applied.deferralDays} дн.` : PAYMENT_LABEL[applied.payment]}` : ""}`
+          : result.reason,
+      terms: applied,
     });
   }
 
@@ -278,12 +318,13 @@ async function rfq(ctx: ToolContext, query: string, args: Record<string, unknown
         buyerId: ctx.userId,
         title: winner.title,
         quantity: deal.quantity,
-        unitPriceKopecks: deal.unitPriceKopecks!,
+        unitPriceKopecks: winner.priceKopecks,
         listPriceKopecks: winner.listPriceKopecks,
-        totalKopecks: deal.totalKopecks!,
-        discountPercent: deal.discountPercent ?? 0,
+        totalKopecks: winner.priceKopecks * deal.quantity,
+        discountPercent: Math.round((1 - winner.priceKopecks / winner.listPriceKopecks) * 1000) / 10,
         rounds: deal.rounds,
         chain: `Лучшее из ${offers.length} предложений. ${negotiationChain(deal)}`,
+        ...(winner.terms ? { leadDays: winner.terms.leadDays, payment: winner.terms.payment, deferralDays: winner.terms.deferralDays || undefined, termsLines: winner.terms.lines } : {}),
       });
       quoteId = quote.id;
       quoteNote = ` ${quote.number} с лучшим продавцом отправлено ему на подтверждение: [Мои КП](/quotes).`;

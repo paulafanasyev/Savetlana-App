@@ -15,6 +15,16 @@ export function QuoteCard({ quote, children }: { quote: Quote; children?: ReactN
       <p className="text-sm">
         {quote.quantity} шт. по <strong>{rub(quote.unitPriceKopecks)}</strong> вместо {rub(quote.listPriceKopecks)} (скидка {String(quote.discountPercent).replace(".", ",")}%), итого <strong>{rub(quote.totalKopecks)}</strong>.
       </p>
+      {quote.termsLines && quote.termsLines.length > 0 && (
+        <ul className="list-disc pl-5 text-sm">
+          {quote.termsLines.map((l, i) => (
+            <li key={i}>{l}</li>
+          ))}
+        </ul>
+      )}
+      {quote.payment === "DEFERRAL" && (
+        <p className="text-xs text-ink-soft">Отсрочку платежа продавец даёт по договору поставки. На площадке заказ сейчас оплачивается через безопасную сделку; отсрочка заработает, когда подключим партнёра по отложенной оплате.</p>
+      )}
       {quote.chain && <p className="text-xs text-ink-soft">{quote.chain}</p>}
       <p className="text-xs text-ink-soft">Действует до {quote.expiresAt.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}. Цена в каталоге не меняется: она действует только по этому КП.</p>
       {children}
