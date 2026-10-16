@@ -11,18 +11,23 @@
  * Автор отвечает только тем, кто откликнулся сам: написать первым по своему
  * объявлению нельзя. Каждое сообщение проходит антифрод (message-guard.ts).
  * Предложения исполнителей по заказу услуги (freelance-bids.ts) идут тем же путём.
+ * Примерам от площадки (attrs.demo) писать нельзя: их автор не человек.
  */
 import { prisma } from "../prisma";
+import { readObject } from "../db/json";
 import { UserFacingError, buildInbox, cleanMessage } from "./engagement-rules";
 import { notify } from "./notifications";
 import { guardOutgoingMessage, warnRecipient } from "./message-guard";
 import { BID_MARK } from "../freelance-bids";
+import { isDemoAd } from "../location-line";
 
 const THREAD_HOURLY_LIMIT = 20;
 const SENDER_HOURLY_LIMIT = 30;
 
 export const authorThreadUrl = (classifiedId: string, applicantId: string) => `/classifieds/${classifiedId}/replies/${applicantId}`;
 export const applicantThreadUrl = (classifiedId: string) => `/classifieds/${classifiedId}/chat`;
+
+export const DEMO_REPLY_BLOCKED = "Это пример объявления от площадки, написать автору нельзя";
 
 export interface ReplyMessage {
   id: string;
@@ -38,6 +43,8 @@ interface AdForReply {
   status: string;
   vertical: string;
   dealType: string;
+  /** Пример от площадки: переписка запрещена. */
+  demo: boolean;
 }
 
 /** Что написать на кнопке и в заголовке уведомления. */
@@ -51,10 +58,11 @@ export function replyWording(ad: { vertical: string; dealType: string }): { butt
 export async function adForReply(classifiedId: string): Promise<AdForReply> {
   const ad = await prisma.classified.findUnique({
     where: { id: classifiedId },
-    select: { id: true, title: true, authorId: true, status: true, vertical: true, dealType: true },
+    select: { id: true, title: true, authorId: true, status: true, vertical: true, dealType: true, attrs: true },
   });
   if (!ad) throw new UserFacingError("Объявление не найдено", 404);
-  return ad;
+  const { attrs, ...rest } = ad;
+  return { ...rest, demo: isDemoAd(readObject(attrs)) };
 }
 
 async function sentLastHour(where: Record<string, unknown>): Promise<number> {
@@ -65,6 +73,7 @@ async function sentLastHour(where: Record<string, unknown>): Promise<number> {
 export async function sendToAuthor(sender: { id: string; name: string | null }, classifiedId: string, raw: unknown): Promise<void> {
   const text = cleanMessage(raw);
   const ad = await adForReply(classifiedId);
+  if (ad.demo) throw new UserFacingError(DEMO_REPLY_BLOCKED, 409);
   if (ad.authorId === sender.id) throw new UserFacingError("Это ваше объявление: писать самому себе не нужно", 400);
   if (ad.status !== "PUBLISHED") throw new UserFacingError("Объявление снято с публикации, отправить отклик нельзя", 409);
   const url = authorThreadUrl(ad.id, sender.id);
