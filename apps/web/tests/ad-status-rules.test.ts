@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backPath, canClose, canReopen } from "../src/lib/ad-status-rules";
+import { backPath, canClose, canReopen, closeOutcome, closeStatus } from "../src/lib/ad-status-rules";
 
 describe("снять и вернуть объявление", () => {
   it("снять можно опубликованное и ждущее проверки", () => {
@@ -14,6 +14,11 @@ describe("снять и вернуть объявление", () => {
     expect(canReopen("REJECTED")).toBe(false);
     expect(canReopen("HIDDEN")).toBe(false);
     expect(canReopen("PUBLISHED")).toBe(false);
+  });
+  it("итог снятия: сделка или просто снято", () => {
+    expect(closeStatus(closeOutcome("deal"))).toBe("SOLD");
+    expect(closeStatus(closeOutcome(null))).toBe("CLOSED");
+    expect(closeStatus(closeOutcome("что угодно"))).toBe("CLOSED");
   });
   it("возврат только на свои страницы", () => {
     expect(backPath("abc", "ad")).toBe("/classifieds/abc");

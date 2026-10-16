@@ -7,7 +7,7 @@ import { prisma } from "../prisma";
 import { UserFacingError } from "./engagement-rules";
 import { audit } from "./audit";
 import { publishClassified } from "./classifieds";
-import { canClose, canReopen } from "../ad-status-rules";
+import { canClose, canReopen, closeStatus, type CloseOutcome } from "../ad-status-rules";
 
 async function ownAd(classifiedId: string, authorId: string) {
   const ad = await prisma.classified.findUnique({ where: { id: classifiedId }, select: { id: true, authorId: true, status: true } });
@@ -15,20 +15,22 @@ async function ownAd(classifiedId: string, authorId: string) {
   return ad;
 }
 
-export async function closeClassified(classifiedId: string, authorId: string): Promise<void> {
+/** Снять объявление. outcome="deal": автор отметил, что сделка состоялась. */
+export async function closeClassified(classifiedId: string, authorId: string, outcome: CloseOutcome = "closed"): Promise<void> {
   const ad = await ownAd(classifiedId, authorId);
   if (!canClose(ad.status)) throw new UserFacingError("Это объявление уже не опубликовано", 409);
+  const status = closeStatus(outcome);
   // Статус меняем, только если он ещё тот же: модератор мог успеть его поменять.
-  const res = await prisma.classified.updateMany({ where: { id: ad.id, status: ad.status }, data: { status: "CLOSED" } });
+  const res = await prisma.classified.updateMany({ where: { id: ad.id, status: ad.status }, data: { status } });
   if (res.count === 0) throw new UserFacingError("Объявление только что изменилось, обновите страницу", 409);
   await audit({
     actorId: authorId,
     actorRole: "BUYER",
-    action: "classified.closed",
+    action: outcome === "deal" ? "classified.deal_done" : "classified.closed",
     targetType: "Classified",
     targetId: ad.id,
     before: { status: ad.status },
-    after: { status: "CLOSED" },
+    after: { status },
   });
 }
 

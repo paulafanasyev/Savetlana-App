@@ -1,13 +1,13 @@
 import { apiRoute, rateLimit, tooManyRequests } from "@/lib/api-helpers";
 import { requireUser } from "@/lib/auth";
 import { closeClassified, reopenClassified } from "@/lib/domains/classified-close";
-import { backPath } from "@/lib/ad-status-rules";
+import { backPath, closeOutcome } from "@/lib/ad-status-rules";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Снять объявление с публикации (?do=close) или вернуть его (?do=reopen).
- * Обычная форма из «Моих объявлений», после неё возврат обратно с итогом в адресе.
+ * Снять объявление с публикации (?do=close, с &reason=deal если сделка состоялась)
+ * или вернуть его (?do=reopen). Обычная форма, после неё возврат обратно с итогом в адресе.
  */
 export const POST = apiRoute(async (request, { params }) => {
   const { user } = await requireUser(request);
@@ -17,8 +17,9 @@ export const POST = apiRoute(async (request, { params }) => {
   const back = new URL(backPath(params.id, url.searchParams.get("back")), request.url);
   try {
     if (action === "close") {
-      await closeClassified(params.id, user.id);
-      back.searchParams.set("closed", "1");
+      const outcome = closeOutcome(url.searchParams.get("reason"));
+      await closeClassified(params.id, user.id, outcome);
+      back.searchParams.set("closed", outcome === "deal" ? "deal" : "1");
     } else {
       const status = await reopenClassified(params.id, user.id);
       back.searchParams.set("reopened", status === "PUBLISHED" ? "1" : "review");
