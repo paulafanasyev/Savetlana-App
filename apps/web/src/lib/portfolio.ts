@@ -34,12 +34,12 @@ export const EMPTY_PORTFOLIO: Portfolio = { about: "", skills: [], items: [] };
 export const portfolioBucket = (userId: string) => `public/portfolio/${userId}`;
 
 function oneLine(s: string): string {
-  return s.replace(/[-\u001f\u007f]+/g, " ").replace(/\s{2,}/g, " ").trim();
+  return s.replace(/[\x00-\x1f\x7f]+/g, " ").replace(/\s{2,}/g, " ").trim();
 }
 
 function text(raw: unknown, max: number): string {
   if (typeof raw !== "string") return "";
-  return raw.replace(/\r/g, "").replace(/[-\u0008\u000b-\u001f\u007f]/g, "").replace(/\n{3,}/g, "\n\n").trim().slice(0, max);
+  return raw.replace(/\r/g, "").replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "").replace(/\n{3,}/g, "\n\n").trim().slice(0, max);
 }
 
 /** «дизайн, вёрстка; Figma» → ["дизайн", "вёрстка", "Figma"], без повторов. */
@@ -117,4 +117,20 @@ export function removeItem(p: Portfolio, id: string): Portfolio {
 
 export function isEmptyPortfolio(p: Portfolio): boolean {
   return !p.about && p.skills.length === 0 && p.items.length === 0;
+}
+
+/**
+ * Ключ файла в хранилище, который можно удалить вместе с работой: только из папки
+ * этого исполнителя и только если фото не осталось в других работах.
+ */
+export function orphanedImageKey(removed: PortfolioItem | undefined, remaining: Portfolio, userId: string): string | null {
+  const url = removed?.imageUrl;
+  if (!url || !isPortfolioImageUrl(url, userId)) return null;
+  if (remaining.items.some((i) => i.imageUrl === url)) return null;
+  if (url.startsWith("https://")) return url;
+  try {
+    return url.slice("/api/storage/".length).split("/").map(decodeURIComponent).join("/");
+  } catch {
+    return null;
+  }
 }

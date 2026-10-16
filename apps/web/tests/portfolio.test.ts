@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addItem, cleanItem, cleanSkills, EMPTY_PORTFOLIO, isEmptyPortfolio, isPortfolioImageUrl, ITEMS_MAX, parsePortfolio, removeItem } from "../src/lib/portfolio";
+import { addItem, cleanItem, cleanSkills, EMPTY_PORTFOLIO, isEmptyPortfolio, isPortfolioImageUrl, ITEMS_MAX, parsePortfolio, removeItem, orphanedImageKey } from "../src/lib/portfolio";
 
 const U = "user123abc";
 
@@ -43,5 +43,25 @@ describe("портфолио исполнителя", () => {
     const p = parsePortfolio(saved, U);
     expect(p.items.map((i) => i.id)).toEqual(["def456"]);
     expect(p.skills).toEqual(["Figma"]);
+  });
+
+  it("фото удаляется вместе с работой, только если больше нигде не используется", () => {
+    const u = "u_abc123";
+    const url = `/api/storage/database/public/portfolio/${u}/abc123`;
+    const item = { id: "aaaaaa", title: "Работа", description: "", imageUrl: url, createdAt: "" };
+    const empty = { about: "", skills: [], items: [] };
+    expect(orphanedImageKey(item, empty, u)).toBe(`database/public/portfolio/${u}/abc123`);
+    expect(orphanedImageKey(item, { ...empty, items: [{ ...item, id: "bbbbbb" }] }, u)).toBeNull();
+    expect(orphanedImageKey({ ...item, imageUrl: "/api/storage/database/public/portfolio/other1/abc" }, empty, u)).toBeNull();
+    expect(orphanedImageKey(undefined, empty, u)).toBeNull();
+    const blob = `https://abc.public.blob.vercel-storage.com/public/portfolio/${u}/x-1.jpg`;
+    expect(orphanedImageKey({ ...item, imageUrl: blob }, empty, u)).toBe(blob);
+  });
+
+  it("дефисы в навыках и описаниях сохраняются, управляющие символы убираются", () => {
+    expect(cleanSkills("UI-дизайн, веб-вёрстка")).toEqual(["UI-дизайн", "веб-вёрстка"]);
+    const c = cleanItem({ title: "Ремонт квартир-студий", description: "Санузел под ключ - 5 дней\x07" }, "u_abc123");
+    expect(c.ok && c.item.title).toBe("Ремонт квартир-студий");
+    expect(c.ok && c.item.description).toBe("Санузел под ключ - 5 дней");
   });
 });
