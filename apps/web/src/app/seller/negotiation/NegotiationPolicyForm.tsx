@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { negotiate, sellerBounds, normalizePolicy, type VolumeTier } from "@/lib/negotiation";
+import type { SellerTerms } from "@/lib/negotiation-terms";
 
 interface Policy {
   enabled: boolean;
@@ -9,6 +10,7 @@ interface Policy {
   negotiablePercent: number;
   minOrderQty: number;
   volumeTiers: VolumeTier[];
+  terms: SellerTerms;
   custom: boolean;
 }
 
@@ -19,6 +21,7 @@ export function NegotiationPolicyForm({ initial }: { initial: Policy }) {
   const [status, setStatus] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const set = <K extends keyof Policy>(key: K, value: Policy[K]) => setPolicy((p) => ({ ...p, [key]: value }));
+  const setTerm = (key: keyof SellerTerms, value: number) => setPolicy((p) => ({ ...p, terms: { ...p.terms, [key]: value } }));
   const setTier = (i: number, key: keyof VolumeTier, value: number) =>
     setPolicy((p) => ({ ...p, volumeTiers: p.volumeTiers.map((t, j) => (j === i ? { ...t, [key]: value } : t)) }));
 
@@ -95,6 +98,25 @@ export function NegotiationPolicyForm({ initial }: { initial: Policy }) {
           )}
         </div>
 
+        <div className="space-y-2">
+          <div className="text-sm font-medium">Срок поставки и оплата</div>
+          {(
+            [
+              ["standardLeadDays", "Обычный срок поставки, дней", 1],
+              ["rushLeadDays", "Самый быстрый срок, дней", 1],
+              ["rushSurchargePercent", "Наценка за срочность, %", 0.5],
+              ["prepayDiscountPercent", "Скидка за 100% предоплату, %", 0.5],
+              ["maxDeferralDays", "Отсрочка платежа до, дней (0 — без отсрочки)", 1],
+              ["deferralMarkupPercent", "Наценка за каждые 30 дней отсрочки, %", 0.5],
+            ] as const
+          ).map(([key, label, step]) => (
+            <label key={key} className="flex items-center justify-between gap-2 text-sm">
+              <span>{label}</span>
+              <input type="number" min={0} step={step} className="w-24 rounded border px-2 py-1" value={policy.terms[key]} onChange={(e) => setTerm(key, Number(e.target.value))} />
+            </label>
+          ))}
+        </div>
+
         <button type="button" disabled={saving} className="rounded bg-blue-900 px-4 py-2 font-medium text-white disabled:opacity-60" onClick={save}>
           {saving ? "Сохраняю…" : "Сохранить правила"}
         </button>
@@ -113,6 +135,10 @@ export function NegotiationPolicyForm({ initial }: { initial: Policy }) {
             <strong>{policy.enabled ? (example.deal.unitPriceKopecks !== null ? `${rub(example.deal.unitPriceKopecks)} за штуку, раундов: ${example.deal.rounds}` : example.deal.reason) : "торг выключен, цена по прайсу"}</strong>
           </li>
         </ul>
+        <p className="text-sm">
+          Срок {policy.terms.standardLeadDays} дн., быстрее {policy.terms.rushLeadDays} дн. не обещаем; срочно +{policy.terms.rushSurchargePercent}%, предоплата −{policy.terms.prepayDiscountPercent}%,{" "}
+          {policy.terms.maxDeferralDays > 0 ? `отсрочка до ${policy.terms.maxDeferralDays} дн. (+${policy.terms.deferralMarkupPercent}% за 30 дн.)` : "без отсрочки"}.
+        </p>
         <p className="text-xs text-ink-soft">Изменения записываются в журнал действий. Посмотреть, как торгуются агенты, можно на странице «B2B-переговоры агентов» (/b2b/negotiation).</p>
       </section>
     </div>

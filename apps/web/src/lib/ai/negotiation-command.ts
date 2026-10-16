@@ -3,6 +3,7 @@
  * просьбы о B2B-торге для встроенной Светланы (без внешней модели) и для
  * ссылок на уже показанные товары. Чистые функции без базы.
  */
+import { termsFromText, type PaymentTerms } from "../negotiation-terms";
 
 export const NEGOTIATE = /(?:поторгу|торгуйся|торговаться|договорись о цене|собери\S* (?:кп|предложени|цен)|запрос\S* (?:цен|кп|предложени)\S* (?:у|от) |тендер|аукцион|оптов\S* цен|цен\S* (?:за|на) парти|скидк\S* (?:за|на) (?:объ[её]м|парти)|коммерческ\S* предложен|(?:^|\s)КП(?:\s|[.,!?]|$))/i;
 
@@ -12,8 +13,8 @@ export function isNegotiationRequest(text: string): boolean {
 
 const NUM = "(\\d[\\d\\s]*\\d|\\d)";
 const QTY = new RegExp(NUM + "\\s*(?:шт|штук|единиц|ед\\.|pcs)", "i");
-const TARGET = new RegExp("(?:по|хочу|хотим|цель|желательно|за)\\s*" + NUM + "(?!\\s*(?:шт|штук|единиц|%|\\d))\\s*(?:₽|руб|р\\b)?", "i");
-const MAX = new RegExp("(?:максимум|макс\\.?|не (?:больше|дороже)|бюджет\\S*|потолок|до)\\s*" + NUM + "(?!\\s*(?:шт|штук|%|\\d))", "i");
+const TARGET = new RegExp("(?:по|хочу|хотим|цель|желательно|за)\\s*" + NUM + "(?!\\s*(?:шт|штук|единиц|%|\\d|дн|день|дня|раб|недел|месяц))\\s*(?:₽|руб|р\\b)?", "i");
+const MAX = new RegExp("(?:максимум|макс\\.?|не (?:больше|дороже)|бюджет\\S*|потолок|до)\\s*" + NUM + "(?!\\s*(?:шт|штук|%|\\d|дн|день|дня|раб|недел|месяц))", "i");
 
 function num(s: string | undefined): number | undefined {
   if (!s) return undefined;
@@ -38,9 +39,20 @@ export function negotiationQuery(text: string): string | undefined {
   return undefined;
 }
 
-/** Количество, желаемая цена, потолок бюджета (в рублях) и товар из текста. Чего нет, того нет: не выдумываем. */
-export function negotiationArgs(text: string): { quantity?: number; targetPriceRub?: number; maxPriceRub?: number; query?: string; note: string } {
-  const out: { quantity?: number; targetPriceRub?: number; maxPriceRub?: number; query?: string; note: string } = { note: text.slice(0, 500) };
+export type NegotiationArgs = {
+  quantity?: number;
+  targetPriceRub?: number;
+  maxPriceRub?: number;
+  query?: string;
+  leadDays?: number;
+  payment?: PaymentTerms;
+  deferralDays?: number;
+  note: string;
+};
+
+/** Количество, желаемая цена, потолок бюджета (в рублях), товар, срок и оплата из текста. Чего нет, того нет. */
+export function negotiationArgs(text: string): NegotiationArgs {
+  const out: NegotiationArgs = { note: text.slice(0, 500), ...termsFromText(text) };
   const query = negotiationQuery(text);
   if (query !== undefined) out.query = query;
   const quantity = num(QTY.exec(text)?.[1]);
