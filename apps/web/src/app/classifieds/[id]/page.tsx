@@ -206,8 +206,13 @@ export default async function ClassifiedDetailPage({
                   {ad.vertical === "JOB" ? "Отклики" : bidMode ? "Предложения и сообщения" : "Сообщения"}: {myReplies?.threads ?? 0}
                   {myReplies && myReplies.unread > 0 ? `, новых ${myReplies.unread}` : ""}
                 </Link>
+                {/* После снятия страница объявления больше не открывается, поэтому возврат в «Мои объявления». */}
                 {closable && (
-                  // После снятия страница объявления больше не открывается, поэтому возврат в «Мои объявления».
+                  <form action={`/api/classifieds/${ad.id}/close?do=close&reason=deal`} method="POST">
+                    <button type="submit" className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">Сделка состоялась</button>
+                  </form>
+                )}
+                {closable && (
                   <form action={`/api/classifieds/${ad.id}/close?do=close`} method="POST">
                     <button type="submit" className="btn btn-ghost">Снять с публикации</button>
                   </form>
