@@ -3,6 +3,7 @@ import { requireUserServer } from "@/lib/auth";
 import { listBuyerQuotes, ordersForQuotes } from "@/lib/domains/b2b-quotes";
 import { checkCounterparty, type CounterpartyReport } from "@/lib/domains/counterparty-check";
 import { QuoteCard } from "@/components/QuoteCard";
+import { QuoteDocLinks } from "@/components/QuoteDocLinks";
 import { AcceptQuoteButton } from "@/components/QuoteActions";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export default async function BuyerQuotesPage() {
     <main className="mx-auto max-w-3xl space-y-4 px-4 py-8">
       <h1 className="text-2xl font-semibold">Мои КП</h1>
       <p className="text-ink-soft">
-        Коммерческие предложения, о которых договорились агенты. Продавец подтверждает КП, после этого вы оформляете заказ по цене КП и оплачиваете его как обычно: деньги у площадки, пока вы не получите товар. Перед заказом посмотрите проверку продавца: что проверено, каким источником и что нужно проверить вручную.
+        Коммерческие предложения, о которых договорились агенты. Продавец подтверждает КП, после этого вы оформляете заказ по цене КП и оплачиваете его как обычно: деньги у площадки, пока вы не получите товар. Перед заказом посмотрите проверку продавца: что проверено, каким источником и что нужно проверить вручную. Договор, счёт и УПД формируются из КП автоматически.
       </p>
       {quotes.length === 0 && (
         <p className="rounded-xl border p-5 text-sm">
@@ -38,6 +39,7 @@ export default async function BuyerQuotesPage() {
               Перейти к заказу
             </Link>
           )}
+          <QuoteDocLinks quote={q} />
         </QuoteCard>
       ))}
     </main>
