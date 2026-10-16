@@ -18,6 +18,7 @@ const NAV: { href: string; label: string }[] = [
   { href: "/admin/payouts", label: "Выплаты" },
   { href: "/admin/verification", label: "Верификация" },
   { href: "/admin/risk", label: "Риски" },
+  { href: "/admin/agents", label: "Эффективность агента" },
   { href: "/admin/ai", label: "AI мониторинг" },
   { href: "/admin/audit", label: "Аудит" },
 ];
