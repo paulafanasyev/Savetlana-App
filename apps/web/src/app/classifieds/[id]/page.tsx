@@ -11,9 +11,17 @@ import { resolveParams } from "@/lib/page-params";
 import { isBidAd } from "@/lib/freelance-bids";
 import { isDemoAd, locationLine } from "@/lib/location-line";
 import { adMeta } from "@/lib/ad-meta";
+import { isAdActive } from "@/lib/ad-active";
+import { prisma } from "@/lib/prisma";
 import { BidForm } from "./BidForm";
 
 export const dynamic = "force-dynamic";
+
+/** Срок объявления истёк (30 дней с публикации): его уже нет в поиске, но ссылка могла остаться. */
+async function adExpired(id: string): Promise<boolean> {
+  const row = await prisma.classified.findUnique({ where: { id }, select: { expiresAt: true } }).catch(() => null);
+  return row ? !isAdActive(row.expiresAt) : false;
+}
 
 /** Свой заголовок и описание: для поиска и превью ссылки в мессенджерах. */
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -26,6 +34,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     cityName: ad.cityName,
     description: ad.description,
     demo: isDemoAd(ad.attrs),
+    expired: await adExpired(ad.id),
   });
   return {
     title: { absolute: m.title },
@@ -53,6 +62,8 @@ export default async function ClassifiedDetailPage({
   const bidMode = isBidAd(ad);
   // Пример от площадки: написать автору нельзя, вместо кнопки честное пояснение.
   const demo = isDemoAd(ad.attrs);
+  // Истёкшее объявление: честно говорим, что оно уже не действует, и не зовём писать.
+  const expired = await adExpired(ad.id);
   const place = locationLine(ad);
 
   // Характеристики с русскими подписями; VIN показываем не целиком.
@@ -152,18 +163,33 @@ export default async function ClassifiedDetailPage({
                 Разместить своё объявление
               </Link>
             </div>
+          ) : expired && !isAuthor ? (
+            <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm" role="note">
+              <p>Срок этого объявления истёк, оно больше не действует.</p>
+              <Link href={`/classifieds?vertical=${ad.vertical}`} className="btn btn-primary mt-3 inline-block">
+                Похожие объявления
+              </Link>
+            </div>
           ) : isAuthor ? (
-            <Link href={`/classifieds/${ad.id}/replies`} className="btn btn-primary mt-4 inline-block">
-              {ad.vertical === "JOB" ? "Отклики" : bidMode ? "Предложения и сообщения" : "Сообщения"}: {myReplies?.threads ?? 0}
-              {myReplies && myReplies.unread > 0 ? `, новых ${myReplies.unread}` : ""}
-            </Link>
+            <>
+              {expired && (
+                <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+                  Срок объявления истёк, его больше не видно в поиске.{" "}
+                  <Link href="/classifieds/my" className="underline">Мои объявления</Link>
+                </p>
+              )}
+              <Link href={`/classifieds/${ad.id}/replies`} className="btn btn-primary mt-4 inline-block">
+                {ad.vertical === "JOB" ? "Отклики" : bidMode ? "Предложения и сообщения" : "Сообщения"}: {myReplies?.threads ?? 0}
+                {myReplies && myReplies.unread > 0 ? `, новых ${myReplies.unread}` : ""}
+              </Link>
+            </>
           ) : (
             <Link href={`/classifieds/${ad.id}/chat`} className={`btn mt-4 inline-block ${bidMode ? "btn-ghost" : "btn-primary"}`}>
               {replyWording(ad).button}
             </Link>
           )}
 
-          {!demo && !isAuthor && bidMode && <BidForm classifiedId={ad.id} signedIn={Boolean(viewer)} />}
+          {!demo && !expired && !isAuthor && bidMode && <BidForm classifiedId={ad.id} signedIn={Boolean(viewer)} />}
 
           {isJob ? (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
