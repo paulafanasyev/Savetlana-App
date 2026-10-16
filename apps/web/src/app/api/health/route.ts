@@ -3,6 +3,7 @@ import { aiMode } from "@/lib/ai/gateway";
 import { integrationStatus } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { getStorageProvider, lastStorageError, storeUpload } from "@/lib/storage";
+import { telegramDiagnostics } from "@/lib/telegram-diagnostics";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,9 @@ const PROBE_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0
  *
  * ?mode=storage: пробная загрузка крошечного файла и его удаление. Показывает, куда
  * реально попал файл (Blob или база) и последнюю ошибку Blob. Не чаще 3 раз в минуту.
+ *
+ * telegram: настроен ли бот уведомлений (только имена недостающих переменных, без значений).
+ * classifieds: сколько опубликованных объявлений видит именно сервер API.
  */
 export const GET = apiRoute(async (request) => {
   const url = new URL(request.url);
@@ -54,6 +58,13 @@ export const GET = apiRoute(async (request) => {
     };
   }
 
+  let classifieds: { published: number } | { error: string };
+  try {
+    classifieds = { published: database.ok ? await prisma.classified.count({ where: { status: "PUBLISHED" } }) : 0 };
+  } catch (e) {
+    classifieds = { error: e instanceof Error ? e.message.slice(0, 200) : "unavailable" };
+  }
+
   // Readiness: every hard dependency must be healthy.
   const ready = database.ok;
   return Response.json(
@@ -64,7 +75,9 @@ export const GET = apiRoute(async (request) => {
       database,
       storage: getStorageProvider().key,
       integrations: integrationStatus,
+      telegram: telegramDiagnostics(),
+      classifieds,
     },
-    { status: ready ? 200 : 503 }
+    { status: ready ? 200 : 503, headers: { "Cache-Control": "no-store" } }
   );
 });
