@@ -7,6 +7,8 @@
  * инструментов. Сами показанные товары берутся из журнала вызовов
  * инструментов этого же разговора (master.ts).
  */
+import { isNegotiationRequest, negotiationArgs } from "./negotiation-command";
+
 export interface ShownItem {
   productId: string;
   title: string;
@@ -74,7 +76,7 @@ export function extractShownItems(output: string): ShownItem[] {
   return items;
 }
 
-const SINGLE_PRODUCT_TOOLS = new Set(["get_product", "get_reviews", "cart_add", "wishlist_add", "search_cheaper", "check_inventory"]);
+const SINGLE_PRODUCT_TOOLS = new Set(["get_product", "get_reviews", "cart_add", "wishlist_add", "search_cheaper", "check_inventory", "negotiate_quote"]);
 
 /**
  * Подставляет показанные товары в аргументы, если пользователь сослался на
@@ -108,7 +110,7 @@ export function resolveToolArgs(toolName: string, args: Record<string, unknown>,
 
 /**
  * Прямое действие по ссылке на показанные товары: «сравни эти два», «добавь
- * второй в корзину», «отзывы на первый», «подробнее про третий».
+ * второй в корзину», «отзывы на первый», «подробнее про третий», «поторгуйся за второй».
  */
 export function planReferenceAction(message: string, shown: ShownItem[]): { tool: string; args: Record<string, unknown>; label: string } | null {
   if (shown.length === 0) return null;
@@ -119,6 +121,12 @@ export function planReferenceAction(message: string, shown: ShownItem[]): { tool
     const picked = pickItems(shown, ref.kind === "index" ? { kind: "all" } : ref);
     if (picked.length < 2) return null;
     return { tool: "compare_products", args: { productIds: picked.map((p) => p.productId) }, label: `Сравниваю: ${picked.map((p) => `«${p.title}»`).join(", ")}.` };
+  }
+  // B2B-торг за показанный товар: количество и цены берём из той же фразы.
+  if (isNegotiationRequest(message)) {
+    const target = pickItems(shown, ref.kind === "index" ? ref : { kind: "index", index: 0 });
+    if (target.length !== 1) return null;
+    return { tool: "negotiate_quote", args: { ...negotiationArgs(message), productId: target[0].productId }, label: `Торгуюсь за «${target[0].title}».` };
   }
   const single = pickItems(shown, ref.kind === "index" ? ref : { kind: "index", index: 0 });
   if (single.length !== 1 || ref.kind !== "index") return null;
