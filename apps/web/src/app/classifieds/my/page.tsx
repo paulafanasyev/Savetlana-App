@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUserServer } from "@/lib/auth";
 import { listMyClassifieds } from "@/lib/domains/classifieds";
 import { replyCountsByAd } from "@/lib/domains/classified-replies";
+import { telegramStatus } from "@/lib/domains/telegram-link";
 import { rub, timeAgo } from "@/lib/format";
 import { priceText } from "@/lib/classified-fields";
 import { readObject } from "@/lib/db/json";
@@ -27,8 +28,14 @@ const EXPIRED = { label: "Срок истёк, не видно в поиске",
 export default async function MyClassifiedsPage({ searchParams }: { searchParams?: Promise<{ renewed?: string; renew?: string }> }) {
   const sp = (await searchParams) ?? {};
   const { user } = await requireUserServer();
-  const [ads, counts] = await Promise.all([listMyClassifieds(user.id), replyCountsByAd(user.id)]);
+  const [ads, counts, telegram] = await Promise.all([
+    listMyClassifieds(user.id),
+    replyCountsByAd(user.id),
+    telegramStatus(user.id).catch(() => ({ configured: false, linked: false, botUsername: null })),
+  ]);
   const now = new Date();
+  // Есть опубликованные объявления, а Telegram не подключён: подсказываем, где включить.
+  const suggestTelegram = telegram.configured && !telegram.linked && ads.some((a) => a.status === "PUBLISHED");
   return (
     <main className="mx-auto max-w-4xl space-y-5 px-4 py-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -46,6 +53,12 @@ export default async function MyClassifiedsPage({ searchParams }: { searchParams
       )}
       {sp.renew === "fail" && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">Не получилось продлить: это можно сделать только с опубликованным объявлением за 3 дня до конца срока или позже.</p>
+      )}
+      {suggestTelegram && (
+        <p className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700">
+          Чтобы не пропускать отклики и напоминания о сроке, подключите Telegram в{" "}
+          <Link href="/profile" className="font-medium underline">профиле</Link>.
+        </p>
       )}
 
       {ads.length === 0 ? (
