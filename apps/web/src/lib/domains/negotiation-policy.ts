@@ -1,7 +1,8 @@
 /**
  * Правила B2B-торга продавца: до какой скидки агент продавца может уступить,
- * скидки за объём и минимальная партия. Продавец задаёт их в кабинете
- * («Торг B2B»); пока не задал, действуют правила площадки по умолчанию.
+ * скидки за объём, минимальная партия, срок поставки и условия оплаты.
+ * Продавец задаёт их в кабинете («Торг B2B»); пока не задал, действуют
+ * правила площадки по умолчанию.
  *
  * Хранятся служебной записью в памяти Светланы владельца кабинета (AiMemory,
  * ключ seller_negotiation_policy, не редактируется через «Что знает
@@ -10,6 +11,7 @@
 import { prisma } from "../prisma";
 import { audit } from "./audit";
 import { DEFAULT_TIERS, MAX_DISCOUNT_CAP_PERCENT, type VolumeTier } from "../negotiation";
+import { DEFAULT_TERMS, normalizeTerms, type SellerTerms } from "../negotiation-terms";
 
 export const POLICY_KEY = "seller_negotiation_policy";
 const MAX_TIERS = 5;
@@ -21,6 +23,8 @@ export interface SellerNegotiationPolicy {
   negotiablePercent: number;
   minOrderQty: number;
   volumeTiers: VolumeTier[];
+  /** Срок поставки и условия оплаты. */
+  terms: SellerTerms;
   /** Правила заданы продавцом, а не взяты по умолчанию. */
   custom: boolean;
 }
@@ -44,6 +48,7 @@ export function defaultNegotiationPolicy(): SellerNegotiationPolicy {
     negotiablePercent: envPercent("NEGOTIATION_EXTRA_PERCENT", 5),
     minOrderQty: 1,
     volumeTiers: DEFAULT_TIERS.map((t) => ({ ...t })),
+    terms: { ...DEFAULT_TERMS },
     custom: false,
   };
 }
@@ -72,6 +77,7 @@ export function normalizeNegotiationPolicy(input: unknown): SellerNegotiationPol
     negotiablePercent: int(p.negotiablePercent, 0, maxDiscountPercent, Math.min(base.negotiablePercent, maxDiscountPercent)),
     minOrderQty: int(p.minOrderQty, 1, 1_000_000, 1),
     volumeTiers: tiers,
+    terms: normalizeTerms(p.terms),
     custom: true,
   };
 }
@@ -106,6 +112,7 @@ export async function saveSellerNegotiationPolicy(
     negotiablePercent: policy.negotiablePercent,
     minOrderQty: policy.minOrderQty,
     volumeTiers: policy.volumeTiers,
+    terms: policy.terms,
   });
   await prisma.aiMemory.upsert({
     where: { userId_key: { userId: seller.userId, key: POLICY_KEY } },

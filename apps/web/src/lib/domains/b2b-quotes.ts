@@ -18,6 +18,7 @@ import { notify } from "./notifications";
 import { generateOrderNumber } from "../utils";
 import { computeSettlement } from "./payments";
 import { UserFacingError } from "./engagement-rules";
+import { PAYMENT_LABEL, type PaymentTerms } from "../negotiation-terms";
 
 export const QUOTE_TOOL = "b2b_quote";
 export const QUOTE_KIND = "B2B_QUOTE";
@@ -39,6 +40,11 @@ export interface QuoteTerms {
   discountPercent: number;
   rounds: number;
   chain: string;
+  /** Условия поставки и оплаты, о которых договорились (если обсуждались). */
+  leadDays?: number;
+  payment?: PaymentTerms;
+  deferralDays?: number;
+  termsLines?: string[];
 }
 
 export interface Quote extends QuoteTerms {
@@ -98,7 +104,7 @@ export async function createQuote(input: Omit<QuoteTerms, "v" | "sellerUserId">)
   const seller = await prisma.sellerProfile.findUnique({ where: { id: input.sellerId }, select: { userId: true } });
   if (!seller) throw new UserFacingError("Продавец не найден", 404);
   if (seller.userId === input.buyerId) throw new UserFacingError("Нельзя оформить КП самому себе", 400);
-  const terms: QuoteTerms = { v: 1, ...input, sellerUserId: seller.userId, chain: input.chain.slice(0, 600), title: input.title.slice(0, 200) };
+  const terms: QuoteTerms = { v: 1, ...input, sellerUserId: seller.userId, chain: input.chain.slice(0, 600), title: input.title.slice(0, 200), termsLines: input.termsLines?.slice(0, 6).map((l) => l.slice(0, 160)) };
   const args = JSON.stringify(terms);
   const row = await prisma.pendingAction.create({
     data: {
@@ -120,7 +126,7 @@ export async function createQuote(input: Omit<QuoteTerms, "v" | "sellerUserId">)
     userId: seller.userId,
     kind: "order_status",
     title: `Новое КП ${quote.number}: «${terms.title}»`,
-    body: `Агенты договорились: ${terms.quantity} шт. по ${rub(terms.unitPriceKopecks)} (прайс ${rub(terms.listPriceKopecks)}), итого ${rub(terms.totalKopecks)}. Подтвердите или отклоните в кабинете.`,
+    body: `Агенты договорились: ${terms.quantity} шт. по ${rub(terms.unitPriceKopecks)} (прайс ${rub(terms.listPriceKopecks)}), итого ${rub(terms.totalKopecks)}${quoteTermsText(terms)}. Подтвердите или отклоните в кабинете.`,
     url: "/seller/quotes",
   }).catch(() => undefined);
   return quote;
@@ -196,7 +202,7 @@ export async function acceptQuote(quoteId: string, buyerId: string): Promise<{ o
         paymentFeeKopecks: settlement.paymentFeeKopecks,
         totalKopecks: total,
         deliveryAddress: JSON.stringify({ kind: QUOTE_KIND, quoteId, deliveryMethod: "PICKUP" }),
-        note: `${q.number}: ${q.quantity} шт. по цене КП`,
+        note: `${q.number}: ${q.quantity} шт. по цене КП${quoteTermsText(q)}`.slice(0, 500),
       },
       select: { id: true, number: true },
     });
@@ -213,10 +219,18 @@ export async function acceptQuote(quoteId: string, buyerId: string): Promise<{ o
     userId: q.sellerUserId,
     kind: "order_status",
     title: `Заказ ${order.number} по ${q.number}`,
-    body: `Покупатель оформил заказ по КП: ${q.quantity} шт. «${q.title}». После оплаты заказ появится в работе.`,
+    body: `Покупатель оформил заказ по КП: ${q.quantity} шт. «${q.title}»${quoteTermsText(q)}. После оплаты заказ появится в работе.`,
     url: "/seller/orders",
   }).catch(() => undefined);
   return order;
+}
+
+/** «; поставка 3 дн.; отсрочка 30 дн.» — условия КП для заметки к заказу. */
+export function quoteTermsText(q: Pick<QuoteTerms, "leadDays" | "payment" | "deferralDays">): string {
+  const parts: string[] = [];
+  if (q.leadDays) parts.push(`поставка ${q.leadDays} дн.`);
+  if (q.payment) parts.push(q.payment === "DEFERRAL" && q.deferralDays ? `${PAYMENT_LABEL.DEFERRAL} ${q.deferralDays} дн.` : PAYMENT_LABEL[q.payment]);
+  return parts.length ? `; ${parts.join("; ")}` : "";
 }
 
 /** Заказ по КП → id заказа (для ссылки «Перейти к заказу»). */
