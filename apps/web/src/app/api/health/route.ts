@@ -1,9 +1,13 @@
-import { apiRoute } from "@/lib/api-helpers";
+import { apiRoute, rateLimit, tooManyRequests } from "@/lib/api-helpers";
 import { aiMode } from "@/lib/ai/gateway";
 import { integrationStatus } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { getStorageProvider, lastStorageError, storeUpload } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
+
+// Крошечный PNG для пробной загрузки: сигнатура и несколько байт.
+const PROBE_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52]);
 
 /**
  * Readiness probe (spec §131). A 200 here must mean the process can actually
@@ -11,6 +15,9 @@ export const dynamic = "force-dynamic";
  * fails with 503 instead of a misleading "ok". Liveness is reported on the
  * same route as a cheap always-200 answer so orchestrators can distinguish
  * "process alive but not ready" from "process dead".
+ *
+ * ?mode=storage: пробная загрузка крошечного файла и его удаление. Показывает, куда
+ * реально попал файл (Blob или база) и последнюю ошибку Blob. Не чаще 3 раз в минуту.
  */
 export const GET = apiRoute(async (request) => {
   const url = new URL(request.url);
@@ -19,6 +26,19 @@ export const GET = apiRoute(async (request) => {
   // Liveness: the process is up. Never depends on dependencies.
   if (mode === "liveness") {
     return Response.json({ status: "alive", time: new Date().toISOString() });
+  }
+
+  if (mode === "storage") {
+    if (!rateLimit("health-storage", 3, 60_000)) return tooManyRequests();
+    const provider = getStorageProvider().key;
+    try {
+      const stored = await storeUpload({ bucket: "public/healthcheck", filename: `probe-${Date.now()}.png`, bytes: PROBE_PNG, declaredMimeType: "image/png", storageClass: "public" });
+      let deleted = true;
+      await getStorageProvider().delete(stored.key).catch(() => { deleted = false; });
+      return Response.json({ provider, storedIn: stored.provider, ok: stored.provider === provider, deleted, lastError: lastStorageError() });
+    } catch (e) {
+      return Response.json({ provider, ok: false, error: e instanceof Error ? e.message : "Хранилище недоступно", lastError: lastStorageError() }, { status: 503 });
+    }
   }
 
   let database: { ok: boolean; latencyMs: number; error?: string };
@@ -42,6 +62,7 @@ export const GET = apiRoute(async (request) => {
       time: new Date().toISOString(),
       ai: aiMode(),
       database,
+      storage: getStorageProvider().key,
       integrations: integrationStatus,
     },
     { status: ready ? 200 : 503 }
