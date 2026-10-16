@@ -8,17 +8,24 @@ import { stars } from "@/lib/service-reviews";
 
 export const dynamic = "force-dynamic";
 
-/** Публичный профиль исполнителя: факты площадки, отзывы заказчиков и его услуги. */
+/** Публичный профиль исполнителя: факты площадки, портфолио, отзывы заказчиков и его услуги. */
 export default async function PerformerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await resolveParams(params);
   const p = await loadPerformer(id);
   if (!p) notFound();
   const facts = performerFacts({ stats: p.stats, npdStatus: p.npdStatus, identityStatus: p.identityStatus, since: p.since, ratings: p.ratings });
+  const { about, skills, items } = p.portfolio;
   return (
     <main className="mx-auto max-w-3xl space-y-5 px-4 py-6">
       <section className="card p-5">
         <p className="text-xs uppercase tracking-wide text-ink-faint">Исполнитель</p>
         <h1 className="mt-1 text-2xl font-semibold text-ink">{p.name}</h1>
+        {about && <p className="mt-2 whitespace-pre-line text-sm text-ink">{about}</p>}
+        {skills.length > 0 && (
+          <ul className="mt-3 flex flex-wrap gap-2" aria-label="Навыки">
+            {skills.map((s) => <li key={s} className="chip">{s}</li>)}
+          </ul>
+        )}
         <ul className="mt-3 space-y-1 text-sm text-ink-soft">
           {facts.map((f) => <li key={f}>• {f}</li>)}
         </ul>
@@ -26,6 +33,24 @@ export default async function PerformerPage({ params }: { params: Promise<{ id: 
           🛡 Оплачивайте работу только через безопасную сделку на площадке: деньги придут исполнителю только после того, как вы примете работу. Не переводите деньги на карту напрямую.
         </p>
       </section>
+      {items.length > 0 && (
+        <section className="card p-5" id="portfolio">
+          <h2 className="text-lg font-semibold">Портфолио</h2>
+          <p className="mt-1 text-xs text-ink-faint">Работы добавил сам исполнитель. Реальные сделки и отзывы на площадке показаны выше и ниже.</p>
+          <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+            {items.map((i) => (
+              <li key={i.id} className="rounded-lg border border-surface-line p-3">
+                {i.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={i.imageUrl} alt={i.title} loading="lazy" className="mb-2 aspect-video w-full rounded-md object-cover" />
+                )}
+                <p className="font-medium text-ink">{i.title}</p>
+                {i.description && <p className="mt-1 whitespace-pre-line text-sm text-ink-soft">{i.description}</p>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="card p-5" id="reviews">
         <h2 className="text-lg font-semibold">Отзывы заказчиков</h2>
         <p className="mt-1 text-xs text-ink-faint">Отзыв может оставить только заказчик, который принял работу через безопасную сделку. Исполнитель не может его удалить.</p>
