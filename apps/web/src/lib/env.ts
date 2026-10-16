@@ -54,6 +54,14 @@ function optional(name: string): string | undefined {
   return value && value.length > 0 ? value : undefined;
 }
 
+/**
+ * Адрес ИИ в виде «…/v1»: без слэша в конце и без «/chat/completions», если их вставили вместе
+ * с адресом: код сам дописывает путь запроса.
+ */
+export function normalizeAiBaseUrl(raw: string): string {
+  return raw.trim().replace(/\/+$/, "").replace(/\/chat\/completions$/, "").replace(/\/+$/, "");
+}
+
 const NODE_ENV = optional("NODE_ENV") ?? "development";
 const IS_PRODUCTION = NODE_ENV === "production";
 // Next.js sets NEXT_PHASE=phase-production-build while compiling. Runtime
@@ -133,9 +141,11 @@ export const env = {
     .filter(Boolean),
 
   // --- AI Gateway (server-side only) -------------------------------------
-  aiGatewayBaseUrl: optional("AI_GATEWAY_BASE_URL") ?? "http://localhost:11434/v1",
-  aiGatewayApiKey: optional("AI_GATEWAY_API_KEY"),
-  aiGatewayModel: optional("AI_GATEWAY_MODEL") ?? "external-chat-model",
+  // Понимаем и имена из проекта Светланы (AI_API_KEY, AI_BASE_URL, AI_MODEL): если они уже
+  // заданы в Vercel, переименовывать не нужно. AI_GATEWAY_* важнее, если заданы оба.
+  aiGatewayBaseUrl: normalizeAiBaseUrl(optional("AI_GATEWAY_BASE_URL") ?? optional("AI_BASE_URL") ?? "http://localhost:11434/v1"),
+  aiGatewayApiKey: optional("AI_GATEWAY_API_KEY") ?? optional("AI_API_KEY"),
+  aiGatewayModel: optional("AI_GATEWAY_MODEL") ?? optional("AI_MODEL") ?? "external-chat-model",
   aiGatewayTimeoutMs: Number(optional("AI_GATEWAY_TIMEOUT_MS") ?? "30000"),
   aiGatewayMaxRetries: Number(optional("AI_GATEWAY_MAX_RETRIES") ?? "2"),
   aiProviderOrder: (optional("AI_PROVIDER_ORDER") ?? "external,mock")
