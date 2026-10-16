@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { searchClassifieds, getGeoTree } from "@/lib/domains/classifieds";
 import { ensureDemoClassifieds } from "@/lib/domains/demo";
@@ -10,11 +11,29 @@ import { resolveSearchParams } from "@/lib/page-params";
 import { readCityCookie } from "@/lib/my-city";
 import { normalize, type PickCity } from "@/lib/city-pick";
 import { kmBetween, kmLabel, nearbyCities } from "@/lib/nearby";
+import { listMeta } from "@/lib/ad-meta";
 import { CityFilter } from "./CityFilter";
 
 export const dynamic = "force-dynamic";
 
 const NEARBY_RADIUS_KM = 300;
+
+/** Заголовок списка по разделу и городу из ссылки; поиск по тексту не индексируется. */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ vertical?: string; cityId?: string; q?: string }>;
+}): Promise<Metadata> {
+  const query = await resolveSearchParams(searchParams);
+  const labels = VERTICAL_LABELS as Record<string, string>;
+  const section = query.vertical ? labels[query.vertical] ?? null : null;
+  const city =
+    query.cityId && query.cityId !== "all"
+      ? await prisma.city.findUnique({ where: { id: query.cityId }, select: { name: true } }).catch(() => null)
+      : null;
+  const m = listMeta({ section, cityName: city?.name ?? null, query: query.q ?? null });
+  return { title: { absolute: m.title }, description: m.description, robots: m.index ? undefined : { index: false, follow: true } };
+}
 
 interface NearbyAd {
   id: string;
