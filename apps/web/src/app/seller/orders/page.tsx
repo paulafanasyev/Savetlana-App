@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireSellerServer } from "@/lib/auth";
 import { getOrdersForSeller } from "@/lib/domains/orders";
 import { rub, timeAgo } from "@/lib/format";
@@ -6,6 +7,7 @@ import { deliveryLabel } from "@/lib/delivery-options";
 import { isLiveDeployment } from "@/lib/live-mode";
 import { CdekCarrierAdapter } from "@/lib/domains/carriers/cdek";
 import { safeDealSellerNote } from "@/lib/safe-deal";
+import { serviceMeta, servicePerformerNote } from "@/lib/service-deal";
 import { FulfillActions } from "./FulfillActions";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +51,28 @@ export default async function SellerOrdersPage() {
       {orders.length === 0 ? <p className="text-ink-faint">Заказов пока нет.</p> : (
         <div className="space-y-4">
           {orders.map((order) => {
+            const service = serviceMeta(order.deliveryAddress);
+            if (service) {
+              // Заказ услуги: доставки нет, работа сдаётся из переписки по объявлению.
+              return (
+                <article className="card space-y-3 p-5" key={order.id}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <b>{order.number}</b>
+                      <div className="text-sm text-ink-faint">{order.buyer.name ?? order.buyer.email} · {timeAgo(order.createdAt)}</div>
+                    </div>
+                    <div className="text-right">
+                      <div>{orderStatusLabel(order.status)}</div>
+                      <b>{rub(order.totalKopecks)}</b>
+                    </div>
+                  </div>
+                  <p className="text-sm">Услуга «{service.title}»{service.days > 0 ? ` · срок ${service.days} дн.` : ""}</p>
+                  <p className="text-sm text-ink-faint">Оплата: {paymentStatusLabel(order.payment?.status)}</p>
+                  <p className="rounded-lg bg-emerald-50 p-2 text-sm text-emerald-900">🛡 {servicePerformerNote(order.status)}</p>
+                  <Link href={`/classifieds/${service.classifiedId}/chat`} className="btn btn-ghost inline-flex px-3 py-2 text-sm">Открыть переписку и сдать работу</Link>
+                </article>
+              );
+            }
             const delivery = parseDelivery(order.deliveryAddress);
             const method = delivery.deliveryMethod ?? "PICKUP";
             const showContacts = !HIDE_CONTACTS.includes(order.status);
