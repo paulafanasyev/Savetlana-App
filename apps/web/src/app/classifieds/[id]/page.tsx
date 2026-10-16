@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getClassifiedPublic, incrementViews } from "@/lib/domains/classifieds";
 import { replyCountsByAd, replyWording } from "@/lib/domains/classified-replies";
@@ -9,9 +10,30 @@ import { dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
 import { resolveParams } from "@/lib/page-params";
 import { isBidAd } from "@/lib/freelance-bids";
 import { isDemoAd, locationLine } from "@/lib/location-line";
+import { adMeta } from "@/lib/ad-meta";
 import { BidForm } from "./BidForm";
 
 export const dynamic = "force-dynamic";
+
+/** Свой заголовок и описание: для поиска и превью ссылки в мессенджерах. */
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await resolveParams(params);
+  const ad = await getClassifiedPublic(id).catch(() => null);
+  if (!ad) return { title: { absolute: "Объявление не найдено | АИКО" }, robots: { index: false } };
+  const m = adMeta({
+    title: ad.title,
+    price: ad.priceKopecks > 0 ? priceText(ad.dealType, ad.attrs, rub(ad.priceKopecks)) : null,
+    cityName: ad.cityName,
+    description: ad.description,
+    demo: isDemoAd(ad.attrs),
+  });
+  return {
+    title: { absolute: m.title },
+    description: m.description,
+    robots: m.index ? undefined : { index: false, follow: true },
+    openGraph: { title: m.title, description: m.description, type: "website", images: ad.coverImage ? [ad.coverImage] : undefined },
+  };
+}
 
 export default async function ClassifiedDetailPage({
   params,
