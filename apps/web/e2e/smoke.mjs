@@ -4,8 +4,9 @@
  * (своя тестовая база, без настоящих ключей и денег).
  *
  * Сценарий: главная, каталог, «Фриланс», регистрация, форма заказа сразу
- * на услуге, выбор города поиском, портфолио (о себе, навыки, работа с фото),
- * публичный профиль исполнителя, удаление работы вместе с фото.
+ * на услуге, выбор города поиском, мой город с погодой в шапке, портфолио
+ * (о себе, навыки, работа с фото), публичный профиль исполнителя, удаление
+ * работы вместе с фото.
  *
  * Итог пишется в сводку GitHub (GITHUB_STEP_SUMMARY) и в аннотации запуска,
  * скриншоты упавших шагов лежат в артефакте «browser-check».
@@ -106,6 +107,23 @@ await step("Город в объявлении выбирается поиско
   expect(label.startsWith("Казань"), `в поле города: ${label}`);
   const id = await page.locator('input[type="hidden"][name="cityId"]').inputValue();
   expect(id.length > 0, "id города не попал в форму");
+});
+
+await step("Мой город: выбор поиском, город в шапке и в новом объявлении", async () => {
+  await open("/city");
+  await page.getByRole("heading", { name: "Мой город" }).waitFor();
+  await page.locator("#my-city").fill("Новосиб");
+  await page.getByRole("option", { name: /Новосибирск/ }).first().click();
+  await page.getByTestId("weather-widget").filter({ hasText: "Новосибирск" }).waitFor();
+  const mapPoints = await page.locator('svg [role="button"]').count();
+  expect(mapPoints > 100, `точек на карте: ${mapPoints}`);
+  await open("/classifieds/new");
+  await page.waitForFunction(() => {
+    const el = document.querySelector('input[type="hidden"][name="cityId"]');
+    return el instanceof HTMLInputElement && el.value.length > 0;
+  });
+  const label = await page.locator("#cityId").inputValue();
+  expect(label.startsWith("Новосибирск"), `в поле города: ${label}`);
 });
 
 await step("Портфолио: о себе и навыки сохраняются (дефисы на месте)", async () => {
