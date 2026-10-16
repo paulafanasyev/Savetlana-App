@@ -5,8 +5,9 @@
  */
 import { randomBytes } from "node:crypto";
 import { prisma } from "../prisma";
+import { getStorageProvider } from "../storage";
 import { UserFacingError } from "./engagement-rules";
-import { addItem, cleanAbout, cleanItem, cleanSkills, parsePortfolio, removeItem, type Portfolio } from "../portfolio";
+import { addItem, cleanAbout, cleanItem, cleanSkills, orphanedImageKey, parsePortfolio, removeItem, type Portfolio } from "../portfolio";
 
 const PROVIDER = "performer-portfolio";
 const externalId = (userId: string) => `portfolio/${userId}`;
@@ -46,10 +47,15 @@ export async function addPortfolioItem(userId: string, input: { title?: unknown;
   return added.portfolio;
 }
 
+/** Убирает работу и её фото из хранилища, если оно больше нигде не используется. */
 export async function removePortfolioItem(userId: string, itemId: string): Promise<Portfolio> {
   const current = await loadPortfolio(userId);
+  const removed = current.items.find((i) => i.id === itemId);
+  if (!removed) throw new UserFacingError("Работа не найдена", 404);
   const next = removeItem(current, itemId);
-  if (next.items.length === current.items.length) throw new UserFacingError("Работа не найдена", 404);
   await savePortfolio(userId, next);
+  const key = orphanedImageKey(removed, next, userId);
+  // Фото удаляем после сохранения: если хранилище ответит ошибкой, работа всё равно убрана.
+  if (key) await getStorageProvider().delete(key).catch(() => undefined);
   return next;
 }
