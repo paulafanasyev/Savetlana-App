@@ -17,6 +17,7 @@ export function CityCombobox({
   id,
   name,
   placeholder = "Начните вводить город",
+  autoMyCity = true,
 }: {
   cities: PickCity[];
   value: string;
@@ -24,6 +25,8 @@ export function CityCombobox({
   id?: string;
   name?: string;
   placeholder?: string;
+  /** Подставлять ли «мой город» в пустое поле. В фильтрах выключено: пусто значит «везде». */
+  autoMyCity?: boolean;
 }) {
   const listId = useId();
   const selected = useMemo(() => cities.find((c) => c.id === value) ?? null, [cities, value]);
@@ -33,7 +36,7 @@ export function CityCombobox({
 
   // Пустое поле: подставляем город, который человек выбрал в шапке сайта. Один раз, при открытии.
   useEffect(() => {
-    if (value || cities.length === 0) return;
+    if (!autoMyCity || value || cities.length === 0) return;
     const mine = readCityCookie(document.cookie);
     const found = mine ? cities.find((c) => normalize(c.name) === normalize(mine)) : undefined;
     if (found) onChange(found);

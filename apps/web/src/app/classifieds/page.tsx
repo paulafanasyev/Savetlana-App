@@ -1,9 +1,13 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { searchClassifieds, getGeoTree } from "@/lib/domains/classifieds";
 import { DEAL_TYPE_LABELS, VERTICAL_LABELS, dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
 import { rub } from "@/lib/format";
 import { priceText } from "@/lib/classified-fields";
 import { resolveSearchParams } from "@/lib/page-params";
+import { readCityCookie } from "@/lib/my-city";
+import { normalize, type PickCity } from "@/lib/city-pick";
+import { CityFilter } from "./CityFilter";
 
 export const dynamic = "force-dynamic";
 
@@ -13,16 +17,38 @@ export default async function ClassifiedsPage({
   searchParams: Promise<{ vertical?: string; dealType?: string; cityId?: string; q?: string }>;
 }) {
   const query = await resolveSearchParams(searchParams);
+  const tree = await getGeoTree();
+
+  // Все города одним списком, крупные первыми (для подсказок в фильтре).
+  const cities: PickCity[] = tree
+    .flatMap((d) => d.regions.flatMap((r) => r.cities.map((c) => ({ id: c.id, name: c.name, regionName: r.name, population: c.population ?? 0 }))))
+    .sort((a, b) => b.population - a.population)
+    .map(({ id, name, regionName }) => ({ id, name, regionName }));
+
+  // Город в ссылке важнее всего; cityId=all значит «по всей России».
+  // Без города в ссылке показываем «мой город», если человек его выбрал.
+  let cityId = query.cityId && query.cityId !== "all" ? query.cityId : undefined;
+  let myCity: PickCity | null = null;
+  if (!query.cityId) {
+    const mine = readCityCookie((await headers()).get("cookie"));
+    myCity = mine ? cities.find((c) => normalize(c.name) === normalize(mine)) ?? null : null;
+    if (myCity) cityId = myCity.id;
+  }
+
   const result = await searchClassifieds({
     vertical: query.vertical,
     dealType: query.dealType,
-    cityId: query.cityId,
+    cityId,
     query: query.q,
     limit: 30,
   });
-  const tree = await getGeoTree();
 
-  const cities = tree.flatMap((d) => d.regions.flatMap((r) => r.cities));
+  const everywhere = new URLSearchParams();
+  if (query.vertical) everywhere.set("vertical", query.vertical);
+  if (query.dealType) everywhere.set("dealType", query.dealType);
+  if (query.q) everywhere.set("q", query.q);
+  everywhere.set("cityId", "all");
+  const everywhereHref = `/classifieds?${everywhere.toString()}`;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6">
@@ -66,14 +92,7 @@ export default async function ClassifiedsPage({
             </option>
           ))}
         </select>
-        <select name="cityId" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm">
-          <option value="">Весь регион</option>
-          {cities.map((c) => (
-            <option key={c.id} value={c.id} selected={query.cityId === c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+        <CityFilter cities={cities} initialId={cityId ?? ""} />
         <div className="flex gap-2 sm:col-span-2 lg:col-span-4">
           <button
             type="submit"
@@ -96,11 +115,27 @@ export default async function ClassifiedsPage({
         </div>
       </form>
 
+      {myCity && (
+        <p className="mb-3 rounded-lg bg-svetlana-50 px-3 py-2 text-sm text-ink" role="status">
+          Показаны объявления в городе {myCity.name}.{" "}
+          <Link href={everywhereHref} className="underline">Показать по всей России</Link>
+          {" · "}
+          <Link href="/city" className="underline">Сменить город</Link>
+        </p>
+      )}
+
       <p className="mb-3 text-sm text-zinc-500">{result.items.length} объявлений</p>
 
       {result.items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 p-12 text-center text-zinc-500">
-          Ничего не найдено. Попробуйте изменить фильтры.
+          {myCity ? (
+            <>
+              В городе {myCity.name} пока ничего не нашлось.{" "}
+              <Link href={everywhereHref} className="underline">Посмотреть по всей России</Link>
+            </>
+          ) : (
+            "Ничего не найдено. Попробуйте изменить фильтры."
+          )}
         </div>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
