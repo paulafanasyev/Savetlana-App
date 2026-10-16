@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
-import { cityLabel, matchCity, suggestCities, type PickCity } from "@/lib/city-pick";
+import { cityLabel, matchCity, normalize, suggestCities, type PickCity } from "@/lib/city-pick";
+import { readCityCookie } from "@/lib/my-city";
 
 /**
  * Поле «Город» с поиском: начинаете печатать, ниже появляются подходящие
  * города. Работает мышью, пальцем и клавиатурой (стрелки, Enter, Esc).
  * Выбранный город уходит в форму скрытым полем с его id.
+ * Пустое поле само заполняется «моим городом» (выбран в шапке сайта).
  */
 export function CityCombobox({
   cities,
@@ -28,6 +30,15 @@ export function CityCombobox({
   const [text, setText] = useState(selected ? cityLabel(selected) : "");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+
+  // Пустое поле: подставляем город, который человек выбрал в шапке сайта. Один раз, при открытии.
+  useEffect(() => {
+    if (value || cities.length === 0) return;
+    const mine = readCityCookie(document.cookie);
+    const found = mine ? cities.find((c) => normalize(c.name) === normalize(mine)) : undefined;
+    if (found) onChange(found);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cities.length]);
 
   // Город выбрали снаружи (например, Светлана взяла его из текста): показываем его название.
   useEffect(() => {

@@ -4,6 +4,7 @@ import { Header } from "@/components/Header";
 import { SvetlanaDock } from "@/components/SvetlanaDock";
 import { GuestCartSync } from "@/components/GuestCartSync";
 import { ConsentGateServer } from "@/components/ConsentGateServer";
+import { WeatherWidget } from "@/components/WeatherWidget";
 import { env } from "@/lib/env";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/seo";
 
@@ -34,6 +35,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ru">
       <body className="min-h-screen flex flex-col">
+        {/* Тонкая полоска над шапкой: мой город и погода в нём. */}
+        <div className="border-b border-surface-line bg-surface-muted">
+          <div className="mx-auto flex min-h-7 max-w-6xl items-center justify-end px-4">
+            <WeatherWidget />
+          </div>
+        </div>
         <Header />
         <main className="flex-1">{children}</main>
         <footer className="border-t border-surface-line bg-white px-4 py-8 text-center text-xs text-ink-soft">
@@ -45,6 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/svetlana" className="hover:text-svetlana-700">Светлана</a>
               <a href="/favorites" className="hover:text-svetlana-700">Избранное</a>
               <a href="/seller" className="hover:text-svetlana-700">Кабинет продавца</a>
+              <a href="/city" className="hover:text-svetlana-700">Мой город и погода</a>
             </div>
             <div className="flex flex-wrap justify-center gap-4">
               <a href="/legal/payment-delivery" className="hover:text-svetlana-700">Оплата и доставка</a>
