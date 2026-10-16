@@ -10,11 +10,13 @@
  *
  * Автор отвечает только тем, кто откликнулся сам: написать первым по своему
  * объявлению нельзя. Каждое сообщение проходит антифрод (message-guard.ts).
+ * Предложения исполнителей по заказу услуги (freelance-bids.ts) идут тем же путём.
  */
 import { prisma } from "../prisma";
 import { UserFacingError, buildInbox, cleanMessage } from "./engagement-rules";
 import { notify } from "./notifications";
 import { guardOutgoingMessage, warnRecipient } from "./message-guard";
+import { BID_MARK } from "../freelance-bids";
 
 const THREAD_HOURLY_LIMIT = 20;
 const SENDER_HOURLY_LIMIT = 30;
@@ -42,6 +44,7 @@ interface AdForReply {
 export function replyWording(ad: { vertical: string; dealType: string }): { button: string; incoming: string } {
   if (ad.vertical === "JOB" && ad.dealType === "VACANCY") return { button: "Откликнуться", incoming: "Отклик на вакансию" };
   if (ad.vertical === "JOB" && ad.dealType === "RESUME") return { button: "Предложить работу", incoming: "Предложение работы по резюме" };
+  if (ad.vertical === "SERVICE" && ad.dealType === "SERVICE_REQUEST") return { button: "Задать вопрос заказчику", incoming: "Сообщение по заказу" };
   return { button: "Написать автору", incoming: "Сообщение по объявлению" };
 }
 
@@ -72,10 +75,11 @@ export async function sendToAuthor(sender: { id: string; name: string | null }, 
     throw new UserFacingError("Слишком много откликов за час. Попробуйте позже", 429);
   }
   const verdict = await guardOutgoingMessage(sender.id, text);
+  const incoming = text.startsWith(BID_MARK) ? "Предложение по заказу" : replyWording(ad).incoming;
   await notify({
     userId: ad.authorId,
     kind: "classified_reply",
-    title: `${replyWording(ad).incoming} «${ad.title.slice(0, 80)}» от ${sender.name?.trim() || "пользователя без имени"}`,
+    title: `${incoming} «${ad.title.slice(0, 80)}» от ${sender.name?.trim() || "пользователя без имени"}`,
     body: text,
     url,
   });

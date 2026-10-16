@@ -16,6 +16,7 @@ import { startPromotionTool, endPromotionTool, sellerMessagesTool, confirmPrevie
 import { extendPromotionTool, extendPromotionPreview } from "./promo-extend-tool";
 import { sellerTodayTool } from "./seller-today-tool";
 import { smartSearchClassifiedsTool } from "./classified-search-tool";
+import { confirmReceiptTool } from "./confirm-receipt-tool";
 import { promoState } from "../../domains/engagement-rules";
 import { ruText } from "../ru-text";
 
@@ -150,8 +151,8 @@ const unpaidOnlyCancelOrderTool: ToolDefinition = {
 };
 
 /**
- * В кабинете продавца «заказы» означают заказы его покупателей, а не его
- * собственные покупки. Покупателю инструмент отвечает как раньше.
+ * В кабинете продавца «заказы» означают заказы его покупателей, а не
+ * его собственные покупки. Покупателю инструмент отвечает как раньше.
  */
 const sellerAwareGetOrderTool: ToolDefinition = {
   ...getOrderTool,
@@ -310,6 +311,8 @@ const ALL_TOOLS: ToolDefinition[] = [
   wishlistAddTool,
   requestReturnTool,
   createDisputeTool,
+  // Безопасная сделка: «товар получен, всё в порядке».
+  confirmReceiptTool,
   getTrackingTool,
   getPaymentStatusTool,
   checkInventoryTool,

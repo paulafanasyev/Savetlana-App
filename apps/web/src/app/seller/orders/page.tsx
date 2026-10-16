@@ -5,6 +5,7 @@ import { orderStatusLabel, paymentStatusLabel, shipmentStatusLabel } from "@/lib
 import { deliveryLabel } from "@/lib/delivery-options";
 import { isLiveDeployment } from "@/lib/live-mode";
 import { CdekCarrierAdapter } from "@/lib/domains/carriers/cdek";
+import { safeDealSellerNote } from "@/lib/safe-deal";
 import { FulfillActions } from "./FulfillActions";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +53,7 @@ export default async function SellerOrdersPage() {
             const method = delivery.deliveryMethod ?? "PICKUP";
             const showContacts = !HIDE_CONTACTS.includes(order.status);
             const address = addressLine(delivery);
+            const safeNote = safeDealSellerNote(order.status);
             return (
               <article className="card space-y-3 p-5" key={order.id}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -87,6 +89,7 @@ export default async function SellerOrdersPage() {
                   Оплата: {paymentStatusLabel(order.payment?.status)}
                   {order.shipment ? ` · Отправление: ${order.shipment.carrierName}, ${shipmentStatusLabel(order.shipment.status)}` : ""}
                 </p>
+                {safeNote && <p className="rounded-lg bg-emerald-50 p-2 text-sm text-emerald-900">🛡 {safeNote}</p>}
                 <FulfillActions orderId={order.id} status={order.status} hasShipment={Boolean(order.shipment)} shipmentProvider={order.shipment?.providerKey} allowTestCarrier={allowTestCarrier} cdekConnected={cdekConnected && method === "SELLER"} />
               </article>
             );

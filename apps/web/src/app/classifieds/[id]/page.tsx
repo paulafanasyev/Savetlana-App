@@ -7,6 +7,8 @@ import { describeAttrs, priceText } from "@/lib/classified-fields";
 import { rub, timeAgo } from "@/lib/format";
 import { dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
 import { resolveParams } from "@/lib/page-params";
+import { isBidAd } from "@/lib/freelance-bids";
+import { BidForm } from "./BidForm";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,8 @@ export default async function ClassifiedDetailPage({
   const { user: viewer } = await resolveSession(await serverRequest()).catch(() => ({ user: null }));
   const isAuthor = Boolean(viewer && viewer.id === ad.authorId);
   const myReplies = isAuthor && viewer ? (await replyCountsByAd(viewer.id)).get(ad.id) : undefined;
+  // Заказ услуги: исполнители предлагают цену и срок.
+  const bidMode = isBidAd(ad);
 
   // Характеристики с русскими подписями; VIN показываем не целиком.
   const isJob = ad.vertical === "JOB";
@@ -81,12 +85,13 @@ export default async function ClassifiedDetailPage({
             </p>
           ) : ad.priceKopecks > 0 ? (
             <p className="mt-2 text-2xl font-bold">
+              {bidMode ? <span className="text-base font-medium text-zinc-500">Бюджет </span> : null}
               {rub(ad.priceKopecks)}
               {ad.dealType === "LONG_RENT" || ad.dealType === "RENT" ? <span className="text-base font-medium text-zinc-500"> в месяц</span> : null}
               {ad.dealType === "DAILY_RENT" ? <span className="text-base font-medium text-zinc-500"> за сутки</span> : null}
             </p>
           ) : (
-            <p className="mt-2 text-lg font-bold text-zinc-500">Цена не указана</p>
+            <p className="mt-2 text-lg font-bold text-zinc-500">{bidMode ? "Бюджет не указан: предложите свою цену" : "Цена не указана"}</p>
           )}
 
           <div className="mt-4 rounded-lg border border-zinc-200 p-3 text-sm">
@@ -106,7 +111,7 @@ export default async function ClassifiedDetailPage({
 
           <div className="mt-4 rounded-lg border border-zinc-200 p-3 text-sm">
             <p className="font-medium">
-              {ad.dealType === "VACANCY" ? "Работодатель" : ad.dealType === "RESUME" ? "Соискатель" : "Автор"}:{" "}
+              {ad.dealType === "VACANCY" ? "Работодатель" : ad.dealType === "RESUME" ? "Соискатель" : bidMode ? "Заказчик" : "Автор"}:{" "}
               {(ad.dealType === "VACANCY" && companyName) || ad.authorName || "Без имени"}
             </p>
             {ad.sellerDisplayName && (
@@ -120,14 +125,16 @@ export default async function ClassifiedDetailPage({
 
           {isAuthor ? (
             <Link href={`/classifieds/${ad.id}/replies`} className="btn btn-primary mt-4 inline-block">
-              {ad.vertical === "JOB" ? "Отклики" : "Сообщения"}: {myReplies?.threads ?? 0}
+              {ad.vertical === "JOB" ? "Отклики" : bidMode ? "Предложения и сообщения" : "Сообщения"}: {myReplies?.threads ?? 0}
               {myReplies && myReplies.unread > 0 ? `, новых ${myReplies.unread}` : ""}
             </Link>
           ) : (
-            <Link href={`/classifieds/${ad.id}/chat`} className="btn btn-primary mt-4 inline-block">
+            <Link href={`/classifieds/${ad.id}/chat`} className={`btn mt-4 inline-block ${bidMode ? "btn-ghost" : "btn-primary"}`}>
               {replyWording(ad).button}
             </Link>
           )}
+
+          {!isAuthor && bidMode && <BidForm classifiedId={ad.id} signedIn={Boolean(viewer)} />}
 
           {isJob ? (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
