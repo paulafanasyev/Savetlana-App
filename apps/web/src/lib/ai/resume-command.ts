@@ -3,7 +3,9 @@
  * опыт 7 лет, хочу от 80 тыс». Здесь разбор просьбы и текст ответа. Само
  * резюме раскладывает тот же составитель, что и в форме объявления
  * (lib/domains/resume-draft.ts), а публикует человек сам: Светлана даёт
- * ссылку на форму, где его текст уже вставлен.
+ * ссылку на форму, где его текст уже вставлен. Город, если он есть в тексте
+ * и в справочнике площадки (lib/city-from-text.ts), Светлана называет сразу:
+ * форма выберет его сама.
  */
 import { describeAttrs } from "../classified-fields";
 import type { VacancyDraft } from "../domains/vacancy-draft";
@@ -38,11 +40,12 @@ export function resumeFormLink(text: string): string {
   return text.length <= MAX_LINK_TEXT ? `/classifieds/new?resume=${encoded}` : "/classifieds/new";
 }
 
-/** Ответ Светланы: что она разложила по полям и как опубликовать. */
-export function resumeChatReply(draft: VacancyDraft, text: string, removed: ContactKind[] = []): string {
+/** Ответ Светланы: что она разложила по полям и как опубликовать. city: город из текста, если нашёлся в справочнике. */
+export function resumeChatReply(draft: VacancyDraft, text: string, removed: ContactKind[] = [], city?: string): string {
   const lines = ["Составила резюме по вашим словам:"];
   if (draft.title) lines.push(`• Должность: ${draft.title}`);
   if (draft.category && draft.category !== "Другое") lines.push(`• Раздел: ${draft.category}`);
+  if (city) lines.push(`• Город: ${city}`);
   if (draft.salaryFrom) lines.push(`• Желаемая зарплата: ${draft.salaryFrom.toLocaleString("ru-RU")} ₽`);
   for (const row of describeAttrs("JOB", draft.attrs)) {
     if (row.label === "Компания") continue;
@@ -56,9 +59,12 @@ export function resumeChatReply(draft: VacancyDraft, text: string, removed: Cont
   if (missing.length) lines.push(`Не нашла в тексте: ${missing.join(", ")}. Их можно дописать в форме.`);
   const note = removedNote(removed);
   if (note) lines.push(note);
+  const check = city
+    ? `проверьте поля (город «${city}» форма выберет сама) и опубликуйте`
+    : "проверьте поля, выберите город и опубликуйте";
   lines.push(
     text.length <= MAX_LINK_TEXT
-      ? `Чтобы опубликовать: [Открыть форму резюме](${resumeFormLink(text)}). Там уже выбран раздел «Работа → Резюме» и вставлен ваш текст. Нажмите «Заполнить форму», проверьте поля, выберите город и опубликуйте.`
+      ? `Чтобы опубликовать: [Открыть форму резюме](${resumeFormLink(text)}). Там уже выбран раздел «Работа → Резюме» и вставлен ваш текст. Нажмите «Заполнить форму», ${check}.`
       : "Чтобы опубликовать, откройте «Подать объявление» → «Работа» → «Резюме», вставьте этот текст в блок Светланы и нажмите «Заполнить форму».",
   );
   return lines.join("\n");
