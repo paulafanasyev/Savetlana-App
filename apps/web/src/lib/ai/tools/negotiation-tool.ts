@@ -6,6 +6,9 @@
  * «Торг B2B»); выключил торг — цена только по прайсу. Договорились —
  * сохраняется КП (b2b-quotes.ts): его подтверждает продавец, потом покупатель
  * оформляет заказ (человек в контуре).
+ *
+ * Два режима: с productId — торг с одним продавцом; с query — запрос цены
+ * у нескольких продавцов (реверсивный аукцион), КП уходит лучшему.
  */
 import { looseObjectSchema } from "./registry";
 import type { ToolDefinition, ToolContext, ToolResult } from "./registry";
@@ -47,12 +50,13 @@ export function negotiationSummary(title: string, r: NegotiationResult, listKope
 export const negotiateQuoteTool: ToolDefinition = {
   name: "negotiate_quote",
   description:
-    "B2B-торг за партию товара: агент покупателя и агент продавца договариваются о цене за штуку в пределах правил торга продавца и бюджета покупателя. Возвращает ход переговоров и КП, которое подтверждают люди. Ничего не покупает и не меняет цены.",
+    "B2B-торг за партию товара: агент покупателя и агент продавца договариваются о цене за штуку в пределах правил торга продавца и бюджета покупателя. Возвращает ход переговоров и КП, которое подтверждают люди. Если productId не указан, а указан query, агент запрашивает цену у нескольких продавцов сразу (до 5, реверсивный аукцион), торгуется с каждым и выбирает лучшее предложение. Ничего не покупает и не меняет цены.",
   permission: "READ_PRODUCTS",
   riskLevel: "READ",
   needsConfirmation: false,
   parameters: looseObjectSchema({
-    productId: { type: "string", description: "id товара" },
+    productId: { type: "string", description: "id товара (торг с одним продавцом)" },
+    query: { type: "string", description: "что ищем, если нужно собрать предложения у нескольких продавцов" },
     quantity: { type: "number", description: "сколько штук нужно" },
     targetPriceRub: { type: "number", description: "желаемая цена за штуку, ₽" },
     maxPriceRub: { type: "number", description: "потолок бюджета за штуку, ₽" },
@@ -60,8 +64,10 @@ export const negotiateQuoteTool: ToolDefinition = {
   }),
   async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
     const productId = typeof args.productId === "string" ? args.productId : "";
+    const query = typeof args.query === "string" ? args.query.trim() : "";
+    if (!productId && query) return rfq(ctx, query, args);
     if (!productId) {
-      return { ok: false, error: "укажите товар, по которому торговаться: найдите его в каталоге и напишите «поторгуйся за первый: 100 штук, хочу по 800 ₽»", verification: "NOT_PROVEN" };
+      return { ok: false, error: "укажите товар, по которому торговаться: найдите его в каталоге и напишите «поторгуйся за первый: 100 штук, хочу по 800 ₽» или «собери КП на перчатки, 100 штук»", verification: "NOT_PROVEN" };
     }
     const quantity = Math.round(Number(args.quantity));
     if (!Number.isFinite(quantity) || quantity < 1) {
@@ -147,3 +153,156 @@ export const negotiateQuoteTool: ToolDefinition = {
     };
   },
 };
+
+const MAX_RFQ_SELLERS = 5;
+
+/** Основы слов запроса без окончаний: «каски защитные» → «каск», «защитн». */
+export function rfqStems(query: string): string[] {
+  return query
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .split(/[^a-zа-я0-9]+/i)
+    .filter((w) => w.length >= 3)
+    .slice(0, 4)
+    .map((w) => (w.length > 5 ? w.slice(0, w.length - 2) : w.length > 4 ? w.slice(0, 4) : w));
+}
+
+interface RfqOffer {
+  productId: string;
+  title: string;
+  seller: string;
+  sellerId: string;
+  listPriceKopecks: number;
+  /** Цена по итогам торга; если не договорились, цена прайса. */
+  priceKopecks: number;
+  status: "AGREED" | "NO_DEAL" | "NEEDS_HUMAN" | "NO_NEGOTIATION";
+  rounds: number;
+  reason: string;
+}
+
+/**
+ * Запрос цены у нескольких продавцов (реверсивный аукцион): находим товар у
+ * разных продавцов, агент покупателя торгуется с агентом каждого в пределах
+ * его правил, лучшее предложение становится КП. Остальные видны для сравнения.
+ */
+async function rfq(ctx: ToolContext, query: string, args: Record<string, unknown>): Promise<ToolResult> {
+  const quantity = Math.round(Number(args.quantity));
+  if (!Number.isFinite(quantity) || quantity < 1) {
+    return { ok: false, error: "укажите, сколько штук нужно (целое число от 1)", verification: "NOT_PROVEN" };
+  }
+  const stems = rfqStems(query);
+  if (stems.length === 0) {
+    return { ok: false, error: "уточните, какой товар нужен: например, «собери КП на перчатки рабочие, 100 штук»", verification: "NOT_PROVEN" };
+  }
+  // Только опубликованные товары; снятые с размещения (isLive=false) не берём.
+  const candidates = await prisma.product.findMany({
+    where: { status: "ACTIVE", NOT: { listing: { isLive: false } } },
+    orderBy: [{ rating: "desc" }, { updatedAt: "desc" }],
+    take: 500,
+    select: {
+      id: true,
+      title: true,
+      keywords: true,
+      priceKopecks: true,
+      sellerProfile: { select: { id: true, displayName: true, userId: true } },
+      inventory: { select: { quantity: true, availability: true, confirmedBySeller: true } },
+    },
+  });
+  const picked: typeof candidates = [];
+  const seen = new Set<string>();
+  for (const p of candidates) {
+    if (seen.has(p.sellerProfile.id) || p.sellerProfile.userId === ctx.userId) continue;
+    const hay = `${p.title} ${p.keywords}`.toLowerCase().replace(/ё/g, "е");
+    if (!stems.every((st) => hay.includes(st))) continue;
+    seen.add(p.sellerProfile.id);
+    picked.push(p);
+    if (picked.length >= MAX_RFQ_SELLERS) break;
+  }
+  if (picked.length === 0) {
+    return { ok: false, error: `не нашла «${query}» у продавцов площадки. Уточните название`, verification: "NOT_PROVEN" };
+  }
+
+  const offers: RfqOffer[] = [];
+  const deals = new Map<string, NegotiationResult>();
+  for (const p of picked) {
+    const base = { productId: p.id, title: p.title, seller: p.sellerProfile.displayName, sellerId: p.sellerProfile.id, listPriceKopecks: p.priceKopecks };
+    const policy = await getSellerNegotiationPolicy(p.sellerProfile.id);
+    if (!policy.enabled) {
+      offers.push({ ...base, priceKopecks: p.priceKopecks, status: "NO_NEGOTIATION", rounds: 0, reason: "продавец не торгуется, цена по прайсу" });
+      continue;
+    }
+    const invRaw = (p as unknown as { inventory?: unknown }).inventory;
+    const inv = (Array.isArray(invRaw) ? invRaw[0] : invRaw) as { quantity: number; availability: string; confirmedBySeller: boolean } | null | undefined;
+    const stockQty = inv && inv.confirmedBySeller && inv.availability === "AVAILABLE" ? inv.quantity : null;
+    const result = negotiate(
+      {
+        listPriceKopecks: p.priceKopecks,
+        volumeTiers: policy.volumeTiers,
+        maxDiscountPercent: policy.maxDiscountPercent,
+        negotiablePercent: policy.negotiablePercent,
+        minOrderQty: policy.minOrderQty,
+        stockQty,
+        maxRounds: 6,
+      },
+      {
+        quantity,
+        targetPriceKopecks: positiveRub(args.targetPriceRub) ?? Math.round(p.priceKopecks * 0.85),
+        maxPriceKopecks: positiveRub(args.maxPriceRub) ?? p.priceKopecks,
+        maxRounds: 6,
+        note: typeof args.note === "string" ? args.note.slice(0, 500) : undefined,
+      }
+    );
+    deals.set(p.id, result);
+    offers.push({
+      ...base,
+      priceKopecks: result.status === "AGREED" && result.unitPriceKopecks !== null ? result.unitPriceKopecks : p.priceKopecks,
+      status: result.status,
+      rounds: result.rounds,
+      reason: result.status === "AGREED" ? `договорились за ${result.rounds} раунд.` : result.reason,
+    });
+  }
+
+  const agreed = offers.filter((o) => o.status === "AGREED").sort((a, b) => a.priceKopecks - b.priceKopecks);
+  const rest = offers.filter((o) => o.status !== "AGREED");
+  const ranked = [...agreed, ...rest];
+  const winner = agreed[0] ?? null;
+
+  let quoteId: string | null = null;
+  let quoteNote = "";
+  if (winner && ctx.userId) {
+    const deal = deals.get(winner.productId)!;
+    try {
+      const quote = await createQuote({
+        productId: winner.productId,
+        sellerId: winner.sellerId,
+        buyerId: ctx.userId,
+        title: winner.title,
+        quantity: deal.quantity,
+        unitPriceKopecks: deal.unitPriceKopecks!,
+        listPriceKopecks: winner.listPriceKopecks,
+        totalKopecks: deal.totalKopecks!,
+        discountPercent: deal.discountPercent ?? 0,
+        rounds: deal.rounds,
+        chain: `Лучшее из ${offers.length} предложений. ${negotiationChain(deal)}`,
+      });
+      quoteId = quote.id;
+      quoteNote = ` ${quote.number} с лучшим продавцом отправлено ему на подтверждение: [Мои КП](/quotes).`;
+    } catch {
+      quoteNote = "";
+    }
+  }
+
+  const lines = ranked.map((o, i) => {
+    const price = o.status === "AGREED" ? `${rub(o.priceKopecks)} за шт. (прайс ${rub(o.listPriceKopecks)})` : `${rub(o.listPriceKopecks)} по прайсу`;
+    return `${i + 1}) ${o.seller}, «${o.title}»: ${price}, ${o.reason}${o === winner ? " ← лучшее" : ""}`;
+  });
+  const head = winner
+    ? `Запросила цену у ${offers.length} продавцов на ${quantity} шт. Лучшее: ${winner.seller}, ${rub(winner.priceKopecks)} за штуку, итого ${rub(winner.priceKopecks * quantity)}.`
+    : `Запросила цену у ${offers.length} продавцов на ${quantity} шт., но ни с кем не договорились в пределах бюджета.`;
+  return {
+    ok: true,
+    data: { mode: "rfq", query, quantity, offers: ranked, winnerProductId: winner?.productId ?? null, quoteId },
+    summary: `${head}\n${lines.join("\n")}${quoteNote}`,
+    verification: "VERIFIED",
+  };
+}
