@@ -5,7 +5,7 @@ import { SvetlanaDock } from "@/components/SvetlanaDock";
 import { GuestCartSync } from "@/components/GuestCartSync";
 import { ConsentGateServer } from "@/components/ConsentGateServer";
 import { WeatherWidget } from "@/components/WeatherWidget";
-import { PromoRail } from "@/components/PromoRail";
+import { PromoLayout } from "@/components/PromoRail";
 import { env } from "@/lib/env";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/seo";
 
@@ -43,11 +43,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
         <Header />
-        {/* На широком экране справа колонка продвижения, на остальных её нет. */}
-        <div className="flex flex-1">
-          <main className="min-w-0 flex-1">{children}</main>
-          <PromoRail />
-        </div>
+        {/* На широком экране справа колонка продвижения, на телефоне лента под страницей. */}
+        <PromoLayout>{children}</PromoLayout>
         <footer className="border-t border-surface-line bg-white px-4 py-8 text-center text-xs text-ink-soft">
           <div className="mx-auto max-w-6xl space-y-2">
             <div className="font-semibold text-ink">{SITE_NAME}</div>
