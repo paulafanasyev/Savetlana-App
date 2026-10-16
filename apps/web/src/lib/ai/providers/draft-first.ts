@@ -19,6 +19,28 @@ import { scrubContacts } from "../../domains/contact-scrub";
 import { parsePromoExtendCommand, PROMO_EXTEND_ASK, promoExtendReply } from "../promo-extend-command";
 import { PROMO_EXTEND_DAYS } from "../../seller-todo";
 import { isTodayQuestion, TODAY_REPLY } from "../today-command";
+import { cityFromText } from "../../city-from-text";
+
+/** Сколько ждём справочник городов: без него резюме всё равно составится, просто без города. */
+const CITY_LOOKUP_MS = 1500;
+
+/** Город из текста резюме по справочнику площадки. Справочник недоступен: без города. */
+async function resumeCity(text: string): Promise<string | undefined> {
+  try {
+    const { getGeoTree } = await import("../../domains/classifieds");
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), CITY_LOOKUP_MS);
+    });
+    const tree = await Promise.race([getGeoTree().catch(() => null), timeout]);
+    clearTimeout(timer);
+    if (!tree) return undefined;
+    const cities = tree.flatMap((d) => d.regions.flatMap((r) => r.cities.map((c) => ({ id: c.id, name: c.name }))));
+    return cityFromText(text, cities)?.name;
+  } catch {
+    return undefined;
+  }
+}
 
 export function isDraftCommand(text: string): boolean {
   return parseDraftCommand(text) !== null;
@@ -54,7 +76,7 @@ export function draftCommandFirst(inner: AiProvider): AiProvider {
         const { parseResumeText } = await import("../../domains/resume-draft");
         // Телефон и почту убираем и из ответа, и из ссылки на форму.
         const clean = scrubContacts(resume);
-        return respond(resumeChatReply(parseResumeText(clean.text), clean.text, clean.removed));
+        return respond(resumeChatReply(parseResumeText(clean.text), clean.text, clean.removed, await resumeCity(clean.text)));
       }
       // «Продли скидку на кроссовки на 7 дней»: без срока сначала спрашиваем, на сколько.
       const extend = userText === null ? null : parsePromoExtendCommand(userText);
