@@ -1,17 +1,18 @@
 /**
  * negotiate_quote: агент покупателя и агент продавца торгуются о цене партии.
  *
- * Только чтение: инструмент ничего не меняет в базе и не меняет цену товара.
- * Агент продавца действует строго в пределах правил торга этого продавца
- * (кабинет → «Торг B2B»); выключил торг — цена только по прайсу. Результат —
- * проект коммерческого предложения; чтобы он стал заказом, его подтверждают
- * продавец и покупатель (человек в контуре).
+ * Цену товара инструмент не меняет и ничего не продаёт. Агент продавца
+ * действует строго в пределах правил торга этого продавца (кабинет →
+ * «Торг B2B»); выключил торг — цена только по прайсу. Договорились —
+ * сохраняется КП (b2b-quotes.ts): его подтверждает продавец, потом покупатель
+ * оформляет заказ (человек в контуре).
  */
 import { looseObjectSchema } from "./registry";
 import type { ToolDefinition, ToolContext, ToolResult } from "./registry";
 import { prisma } from "../../prisma";
 import { negotiate, type NegotiationResult } from "../../negotiation";
 import { getSellerNegotiationPolicy } from "../../domains/negotiation-policy";
+import { createQuote } from "../../domains/b2b-quotes";
 
 function positiveRub(v: unknown): number | null {
   const n = Number(v);
@@ -46,7 +47,7 @@ export function negotiationSummary(title: string, r: NegotiationResult, listKope
 export const negotiateQuoteTool: ToolDefinition = {
   name: "negotiate_quote",
   description:
-    "B2B-торг за партию товара: агент покупателя и агент продавца договариваются о цене за штуку в пределах правил торга продавца и бюджета покупателя. Возвращает ход переговоров и проект КП, который подтверждают люди. Ничего не покупает и не меняет цены.",
+    "B2B-торг за партию товара: агент покупателя и агент продавца договариваются о цене за штуку в пределах правил торга продавца и бюджета покупателя. Возвращает ход переговоров и КП, которое подтверждают люди. Ничего не покупает и не меняет цены.",
   permission: "READ_PRODUCTS",
   riskLevel: "READ",
   needsConfirmation: false,
@@ -57,7 +58,7 @@ export const negotiateQuoteTool: ToolDefinition = {
     maxPriceRub: { type: "number", description: "потолок бюджета за штуку, ₽" },
     note: { type: "string", description: "комментарий покупателя" },
   }),
-  async execute(_ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
     const productId = typeof args.productId === "string" ? args.productId : "";
     if (!productId) {
       return { ok: false, error: "укажите товар, по которому торговаться: найдите его в каталоге и напишите «поторгуйся за первый: 100 штук, хочу по 800 ₽»", verification: "NOT_PROVEN" };
@@ -114,10 +115,34 @@ export const negotiateQuoteTool: ToolDefinition = {
         note: typeof args.note === "string" ? args.note.slice(0, 500) : undefined,
       }
     );
+    // Договорились: сохраняем КП и отправляем продавцу на подтверждение.
+    let quoteId: string | null = null;
+    let quoteNote = "";
+    if (result.status === "AGREED" && result.unitPriceKopecks !== null && result.totalKopecks !== null && ctx.userId) {
+      try {
+        const quote = await createQuote({
+          productId: product.id,
+          sellerId: product.sellerId,
+          buyerId: ctx.userId,
+          title: product.title,
+          quantity: result.quantity,
+          unitPriceKopecks: result.unitPriceKopecks,
+          listPriceKopecks: list,
+          totalKopecks: result.totalKopecks,
+          discountPercent: result.discountPercent ?? 0,
+          rounds: result.rounds,
+          chain: negotiationChain(result),
+        });
+        quoteId = quote.id;
+        quoteNote = ` ${quote.number} отправлено продавцу на подтверждение, следить и оформить заказ: [Мои КП](/quotes).`;
+      } catch {
+        quoteNote = "";
+      }
+    }
     return {
       ok: true,
-      data: { productId: product.id, title: product.title, listPriceKopecks: list, sellerRules: policy.custom ? "seller" : "default", ...result },
-      summary: negotiationSummary(product.title, result, list),
+      data: { productId: product.id, title: product.title, listPriceKopecks: list, sellerRules: policy.custom ? "seller" : "default", quoteId, ...result },
+      summary: negotiationSummary(product.title, result, list) + quoteNote,
       verification: "VERIFIED",
     };
   },
