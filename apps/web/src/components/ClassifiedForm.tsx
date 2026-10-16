@@ -135,7 +135,7 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
   }, []);
 
   /** Черновик Светланы в поля формы. Поля остаются обычными: человек правит что угодно. */
-  const applyDraft = (d: VacancyDraftResult) => {
+  const applyDraft = (d: VacancyDraftResult, sourceText = "") => {
     const form = formRef.current;
     if (!form) return;
     const put = (name: string, value: string) => {
@@ -147,9 +147,10 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
     if (d.description) put("description", d.description.slice(0, 5000));
     if (d.salaryFrom) put("priceRub", String(d.salaryFrom));
     for (const [key, value] of Object.entries(d.attrs)) put(ATTR_PREFIX + key, value);
-    // «Живу в Казани»: город из текста, если он есть в справочнике. Нет в тексте: поле не трогаем.
-    const cities = tree.flatMap((d) => d.regions.flatMap((r) => r.cities));
-    const city = cityFromText(`${d.title}\n${d.description}`, cities);
+    // «Живу в Казани»: город сначала из слов самого человека (модель могла переписать
+    // описание без города), потом из черновика. Нет в справочнике: поле не трогаем.
+    const cities = tree.flatMap((g) => g.regions.flatMap((r) => r.cities));
+    const city = cityFromText(sourceText, cities) ?? cityFromText(`${d.title}\n${d.description}`, cities);
     if (city) {
       put("cityId", city.id);
       setCityNote(`Город «${city.name}» взяла из текста. Если не тот, выберите другой.`);
