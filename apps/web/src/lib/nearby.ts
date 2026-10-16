@@ -28,3 +28,23 @@ export function nearbyCities(name: string, radiusKm = 300, limit = 12): { name: 
     .sort((a, b) => a.km - b.km)
     .slice(0, limit);
 }
+
+/** Расстояние между двумя городами по названию, км. null, если города нет в справочнике. */
+export function kmBetween(from: string, to: string): number | null {
+  const all = allCities();
+  const find = (name: string) => {
+    const key = normalizeCityName(name);
+    return all.find((c) => normalizeCityName(c.name) === key);
+  };
+  const a = find(from);
+  const b = find(to);
+  if (!a || !b) return null;
+  return Math.round(distanceKm(a, b));
+}
+
+/** Подпись расстояния для карточки. */
+export function kmLabel(km: number | null): string {
+  if (km === null) return "";
+  if (km < 1) return "в вашем городе";
+  return `≈ ${km.toLocaleString("ru-RU")} км`;
+}

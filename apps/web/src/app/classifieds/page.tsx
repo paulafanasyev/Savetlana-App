@@ -9,7 +9,7 @@ import { priceText } from "@/lib/classified-fields";
 import { resolveSearchParams } from "@/lib/page-params";
 import { readCityCookie } from "@/lib/my-city";
 import { normalize, type PickCity } from "@/lib/city-pick";
-import { nearbyCities } from "@/lib/nearby";
+import { kmBetween, kmLabel, nearbyCities } from "@/lib/nearby";
 import { CityFilter } from "./CityFilter";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ interface NearbyAd {
 export default async function ClassifiedsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ vertical?: string; dealType?: string; cityId?: string; q?: string }>;
+  searchParams: Promise<{ vertical?: string; dealType?: string; cityId?: string; q?: string; sort?: string }>;
 }) {
   const query = await resolveSearchParams(searchParams);
   // Пустая база: показываем помеченные примеры, пока нет настоящих объявлений.
@@ -43,23 +43,34 @@ export default async function ClassifiedsPage({
     .sort((a, b) => b.population - a.population)
     .map(({ id, name, regionName }) => ({ id, name, regionName }));
 
+  // «Мой город» из cookie нужен и для фильтра по умолчанию, и для расстояния в режиме «по всей России».
+  const mineName = readCityCookie((await headers()).get("cookie"));
+  const mine = mineName ? cities.find((c) => normalize(c.name) === normalize(mineName)) ?? null : null;
+
   // Город в ссылке важнее всего; cityId=all значит «по всей России».
   // Без города в ссылке показываем «мой город», если человек его выбрал.
   let cityId = query.cityId && query.cityId !== "all" ? query.cityId : undefined;
   let myCity: PickCity | null = null;
-  if (!query.cityId) {
-    const mine = readCityCookie((await headers()).get("cookie"));
-    myCity = mine ? cities.find((c) => normalize(c.name) === normalize(mine)) ?? null : null;
-    if (myCity) cityId = myCity.id;
+  if (!query.cityId && mine) {
+    myCity = mine;
+    cityId = mine.id;
   }
+
+  // По всей России с выбранным городом: показываем расстояние и даём сортировку «Сначала ближе».
+  const showKm = Boolean(mine) && !cityId;
+  const sortNear = showKm && query.sort === "near";
+  const kmOf = (name: string): number | null => (showKm && mine ? kmBetween(mine.name, name) : null);
 
   const result = await searchClassifieds({
     vertical: query.vertical,
     dealType: query.dealType,
     cityId,
     query: query.q,
-    limit: 30,
+    limit: sortNear ? 50 : 30,
   });
+  const items = sortNear
+    ? [...result.items].sort((a, b) => (kmOf(a.cityName) ?? Number.MAX_SAFE_INTEGER) - (kmOf(b.cityName) ?? Number.MAX_SAFE_INTEGER))
+    : result.items;
 
   // В моём городе мало объявлений: добавляем соседние города с расстоянием.
   let nearbyAds: NearbyAd[] = [];
@@ -110,6 +121,7 @@ export default async function ClassifiedsPage({
   if (query.q) everywhere.set("q", query.q);
   everywhere.set("cityId", "all");
   const everywhereHref = `/classifieds?${everywhere.toString()}`;
+  const nearestHref = `${everywhereHref}&sort=near`;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6">
@@ -185,9 +197,21 @@ export default async function ClassifiedsPage({
         </p>
       )}
 
-      <p className="mb-3 text-sm text-zinc-500">{result.items.length} объявлений</p>
+      {showKm && mine && (
+        <nav className="mb-3 flex flex-wrap items-center gap-2 text-sm" aria-label="Порядок объявлений">
+          <Link href={everywhereHref} className={`rounded-full border px-3 py-1 ${!sortNear ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300"}`}>
+            Сначала новые
+          </Link>
+          <Link href={nearestHref} className={`rounded-full border px-3 py-1 ${sortNear ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300"}`}>
+            Сначала ближе к городу {mine.name}
+          </Link>
+          {sortNear && <span className="text-xs text-zinc-500">среди 50 свежих объявлений</span>}
+        </nav>
+      )}
 
-      {result.items.length === 0 ? (
+      <p className="mb-3 text-sm text-zinc-500">{items.length} объявлений</p>
+
+      {items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 p-12 text-center text-zinc-500">
           {myCity ? (
             <>
@@ -200,66 +224,70 @@ export default async function ClassifiedsPage({
         </div>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {result.items.map((ad) => (
-            <li
-              key={ad.id}
-              className="overflow-hidden rounded-xl border border-zinc-200 bg-white"
-            >
-              <Link href={`/classifieds/${ad.id}`}>
-                {ad.coverImage ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={ad.coverImage}
-                    alt={ad.title}
-                    className="h-40 w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-40 w-full items-center justify-center bg-zinc-100 text-3xl">
-                    {verticalEmoji(ad.vertical)}
-                  </div>
-                )}
-              </Link>
-              <div className="p-4">
-                <div className="mb-1 flex items-center gap-2 text-xs text-zinc-500">
-                  <span className="rounded bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700">
-                    {verticalLabel(ad.vertical)}
-                  </span>
-                  <span>{dealTypeLabel(ad.dealType)}</span>
-                </div>
+          {items.map((ad) => {
+            const km = kmLabel(kmOf(ad.cityName));
+            return (
+              <li
+                key={ad.id}
+                className="overflow-hidden rounded-xl border border-zinc-200 bg-white"
+              >
                 <Link href={`/classifieds/${ad.id}`}>
-                  <h3 className="line-clamp-2 font-semibold hover:underline">{ad.title}</h3>
+                  {ad.coverImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={ad.coverImage}
+                      alt={ad.title}
+                      className="h-40 w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-40 w-full items-center justify-center bg-zinc-100 text-3xl">
+                      {verticalEmoji(ad.vertical)}
+                    </div>
+                  )}
                 </Link>
-                {ad.priceKopecks > 0 ? (
-                  <p className="mt-1 font-bold">{priceText(ad.dealType, ad.attrs, rub(ad.priceKopecks))}</p>
-                ) : (
-                  <p className="mt-1 font-bold text-zinc-500">Цена не указана</p>
-                )}
-                <p className="mt-2 text-sm text-zinc-600">
-                  {ad.cityName}
-                  {ad.districtName ? `, ${ad.districtName}` : ""}
-                  {ad.metroName ? ` · м. ${ad.metroName}` : ""}
-                </p>
-                {ad.sellerDisplayName && (
-                  <p className="mt-1 text-xs text-zinc-500">
-                    {ad.sellerDisplayName}
-                    {ad.sellerVerified ? " ✓" : ""}
+                <div className="p-4">
+                  <div className="mb-1 flex items-center gap-2 text-xs text-zinc-500">
+                    <span className="rounded bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700">
+                      {verticalLabel(ad.vertical)}
+                    </span>
+                    <span>{dealTypeLabel(ad.dealType)}</span>
+                  </div>
+                  <Link href={`/classifieds/${ad.id}`}>
+                    <h3 className="line-clamp-2 font-semibold hover:underline">{ad.title}</h3>
+                  </Link>
+                  {ad.priceKopecks > 0 ? (
+                    <p className="mt-1 font-bold">{priceText(ad.dealType, ad.attrs, rub(ad.priceKopecks))}</p>
+                  ) : (
+                    <p className="mt-1 font-bold text-zinc-500">Цена не указана</p>
+                  )}
+                  <p className="mt-2 text-sm text-zinc-600">
+                    {ad.cityName}
+                    {ad.districtName ? `, ${ad.districtName}` : ""}
+                    {ad.metroName ? ` · м. ${ad.metroName}` : ""}
+                    {km ? ` · ${km}` : ""}
                   </p>
-                )}
-                {ad.vinCheck && (
-                  <p
-                    className={`mt-2 text-xs font-medium ${
-                      ad.vinCheck.verification === "VERIFIED"
-                        ? "text-emerald-700"
-                        : "text-amber-700"
-                    }`}
-                  >
-                    VIN: {ad.vinCheck.status}
-                    {ad.vinCheck.verification === "NOT_PROVEN" ? " · требуется проверка" : ""}
-                  </p>
-                )}
-              </div>
-            </li>
-          ))}
+                  {ad.sellerDisplayName && (
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {ad.sellerDisplayName}
+                      {ad.sellerVerified ? " ✓" : ""}
+                    </p>
+                  )}
+                  {ad.vinCheck && (
+                    <p
+                      className={`mt-2 text-xs font-medium ${
+                        ad.vinCheck.verification === "VERIFIED"
+                          ? "text-emerald-700"
+                          : "text-amber-700"
+                      }`}
+                    >
+                      VIN: {ad.vinCheck.status}
+                      {ad.vinCheck.verification === "NOT_PROVEN" ? " · требуется проверка" : ""}
+                    </p>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
 
