@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 import { siteUrl } from "@/lib/seo";
 import { DEMO_AUTHOR_EMAIL } from "@/lib/demo-classifieds";
+import { activeAdClause } from "@/lib/ad-active";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ const STATIC_PAGES: { path: string; priority: number; changeFrequency: "daily" |
 
 /**
  * Карта сайта для Яндекс.Вебмастера и Google: страницы, опубликованные товары, их продавцы
- * и опубликованные объявления. Примеры от площадки сюда не попадают.
+ * и действующие объявления. Примеры от площадки и истёкшие объявления сюда не попадают.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
@@ -45,7 +46,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         take: 1000,
       }),
       prisma.classified.findMany({
-        where: { status: "PUBLISHED", author: { email: { not: DEMO_AUTHOR_EMAIL } } },
+        where: { status: "PUBLISHED", author: { email: { not: DEMO_AUTHOR_EMAIL } }, AND: [activeAdClause(now)] },
         select: { id: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
         take: 5000,
