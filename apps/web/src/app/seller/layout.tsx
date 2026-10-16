@@ -14,6 +14,7 @@ const NAV = [
   ["/seller/customers", "Покупатели"],
   ["/seller/promotions", "Акции"],
   ["/seller/pricing", "Цены"],
+  ["/seller/negotiation", "Торг B2B"],
   ["/seller/competitors", "Конкуренты"],
   ["/seller/analytics", "Аналитика"],
   ["/seller/payouts", "Выплаты"],
