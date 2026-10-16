@@ -2,6 +2,7 @@ import { apiRoute, tooManyRequests, rateLimit } from "@/lib/api-helpers";
 import { requireBuyer } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { syncTracking } from "@/lib/domains/delivery";
+import { hasServiceReview } from "@/lib/domains/service-reviews";
 import { serviceMeta } from "@/lib/service-deal";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,8 @@ const AFTER_DELIVERY = ["DELIVERED", "COMPLETED", "DISPUTED"];
  * Also returns the price breakdown and which products the buyer has already
  * reviewed, so the order page can offer a review form after delivery.
  * deliveredAt: когда заказ доставлен, чтобы показать дату автоприёмки безопасной сделки.
- * kind: SERVICE для заказа услуги (фриланс), тогда workReport: что исполнитель написал при сдаче.
+ * kind: SERVICE для заказа услуги (фриланс), тогда workReport: что исполнитель написал при сдаче,
+ * и serviceReviewed: заказчик уже оставил отзыв о работе.
  */
 export const GET = apiRoute(async (request, { params }) => {
   const { user } = await requireBuyer(request);
@@ -73,6 +75,7 @@ export const GET = apiRoute(async (request, { params }) => {
       })
     : null;
   const workReport = meta && delivered?.reason ? delivered.reason.replace(/^работа сдана:\s*/i, "").trim() || null : null;
+  const serviceReviewed = meta && order.status === "COMPLETED" ? await hasServiceReview(meta.performerId, order.number) : false;
 
   return Response.json({
     order: {
@@ -89,6 +92,7 @@ export const GET = apiRoute(async (request, { params }) => {
       kind: meta ? "SERVICE" : "GOODS",
       serviceTitle: meta?.title ?? null,
       workReport,
+      serviceReviewed,
     },
     reviewedProductIds: reviews.map((r) => r.productId),
     // Отзывы, скрытые антифродом до проверки: автору честно пишем «на проверке».
