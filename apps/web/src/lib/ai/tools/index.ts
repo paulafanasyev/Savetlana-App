@@ -17,6 +17,7 @@ import { extendPromotionTool, extendPromotionPreview } from "./promo-extend-tool
 import { sellerTodayTool } from "./seller-today-tool";
 import { smartSearchClassifiedsTool } from "./classified-search-tool";
 import { confirmReceiptTool } from "./confirm-receipt-tool";
+import { negotiateQuoteTool } from "./negotiation-tool";
 import { promoState } from "../../domains/engagement-rules";
 import { ruText } from "../ru-text";
 
@@ -303,6 +304,8 @@ const ALL_TOOLS: ToolDefinition[] = [
   // Работа, услуги и фриланс, недвижимость и авто из раздела «Объявления».
   smartSearchClassifiedsTool,
   vinCheckTool,
+  // B2B: агент покупателя и агент продавца торгуются о цене партии (только проект КП).
+  negotiateQuoteTool,
   // Commerce
   sellerAwareGetOrderTool,
   cartAddTool,
