@@ -18,7 +18,7 @@ const STATUS: Record<string, { label: string; tone: string }> = {
   DRAFT: { label: "Черновик", tone: "bg-zinc-100 text-zinc-700" },
   REJECTED: { label: "Отклонено модератором", tone: "bg-red-50 text-red-800" },
   HIDDEN: { label: "Скрыто", tone: "bg-zinc-100 text-zinc-700" },
-  SOLD: { label: "Продано", tone: "bg-zinc-100 text-zinc-700" },
+  SOLD: { label: "Сделка состоялась", tone: "bg-emerald-50 text-emerald-800" },
   CLOSED: { label: "Снято с публикации", tone: "bg-zinc-100 text-zinc-700" },
   ARCHIVED: { label: "В архиве", tone: "bg-zinc-100 text-zinc-700" },
 };
@@ -31,6 +31,7 @@ type Notice = { tone: "ok" | "warn" | "bad"; text: string };
 function noticeOf(sp: Record<string, string | undefined>): Notice | null {
   if (sp.renewed === "1") return { tone: "ok", text: `Объявление продлено на ${RENEW_DAYS} дней и снова видно в поиске.` };
   if (sp.renew === "fail") return { tone: "bad", text: "Не получилось продлить: это можно сделать только с опубликованным объявлением за 3 дня до конца срока или позже." };
+  if (sp.closed === "deal") return { tone: "ok", text: "Поздравляем со сделкой! Объявление снято с поиска, писать по нему больше не будут." };
   if (sp.closed === "1") return { tone: "ok", text: "Объявление снято с публикации. Его больше не видно в поиске, вернуть можно в любой момент." };
   if (sp.reopened === "1") return { tone: "ok", text: `Объявление снова в поиске на ${RENEW_DAYS} дней.` };
   if (sp.reopened === "review") return { tone: "warn", text: "Объявление отправлено на проверку модератору и появится в поиске после неё." };
@@ -135,6 +136,13 @@ export default async function MyClassifiedsPage({ searchParams }: { searchParams
                         <form action={`/api/classifieds/${ad.id}/close?do=reopen`} method="POST">
                           <button type="submit" className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white">
                             Вернуть в поиск
+                          </button>
+                        </form>
+                      )}
+                      {closable && published && (
+                        <form action={`/api/classifieds/${ad.id}/close?do=close&reason=deal`} method="POST">
+                          <button type="submit" className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800">
+                            Сделка состоялась
                           </button>
                         </form>
                       )}
