@@ -13,6 +13,7 @@ describe("портфолио исполнителя", () => {
   it("фото только из своей папки на площадке", () => {
     expect(isPortfolioImageUrl(`/api/storage/database/public/portfolio/${U}/1-ab-photo.jpg`, U)).toBe(true);
     expect(isPortfolioImageUrl(`https://abc123.public.blob.vercel-storage.com/public/portfolio/${U}/x.jpg`, U)).toBe(true);
+    expect(isPortfolioImageUrl(`https://AbC123.public.blob.vercel-storage.com/public/portfolio/${U}/x-Rnd9.jpg`, U)).toBe(true);
     expect(isPortfolioImageUrl(`/api/storage/database/public/portfolio/other/x.jpg`, U)).toBe(false);
     expect(isPortfolioImageUrl("https://evil.example/x.jpg", U)).toBe(false);
     expect(isPortfolioImageUrl(`/api/storage/public/portfolio/${U}/../x.jpg`, U)).toBe(false);

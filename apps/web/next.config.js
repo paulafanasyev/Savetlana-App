@@ -20,6 +20,8 @@ const nextConfig = {
       { protocol: "https", hostname: "images.svetlana.example" },
       { protocol: "https", hostname: "cdn.svetlana.example" },
       { protocol: "https", hostname: "avatars.svetlana.example" },
+      // Публичные фото из Vercel Blob (товары, объявления, портфолио).
+      { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
     ],
   },
   async rewrites() {
