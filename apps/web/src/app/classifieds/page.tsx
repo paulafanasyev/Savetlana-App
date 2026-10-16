@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { searchClassifieds, getGeoTree } from "@/lib/domains/classifieds";
+import { ensureDemoClassifieds } from "@/lib/domains/demo";
 import { prisma } from "@/lib/prisma";
 import { DEAL_TYPE_LABELS, VERTICAL_LABELS, dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
 import { rub } from "@/lib/format";
@@ -31,6 +32,8 @@ export default async function ClassifiedsPage({
   searchParams: Promise<{ vertical?: string; dealType?: string; cityId?: string; q?: string }>;
 }) {
   const query = await resolveSearchParams(searchParams);
+  // Пустая база: показываем помеченные примеры, пока нет настоящих объявлений.
+  await ensureDemoClassifieds();
   const tree = await getGeoTree();
 
   // Все города одним списком, крупные первыми (для подсказок в фильтре).
