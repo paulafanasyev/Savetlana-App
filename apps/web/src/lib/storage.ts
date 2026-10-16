@@ -102,6 +102,12 @@ const BLOB_API_URL = "https://vercel.com/api/blob";
 const BLOB_API_VERSION = "13";
 const BLOB_TIMEOUT_MS = 20_000;
 
+/** Последняя ошибка Blob в этом экземпляре сервера (для проверки /api/health?mode=storage). */
+let lastBlobError: string | null = null;
+export function lastStorageError(): string | null {
+  return lastBlobError;
+}
+
 /**
  * Публичные фото (товары, объявления, портфолио) идут в Vercel Blob и отдаются с их CDN.
  * Приватные файлы (документы продавца, доказательства в споре) остаются в базе: их
@@ -149,11 +155,15 @@ class VercelBlobProvider implements StorageProvider {
         { "x-vercel-blob-access": "public", "x-content-type": params.mimeType, "x-add-random-suffix": "1" },
         new Uint8Array(params.bytes),
       );
-      const json = (await res.json().catch(() => ({}))) as { url?: unknown; error?: { message?: string } };
-      if (!res.ok || !isPublicBlobUrl(json.url)) throw new Error(json.error?.message ?? `Vercel Blob ответил ${res.status}`);
+      const json = (await res.json().catch(() => ({}))) as { url?: unknown; error?: { code?: string; message?: string } };
+      if (!res.ok || !isPublicBlobUrl(json.url)) {
+        throw new Error(`${res.status} ${json.error?.code ?? ""} ${json.error?.message ?? "неожиданный ответ"}`.trim());
+      }
+      lastBlobError = null;
       return { key: json.url, url: json.url };
     } catch (error) {
-      console.warn("[storage] Vercel Blob не принял файл, сохраняем в базу:", error instanceof Error ? error.message : error);
+      lastBlobError = (error instanceof Error ? error.message : String(error)).slice(0, 300);
+      console.warn("[storage] Vercel Blob не принял файл, сохраняем в базу:", lastBlobError);
       return this.database.put(params);
     }
   }
