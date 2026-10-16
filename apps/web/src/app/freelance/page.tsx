@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -7,6 +8,28 @@ import { readCityCookie } from "@/lib/my-city";
 import { FREELANCE_TABS, TAB_DEAL_TYPE, freelanceFormHref, freelanceHref, freelanceTab, pickCategory, type FreelanceTab } from "@/lib/freelance-section";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Заголовок по вкладке и категории. Категорию из ссылки берём, только если такие
+ * объявления реально есть: иначе в заголовок можно было бы подставить любой текст.
+ */
+export async function generateMetadata({ searchParams }: { searchParams?: Promise<{ tab?: string; category?: string; near?: string }> }): Promise<Metadata> {
+  const sp = (await searchParams) ?? {};
+  const tab = freelanceTab(sp.tab);
+  const raw = typeof sp.category === "string" ? sp.category.trim().slice(0, 80) : "";
+  const known = raw
+    ? (await prisma.classified.count({ where: { vertical: "SERVICE", dealType: TAB_DEAL_TYPE[tab], status: "PUBLISHED", category: raw } }).catch(() => 0)) > 0
+    : false;
+  const section = tab === "orders" ? "Заказы на услуги" : "Услуги исполнителей";
+  const title = known ? `${section}: ${raw} | Фриланс АИКО` : `${section} | Фриланс АИКО`;
+  const description =
+    tab === "orders"
+      ? "Заказы на услуги: исполнители предлагают цену и срок, деньги хранятся у площадки до приёмки работы."
+      : "Услуги исполнителей с портфолио: деньги хранятся у площадки и приходят исполнителю после приёмки.";
+  // Фильтр «только мой город» зависит от cookie и не должен попадать в выдачу.
+  const noindex = sp.near === "1" || (raw !== "" && !known);
+  return { title: { absolute: title }, description, robots: noindex ? { index: false, follow: true } : undefined };
+}
 
 /** Добавляет к ссылке фильтр «только мой город». */
 function nearHref(href: string): string {

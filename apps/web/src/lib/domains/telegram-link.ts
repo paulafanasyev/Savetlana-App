@@ -1,17 +1,17 @@
 /**
- * Уведомления продавцу в Telegram.
+ * Уведомления в Telegram для любого пользователя: продавца, автора объявлений, исполнителя.
  *
  * Как подключается:
- *  1. Продавец в кабинете нажимает «Подключить Telegram» и получает ссылку
- *     t.me/<бот>?start=<одноразовый код>. Код живёт 15 минут, в базе хранится
+ *  1. В кабинете продавца или в профиле человек нажимает «Подключить Telegram» и получает
+ *     ссылку t.me/<бот>?start=<одноразовый код>. Код живёт 15 минут, в базе хранится
  *     только его SHA-256 (как у ссылок сброса пароля).
  *  2. В Telegram он нажимает «Запустить». Бот получает /start <код>, по коду
  *     находит аккаунт и запоминает номер чата (IntegrationLink, провайдер TELEGRAM).
- *  3. Дальше каждое уведомление кабинета (новый оплаченный заказ, сообщение
- *     покупателя, заканчивается товар, выплата) дублируется в этот чат.
+ *  3. Дальше каждое уведомление сайта (заказ, сообщение, отклик на объявление,
+ *     срок объявления, остатки, выплата) дублируется в этот чат.
  *
  * Письма безопасности (сброс пароля, подтверждение почты) в Telegram не идут:
- * если кто-то на минуту получил доступ к кабинету и привязал свой Telegram,
+ * если кто-то на минуту получил доступ к аккаунту и привязал свой Telegram,
  * он не должен получать ссылки на смену пароля.
  */
 import { createHash, randomBytes } from "node:crypto";
@@ -51,7 +51,7 @@ export async function createTelegramLinkCode(userId: string): Promise<TelegramLi
   return { url: config ? `https://t.me/${config.username}?start=${code}` : null, code, expiresAt };
 }
 
-export type LinkOutcome = { ok: true; userId: string } | { ok: false; reason: "invalid" | "used" | "expired" };
+export type LinkOutcome = { ok: true; userId: string; seller: boolean } | { ok: false; reason: "invalid" | "used" | "expired" };
 
 /** Привязать чат по коду из /start. Код срабатывает один раз. */
 export async function completeTelegramLink(code: string, chatId: string): Promise<LinkOutcome> {
@@ -88,11 +88,13 @@ export async function completeTelegramLink(code: string, chatId: string): Promis
   await notify({
     userId: ticket.userId,
     kind: "security",
-    title: "К магазину подключён Telegram",
-    body: "Уведомления кабинета теперь приходят и в Telegram. Если это были не вы, отключите Telegram в кабинете продавца и смените пароль.",
-    url: "/seller",
+    title: seller ? "К магазину подключён Telegram" : "К аккаунту подключён Telegram",
+    body: seller
+      ? "Уведомления кабинета теперь приходят и в Telegram. Если это были не вы, отключите Telegram в кабинете продавца и смените пароль."
+      : "Уведомления сайта теперь приходят и в Telegram. Если это были не вы, отключите Telegram в профиле и смените пароль.",
+    url: seller ? "/seller" : "/profile",
   }).catch(() => undefined);
-  return { ok: true, userId: ticket.userId };
+  return { ok: true, userId: ticket.userId, seller: Boolean(seller) };
 }
 
 export async function unlinkTelegramForUser(userId: string): Promise<number> {
@@ -194,12 +196,12 @@ export type Reply = (chatId: string, text: string) => Promise<unknown>;
 const defaultReply: Reply = (chatId, text) => telegramApi("sendMessage", { chat_id: chatId, text });
 
 const HELP =
-  "Это бот уведомлений для продавцов. Чтобы подключить магазин, откройте кабинет продавца на сайте и нажмите «Подключить Telegram». Отключить уведомления: /stop";
+  "Это бот уведомлений АИКО. Чтобы подключить его, откройте на сайте профиль (или кабинет продавца) и нажмите «Подключить Telegram». Отключить уведомления: /stop";
 
 /** Разбор одного обновления от Telegram. Ответ всегда по-русски и без технических подробностей. */
 export async function handleTelegramUpdate(update: TelegramUpdate, reply: Reply = defaultReply): Promise<void> {
   const message = update.message;
-  // Уведомления магазина приходят только в личный чат, не в группы.
+  // Уведомления приходят только в личный чат, не в группы.
   if (!message || !message.chat || message.chat.type !== "private") return;
   const rawChatId = message.chat.id;
   if (rawChatId === undefined || rawChatId === null) return;
@@ -214,7 +216,12 @@ export async function handleTelegramUpdate(update: TelegramUpdate, reply: Reply 
     }
     const outcome = await completeTelegramLink(code, chatId);
     if (outcome.ok) {
-      await reply(chatId, "Готово, магазин подключён. Сюда будут приходить новые заказы, сообщения покупателей и напоминания об остатках. Отключить: /stop");
+      await reply(
+        chatId,
+        outcome.seller
+          ? "Готово, магазин подключён. Сюда будут приходить новые заказы, сообщения покупателей и напоминания об остатках. Отключить: /stop"
+          : "Готово, Telegram подключён. Сюда будут приходить ответы на ваши объявления, сообщения и напоминания о сроке объявлений. Отключить: /stop",
+      );
       return;
     }
     const why =
@@ -223,13 +230,13 @@ export async function handleTelegramUpdate(update: TelegramUpdate, reply: Reply 
         : outcome.reason === "used"
         ? "Эта ссылка уже использована."
         : "Ссылка не подошла.";
-    await reply(chatId, `${why} Откройте кабинет продавца и нажмите «Подключить Telegram» ещё раз.`);
+    await reply(chatId, `${why} Откройте на сайте профиль или кабинет продавца и нажмите «Подключить Telegram» ещё раз.`);
     return;
   }
 
   if (text === "/stop") {
     const removed = await unlinkTelegramChat(chatId);
-    await reply(chatId, removed ? "Уведомления отключены. Подключить снова можно в кабинете продавца." : "Этот чат не был подключён к магазину.");
+    await reply(chatId, removed ? "Уведомления отключены. Подключить снова можно в профиле на сайте." : "Этот чат не был подключён к уведомлениям.");
     return;
   }
 
@@ -258,11 +265,11 @@ export async function ensureTelegramWebhook(publicAppUrl: string): Promise<{ ok:
   return { ok: true };
 }
 
-/** Пробное сообщение из кабинета: продавец сразу видит, что всё работает. */
+/** Пробное сообщение из кабинета или профиля: человек сразу видит, что всё работает. */
 export async function sendTelegramTest(userId: string): Promise<{ ok: boolean; error?: string }> {
   const chatId = await activeTelegramChat(userId);
   if (!chatId) return { ok: false, error: "Telegram не подключён" };
-  const res = await telegramApi("sendMessage", { chat_id: chatId, text: "Проверка связи: уведомления магазина приходят сюда." });
+  const res = await telegramApi("sendMessage", { chat_id: chatId, text: "Проверка связи: уведомления АИКО приходят сюда." });
   if (res.ok) return { ok: true };
   if (isChatGone(res)) {
     await unlinkTelegramChat(chatId);
