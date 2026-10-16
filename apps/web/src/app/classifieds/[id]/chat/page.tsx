@@ -2,10 +2,15 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireUserServer } from "@/lib/auth";
 import { resolveParams } from "@/lib/page-params";
+import { rub } from "@/lib/format";
 import { adForReply, loadReplyThread, replyWording } from "@/lib/domains/classified-replies";
+import { serviceOrderForAd } from "@/lib/domains/service-deals";
 import { UserFacingError } from "@/lib/domains/engagement-rules";
+import { isBidAd } from "@/lib/freelance-bids";
+import { WORK_SUBMIT_FROM, servicePerformerNote } from "@/lib/service-deal";
 import { ClassifiedReplyForm } from "@/components/ClassifiedReplyForm";
 import { MessageThread } from "@/components/MessageThread";
+import { SubmitWorkForm } from "./SubmitWorkForm";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +28,9 @@ export default async function ClassifiedChatPage({ params }: { params: Promise<{
   if (ad.status !== "PUBLISHED" && messages.length === 0) notFound();
   const wording = replyWording(ad);
   const isVacancy = ad.vertical === "JOB" && ad.dealType === "VACANCY";
+  // Безопасная сделка: исполнитель видит статус оплаты и сдаёт работу здесь.
+  const deal = isBidAd(ad) ? await serviceOrderForAd(ad.id) : null;
+  const myDeal = deal && deal.performerUserId === user.id ? deal : null;
   return (
     <main className="mx-auto max-w-3xl space-y-5 px-4 py-6">
       <div>
@@ -34,6 +42,16 @@ export default async function ClassifiedChatPage({ params }: { params: Promise<{
             : "Не переводите задаток до встречи и не называйте коды из СМС."}
         </p>
       </div>
+      {myDeal && (
+        <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <p className="font-medium">🛡 Безопасная сделка: заказ {myDeal.number} на {rub(myDeal.totalKopecks)}</p>
+          <p className="mt-1">{servicePerformerNote(myDeal.status)}</p>
+          {WORK_SUBMIT_FROM.includes(myDeal.status) && <SubmitWorkForm orderId={myDeal.id} />}
+          {myDeal.status === "COMPLETED" && (
+            <Link href="/seller/payouts" className="mt-2 inline-block underline">Перейти к выплатам</Link>
+          )}
+        </section>
+      )}
       <section className="card p-4">
         <MessageThread
           messages={messages}

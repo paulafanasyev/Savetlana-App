@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-/** Заказчик выбирает исполнителя: сначала подтверждение, потом запрос. */
+/** Заказчик выбирает исполнителя: сначала подтверждение, потом сделка и переход к оплате. */
 export function ChooseBidButton({ classifiedId, applicantId, name }: { classifiedId: string; applicantId: string; name: string }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -24,6 +24,10 @@ export function ChooseBidButton({ classifiedId, applicantId, name }: { classifie
         setError(body?.error ?? "Не удалось выбрать исполнителя");
         return;
       }
+      if (typeof body?.orderId === "string") {
+        router.push(`/orders/${body.orderId}`);
+        return;
+      }
       router.refresh();
     } catch {
       setError("Нет связи с сервером");
@@ -37,7 +41,7 @@ export function ChooseBidButton({ classifiedId, applicantId, name }: { classifie
     <div className="mt-2 text-xs">
       {confirming ? (
         <div className="flex flex-wrap justify-end gap-2">
-          <span className="w-full text-right text-ink-soft">Выбрать {name}? Остальным придёт уведомление.</span>
+          <span className="w-full text-right text-ink-soft">Выбрать {name}? Дальше оплата: деньги будут у площадки до приёмки работы.</span>
           <button className="btn btn-primary px-3 py-1.5 text-xs" disabled={busy} onClick={() => void choose()}>{busy ? "Выбираем…" : "Да, выбрать"}</button>
           <button className="btn btn-ghost px-3 py-1.5 text-xs" disabled={busy} onClick={() => setConfirming(false)}>Нет</button>
         </div>
