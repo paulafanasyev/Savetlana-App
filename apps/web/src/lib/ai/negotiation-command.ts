@@ -4,7 +4,7 @@
  * ссылок на уже показанные товары. Чистые функции без базы.
  */
 
-export const NEGOTIATE = /(?:поторгу|торгуйся|торговаться|договорись о цене|оптов\S* цен|цен\S* (?:за|на) парти|скидк\S* (?:за|на) (?:объ[её]м|парти)|коммерческ\S* предложен|(?:^|\s)КП(?:\s|[.,!?]|$))/i;
+export const NEGOTIATE = /(?:поторгу|торгуйся|торговаться|договорись о цене|собери\S* (?:кп|предложени|цен)|запрос\S* (?:цен|кп|предложени)\S* (?:у|от) |тендер|аукцион|оптов\S* цен|цен\S* (?:за|на) парти|скидк\S* (?:за|на) (?:объ[её]м|парти)|коммерческ\S* предложен|(?:^|\s)КП(?:\s|[.,!?]|$))/i;
 
 export function isNegotiationRequest(text: string): boolean {
   return NEGOTIATE.test(text);
@@ -21,9 +21,28 @@ function num(s: string | undefined): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-/** Количество, желаемая цена и потолок бюджета (в рублях) из текста. Чего нет, того нет: не выдумываем. */
-export function negotiationArgs(text: string): { quantity?: number; targetPriceRub?: number; maxPriceRub?: number; note: string } {
-  const out: { quantity?: number; targetPriceRub?: number; maxPriceRub?: number; note: string } = { note: text.slice(0, 500) };
+const REF_WORDS = /^(?:перв|втор|трет|последн|этот|эту|этого|его|него|нее|неё|них|их|все|всех|нескольк|разн|продавц)/i;
+
+/**
+ * Что ищем, когда товар назван словами: «поторгуйся за перчатки рабочие: 100 шт»,
+ * «собери КП на каски 50 штук». Ссылки «за первый», «за этот» товаром не считаем.
+ */
+export function negotiationQuery(text: string): string | undefined {
+  const re = /(?:^|\s)(?:на|за|для)\s+([^\d:,.;!?()«»"]+?)(?=\s*[:,.;!?(]|\s+\d|\s+(?:у|от|по|до|максимум|хочу|нужно|надо|бюджет)\s|$)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const q = m[1].replace(/\s+/g, " ").trim();
+    if (q.length < 3 || REF_WORDS.test(q) || /^(?:парти|объ[её]м|штук|шт)/i.test(q)) continue;
+    return q.slice(0, 80);
+  }
+  return undefined;
+}
+
+/** Количество, желаемая цена, потолок бюджета (в рублях) и товар из текста. Чего нет, того нет: не выдумываем. */
+export function negotiationArgs(text: string): { quantity?: number; targetPriceRub?: number; maxPriceRub?: number; query?: string; note: string } {
+  const out: { quantity?: number; targetPriceRub?: number; maxPriceRub?: number; query?: string; note: string } = { note: text.slice(0, 500) };
+  const query = negotiationQuery(text);
+  if (query !== undefined) out.query = query;
   const quantity = num(QTY.exec(text)?.[1]);
   const targetPriceRub = num(TARGET.exec(text)?.[1]);
   const maxPriceRub = num(MAX.exec(text)?.[1]);
