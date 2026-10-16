@@ -18,6 +18,7 @@ const PRIMARY = [
 const USER_MENU: [string, string][] = [
   ["/profile", "Мой профиль"],
   ["/profile/portfolio", "Портфолио"],
+  ["/promote", "Продвижение"],
   ["/orders", "Мои заказы"],
   ["/messages", "Сообщения"],
   ["/disputes", "Возвраты и споры"],
@@ -222,6 +223,11 @@ export function Header() {
             <Link href="/orders" className="flex items-center rounded-lg px-3 py-3 text-base font-medium text-ink hover:bg-surface-muted">
               Мои заказы
               <Badge n={todo} label="Дел по заказам" tone="amber" />
+            </Link>
+          )}
+          {user && (
+            <Link href="/promote" className="block rounded-lg px-3 py-3 text-base font-medium text-ink hover:bg-surface-muted">
+              Продвижение
             </Link>
           )}
           {!user && (
