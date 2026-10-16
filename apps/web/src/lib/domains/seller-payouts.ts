@@ -1,5 +1,6 @@
 /**
- * Выплата продавцу только за доставленные заказы. Резерв и outbox как в payments.ts
+ * Выплата продавцу только за принятые покупателем заказы (безопасная сделка:
+ * до приёмки деньги лежат на счёте площадки). Резерв и outbox как в payments.ts
  * (вызов банка вне транзакции, идемпотентность по ключу), но фильтр по статусу
  * заказа стоит прямо в резерве, а не только в маршруте.
  * После смены реквизитов или сброса пароля выплата ждёт (защита от захвата аккаунта).
@@ -7,8 +8,10 @@
 import { prisma } from "../prisma";
 import { getPayoutProvider, processPayoutOutbox } from "./payments";
 import { assertNoPayoutHold } from "./account-security";
+import { PAYOUT_READY_ORDER_STATUSES } from "../safe-deal";
 
-export const DELIVERED_ORDER_STATUSES = ["DELIVERED", "COMPLETED"];
+/** Имя осталось старым для совместимости: теперь это только принятые заказы. */
+export const DELIVERED_ORDER_STATUSES: string[] = [...PAYOUT_READY_ORDER_STATUSES];
 
 export const readySettlementWhere = (sellerId: string) => ({
   sellerId,

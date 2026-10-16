@@ -13,6 +13,8 @@
  *   5. Автоотмена заказов, не оплаченных за 24 часа (товар возвращается в продажу).
  *   6. Конец акций по сроку — обычная цена возвращается сама.
  *   7. Предупреждения продавцу, что товар заканчивается.
+ *   8. Автоприёмка безопасной сделки: доставленный заказ без возврата и спора
+ *      завершается через 7 дней, и деньги становятся доступны продавцу.
  *
  * This module exposes a single `runJobs()` entry point that performs one
  * bounded slice of every category, so it can be driven by Vercel Cron
@@ -34,6 +36,7 @@ import { syncTracking } from "./delivery";
 import { checkSlaBreaches } from "./disputes";
 import { expirePromotions } from "./seller-promotions";
 import { sendLowStockAlerts } from "./stock-alerts";
+import { autoAcceptDelivered } from "./safe-deal-actions";
 import { retryFailedDeliveries } from "../notification-delivery";
 import { ShipmentStatus_VALUES } from "../db/enums";
 
@@ -85,6 +88,8 @@ export async function runJobs(): Promise<JobRunResult> {
     timed("delivery_retry", () => retryFailedDeliveries(), (n) => `${n} retried`),
     timed("promo_expiry", () => expirePromotions(), (n) => `${n} promotions ended`),
     timed("low_stock_alerts", () => sendLowStockAlerts(), (n) => `${n} alerts sent`),
+    timed("safe_deal_auto_accept", () => autoAcceptDelivered({ limit: 25 }), (r) =>
+      `${r.checked} checked, ${r.completed} completed, ${r.failed} failed`),
   ]);
 
   return {

@@ -1,13 +1,17 @@
 /**
  * Что продавец может сделать с заказом в каждом статусе. Чистые правила без
  * базы, чтобы их было легко проверять тестами и показывать нужные кнопки.
+ *
+ * Отказ в возврате возвращает заказ в «Доставлен», а не завершает его: иначе
+ * продавец одним нажатием забирал бы деньги из безопасной сделки. У покупателя
+ * снова есть срок приёмки, чтобы открыть спор.
  */
 export type SellerOrderAction = "reject" | "accept_return" | "decline_return" | "refund_return";
 
 export const SELLER_ORDER_ACTIONS: Record<SellerOrderAction, { from: string; to: string; label: string }> = {
   reject: { from: "PAID", to: "CANCELLED", label: "Отказаться от заказа" },
   accept_return: { from: "RETURN_REQUESTED", to: "RETURNING", label: "Принять возврат" },
-  decline_return: { from: "RETURN_REQUESTED", to: "COMPLETED", label: "Отказать в возврате" },
+  decline_return: { from: "RETURN_REQUESTED", to: "DELIVERED", label: "Отказать в возврате" },
   refund_return: { from: "RETURNING", to: "REFUNDED", label: "Товар вернулся, вернуть деньги" },
 };
 
