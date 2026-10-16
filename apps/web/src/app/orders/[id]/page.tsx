@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { rub, orderStatusLabel, timeAgo } from "@/lib/format";
 import { safeDealBuyerNote } from "@/lib/safe-deal";
+import { serviceCustomerNote } from "@/lib/service-deal";
 
 interface TrackingResponse {
   order: {
@@ -21,6 +22,11 @@ interface TrackingResponse {
     payment: { status: string; sandbox: boolean } | null;
     /** Когда заказ доставлен: от этой даты считается автоприёмка. */
     deliveredAt?: string | null;
+    /** SERVICE: заказ услуги через фриланс, без доставки. */
+    kind?: "SERVICE" | "GOODS";
+    serviceTitle?: string | null;
+    /** Что исполнитель написал, когда сдавал работу. */
+    workReport?: string | null;
   };
   reviewedProductIds: string[];
   /** Отзывы, которые антифрод скрыл до проверки модератором. */
@@ -99,12 +105,14 @@ export default function OrderDetailPage() {
   }
 
   const { order, shipment } = data;
+  const isService = order.kind === "SERVICE";
   const needsPayment = order.status === "PAYMENT_PENDING" || order.status === "CREATED";
   const delivered = order.status === "DELIVERED" || order.status === "COMPLETED";
   const inFlight = IN_FLIGHT.includes(order.status);
   const subtotal = order.subtotalKopecks ?? order.items.reduce((sum, item) => sum + item.priceKopecks * item.quantity, 0);
   const delivery = order.deliveryKopecks ?? Math.max(0, order.totalKopecks - subtotal);
-  const safeNote = safeDealBuyerNote(order.status, order.deliveredAt ? new Date(order.deliveredAt) : null);
+  const deliveredAt = order.deliveredAt ? new Date(order.deliveredAt) : null;
+  const safeNote = isService ? serviceCustomerNote(order.status, deliveredAt) : safeDealBuyerNote(order.status, deliveredAt);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
@@ -122,18 +130,22 @@ export default function OrderDetailPage() {
         </div>
 
         <div className="mt-4 border-t border-line pt-4">
-          <h2 className="text-sm font-bold text-ink">Состав заказа</h2>
-          <ul className="mt-2 space-y-2">
-            {order.items.map((item) => (
-              <li key={item.id} className="flex items-center justify-between text-sm">
-                <span className="text-ink">{item.titleSnapshot} × {item.quantity}</span>
-                <span className="text-ink-soft">{rub(item.priceKopecks * item.quantity)}</span>
-              </li>
-            ))}
-          </ul>
+          <h2 className="text-sm font-bold text-ink">{isService ? "Заказ услуги" : "Состав заказа"}</h2>
+          {isService ? (
+            <p className="mt-2 text-sm text-ink">Услуга: {order.serviceTitle ?? "без названия"}</p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {order.items.map((item) => (
+                <li key={item.id} className="flex items-center justify-between text-sm">
+                  <span className="text-ink">{item.titleSnapshot} × {item.quantity}</span>
+                  <span className="text-ink-soft">{rub(item.priceKopecks * item.quantity)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           <dl className="mt-3 space-y-1 border-t border-line pt-2 text-sm">
-            <div className="flex justify-between"><dt className="text-ink-soft">Товары</dt><dd>{rub(subtotal)}</dd></div>
-            <div className="flex justify-between"><dt className="text-ink-soft">Доставка</dt><dd>{delivery > 0 ? rub(delivery) : "бесплатно"}</dd></div>
+            {!isService && <div className="flex justify-between"><dt className="text-ink-soft">Товары</dt><dd>{rub(subtotal)}</dd></div>}
+            {!isService && <div className="flex justify-between"><dt className="text-ink-soft">Доставка</dt><dd>{delivery > 0 ? rub(delivery) : "бесплатно"}</dd></div>}
             <div className="flex justify-between font-bold"><dt>Итого</dt><dd>{rub(order.totalKopecks)}</dd></div>
           </dl>
         </div>
@@ -146,45 +158,60 @@ export default function OrderDetailPage() {
           <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900" role="status">🛡 {safeNote}</p>
         )}
 
-        {needsPayment && <PayButton orderId={order.id} onPaid={load} />}
-        {needsPayment && <CancelButton orderId={order.id} onDone={load} />}
-
-        {order.status === "DELIVERED" && <ConfirmReceipt orderId={order.id} onDone={load} />}
-        {delivered && <ReturnActions orderId={order.id} onChanged={load} mode="full" />}
-        {inFlight && <ReturnActions orderId={order.id} onChanged={load} mode="dispute" />}
-      </div>
-
-      <div className="card mt-3 p-5">
-        <h2 className="text-sm font-bold text-ink">Отслеживание доставки</h2>
-        {shipment ? (
-          <div className="mt-3">
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="chip">{SHIPMENT_STATUS_LABEL[shipment.status] ?? "В обработке"}</span>
-              {shipment.sandbox && <span className="chip bg-amber-100 text-amber-800">тестовая доставка</span>}
-            </div>
-            <dl className="mt-3 grid gap-2 text-xs text-ink-soft sm:grid-cols-2">
-              <div>Перевозчик: <span className="text-ink">{shipment.carrierName}</span></div>
-              <div>Трек-номер: <span className="font-mono text-ink">{shipment.trackingNumber || "пока нет"}</span></div>
-              <div>Ожидаемая доставка: <span className="text-ink">{shipment.eta ? new Date(shipment.eta).toLocaleDateString("ru-RU") : "неизвестно"}</span></div>
-            </dl>
-            {shipment.events.length > 0 && (
-              <ol className="mt-4 space-y-3 border-l-2 border-line pl-4">
-                {shipment.events.map((ev) => (
-                  <li key={ev.id} className="relative">
-                    <span className="absolute -left-[21px] top-1 h-2 w-2 rounded-full bg-svetlana-600" />
-                    <div className="text-sm text-ink">{ev.description}</div>
-                    <div className="text-xs text-ink-soft">{timeAgo(ev.occurredAt)}</div>
-                  </li>
-                ))}
-              </ol>
-            )}
+        {isService && order.workReport && (
+          <div className="mt-4 rounded-lg bg-surface-muted p-3 text-sm">
+            <div className="font-medium text-ink">Отчёт исполнителя</div>
+            <p className="mt-1 whitespace-pre-line text-ink-soft">{order.workReport}</p>
           </div>
+        )}
+
+        {needsPayment && <PayButton orderId={order.id} onPaid={load} service={isService} />}
+        {needsPayment && <CancelButton orderId={order.id} onDone={load} service={isService} />}
+
+        {order.status === "DELIVERED" && <ConfirmReceipt orderId={order.id} onDone={load} service={isService} />}
+        {isService ? (
+          (delivered || inFlight) && order.status !== "COMPLETED" && <ReturnActions orderId={order.id} onChanged={load} mode="service" />
         ) : (
-          <p className="mt-2 text-sm text-ink-soft">Продавец ещё не передал заказ в доставку. Отслеживание появится, когда отправление будет создано.</p>
+          <>
+            {delivered && <ReturnActions orderId={order.id} onChanged={load} mode="full" />}
+            {inFlight && <ReturnActions orderId={order.id} onChanged={load} mode="dispute" />}
+          </>
         )}
       </div>
 
-      {delivered && (
+      {!isService && (
+        <div className="card mt-3 p-5">
+          <h2 className="text-sm font-bold text-ink">Отслеживание доставки</h2>
+          {shipment ? (
+            <div className="mt-3">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="chip">{SHIPMENT_STATUS_LABEL[shipment.status] ?? "В обработке"}</span>
+                {shipment.sandbox && <span className="chip bg-amber-100 text-amber-800">тестовая доставка</span>}
+              </div>
+              <dl className="mt-3 grid gap-2 text-xs text-ink-soft sm:grid-cols-2">
+                <div>Перевозчик: <span className="text-ink">{shipment.carrierName}</span></div>
+                <div>Трек-номер: <span className="font-mono text-ink">{shipment.trackingNumber || "пока нет"}</span></div>
+                <div>Ожидаемая доставка: <span className="text-ink">{shipment.eta ? new Date(shipment.eta).toLocaleDateString("ru-RU") : "неизвестно"}</span></div>
+              </dl>
+              {shipment.events.length > 0 && (
+                <ol className="mt-4 space-y-3 border-l-2 border-line pl-4">
+                  {shipment.events.map((ev) => (
+                    <li key={ev.id} className="relative">
+                      <span className="absolute -left-[21px] top-1 h-2 w-2 rounded-full bg-svetlana-600" />
+                      <div className="text-sm text-ink">{ev.description}</div>
+                      <div className="text-xs text-ink-soft">{timeAgo(ev.occurredAt)}</div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-ink-soft">Продавец ещё не передал заказ в доставку. Отслеживание появится, когда отправление будет создано.</p>
+          )}
+        </div>
+      )}
+
+      {delivered && !isService && (
         <section className="card mt-3 p-5">
           <h2 className="text-lg font-bold text-ink">Отзыв о товаре</h2>
           <p className="mt-1 text-sm text-ink-soft">Отзыв будет отмечен как «покупка подтверждена». Подозрительные отзывы сначала проверяет модератор.</p>
@@ -205,8 +232,8 @@ export default function OrderDetailPage() {
   );
 }
 
-/** Безопасная сделка: покупатель принимает товар, и деньги становятся доступны продавцу. */
-function ConfirmReceipt({ orderId, onDone }: { orderId: string; onDone: () => void }) {
+/** Безопасная сделка: покупатель принимает товар (или работу), и деньги становятся доступны продавцу. */
+function ConfirmReceipt({ orderId, onDone, service }: { orderId: string; onDone: () => void; service: boolean }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -218,7 +245,7 @@ function ConfirmReceipt({ orderId, onDone }: { orderId: string; onDone: () => vo
       const res = await fetch(`/api/orders/${orderId}/confirm`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMessage(body?.error ?? "Не удалось подтвердить получение");
+        setMessage(body?.error ?? "Не удалось подтвердить");
         return;
       }
       onDone();
@@ -234,19 +261,19 @@ function ConfirmReceipt({ orderId, onDone }: { orderId: string; onDone: () => vo
     <div className="mt-4 border-t border-line pt-4">
       {confirming ? (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-ink-soft">Товар проверен и всё в порядке? После этого деньги уйдут продавцу.</span>
+          <span className="text-ink-soft">{service ? "Работа проверена и всё в порядке? После этого деньги уйдут исполнителю." : "Товар проверен и всё в порядке? После этого деньги уйдут продавцу."}</span>
           <button className="btn btn-primary px-3 py-1.5 text-xs" disabled={busy} onClick={() => void confirm()}>{busy ? "Подтверждаем…" : "Да, всё в порядке"}</button>
           <button className="btn btn-ghost px-3 py-1.5 text-xs" disabled={busy} onClick={() => setConfirming(false)}>Нет</button>
         </div>
       ) : (
-        <button className="btn btn-primary w-full sm:w-auto" onClick={() => setConfirming(true)}>✓ Товар получен, всё в порядке</button>
+        <button className="btn btn-primary w-full sm:w-auto" onClick={() => setConfirming(true)}>{service ? "✓ Работа принята, всё в порядке" : "✓ Товар получен, всё в порядке"}</button>
       )}
       {message && <p className="mt-1 text-xs text-bad" role="alert">{message}</p>}
     </div>
   );
 }
 
-function CancelButton({ orderId, onDone }: { orderId: string; onDone: () => void }) {
+function CancelButton({ orderId, onDone, service }: { orderId: string; onDone: () => void; service: boolean }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -274,7 +301,7 @@ function CancelButton({ orderId, onDone }: { orderId: string; onDone: () => void
     <div className="mt-3">
       {confirming ? (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-ink-soft">Отменить заказ? Товар вернётся продавцу.</span>
+          <span className="text-ink-soft">{service ? "Отменить заказ? Исполнитель получит уведомление." : "Отменить заказ? Товар вернётся продавцу."}</span>
           <button className="btn btn-danger px-3 py-1.5 text-xs" disabled={busy} onClick={() => void cancel()}>{busy ? "Отменяем…" : "Да, отменить"}</button>
           <button className="btn btn-ghost px-3 py-1.5 text-xs" disabled={busy} onClick={() => setConfirming(false)}>Нет</button>
         </div>
@@ -377,7 +404,14 @@ const DISPUTE_REASONS: { value: string; label: string }[] = [
 
 const PRE_DELIVERY_DISPUTE_REASONS = DISPUTE_REASONS.filter((r) => ["ITEM_NOT_RECEIVED", "PAYMENT_DISPUTE", "DELIVERY_DISPUTE"].includes(r.value));
 
-function ReturnActions({ orderId, onChanged, mode }: { orderId: string; onChanged: () => void; mode: "full" | "dispute" }) {
+// Услугу нельзя «вернуть», только открыть спор: деньги остаются у площадки до решения.
+const SERVICE_DISPUTE_REASONS: { value: string; label: string }[] = [
+  { value: "ITEM_NOT_AS_DESCRIBED", label: "Работа не соответствует заданию" },
+  { value: "ITEM_NOT_RECEIVED", label: "Работа не сдана" },
+  { value: "PAYMENT_DISPUTE", label: "Спор по оплате" },
+];
+
+function ReturnActions({ orderId, onChanged, mode }: { orderId: string; onChanged: () => void; mode: "full" | "dispute" | "service" }) {
   const [open, setOpen] = useState<"none" | "return" | "dispute">("none");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -420,13 +454,13 @@ function ReturnActions({ orderId, onChanged, mode }: { orderId: string; onChange
     return (
       <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
         {mode === "full" && <button className="btn btn-ghost px-3 py-2 text-sm" onClick={() => { setOpen("return"); setReason(""); }}>Оформить возврат</button>}
-        <button className="btn btn-ghost px-3 py-2 text-sm" onClick={() => { setOpen("dispute"); setReason(""); }}>{mode === "full" ? "Открыть спор" : "Проблема с заказом"}</button>
+        <button className="btn btn-ghost px-3 py-2 text-sm" onClick={() => { setOpen("dispute"); setReason(""); }}>{mode === "full" ? "Открыть спор" : mode === "service" ? "Проблема с работой" : "Проблема с заказом"}</button>
         {message && <p className="w-full text-xs text-ink-soft">{message}</p>}
       </div>
     );
   }
 
-  const options = open === "return" ? RETURN_REASONS : mode === "dispute" ? PRE_DELIVERY_DISPUTE_REASONS : DISPUTE_REASONS;
+  const options = open === "return" ? RETURN_REASONS : mode === "service" ? SERVICE_DISPUTE_REASONS : mode === "dispute" ? PRE_DELIVERY_DISPUTE_REASONS : DISPUTE_REASONS;
 
   return (
     <div className="mt-4 border-t border-line pt-4">
@@ -460,7 +494,7 @@ function ReturnActions({ orderId, onChanged, mode }: { orderId: string; onChange
  * (оплата в приложении своего банка по QR или ссылке). Заказ становится
  * оплаченным только после подтверждения банка.
  */
-function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void }) {
+function PayButton({ orderId, onPaid, service }: { orderId: string; onPaid: () => void; service: boolean }) {
   const [state, setState] = useState<"idle" | "busy" | "ok" | "wait" | "err">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [busyMethod, setBusyMethod] = useState<"card" | "sbp" | null>(null);
@@ -493,7 +527,7 @@ function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void })
         return;
       }
       setState("ok");
-      setMessage(body.sandbox ? "Тестовая оплата прошла: деньги не списывались. Продавец получил заказ." : "Оплата подтверждена банком.");
+      setMessage(body.sandbox ? `Тестовая оплата прошла: деньги не списывались. ${service ? "Исполнитель" : "Продавец"} получил заказ.` : "Оплата подтверждена банком.");
       onPaid();
     } catch {
       setState("err");
@@ -519,7 +553,7 @@ function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void })
           </button>
         </div>
       )}
-      <p className="mt-2 text-xs text-ink-soft">Карты «Мир», Visa, Mastercard, SberPay, T-Pay и СБП. Данные карты вводятся только на странице банка. Деньги продавец получит только после того, как вы примете товар.</p>
+      <p className="mt-2 text-xs text-ink-soft">Карты «Мир», Visa, Mastercard, SberPay, T-Pay и СБП. Данные карты вводятся только на странице банка. {service ? "Деньги исполнитель получит только после того, как вы примете работу." : "Деньги продавец получит только после того, как вы примете товар."}</p>
       {message && <p className={`mt-2 text-xs ${state === "ok" ? "text-good" : state === "wait" || state === "busy" ? "text-ink-soft" : "text-bad"}`}>{message}</p>}
     </div>
   );
