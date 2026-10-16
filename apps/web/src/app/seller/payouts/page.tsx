@@ -5,6 +5,7 @@ import { bankRegistryMode } from "@/lib/domains/payout-registry";
 import { bankDetailsSummary } from "@/lib/domains/bank-details";
 import { getPayoutHold } from "@/lib/domains/account-security";
 import { holdMessage } from "@/lib/domains/account-guard";
+import { ACCEPT_DAYS } from "@/lib/safe-deal";
 import { BankDetailsForm } from "./BankDetailsForm";
 import { rub, timeAgo } from "@/lib/format";
 import { settlementStatusLabel } from "@/lib/labels";
@@ -12,7 +13,7 @@ import { settlementStatusLabel } from "@/lib/labels";
 export const dynamic = "force-dynamic";
 
 const RESULT_TEXT: Record<string, string> = {
-  delivery_required: "Выплата станет доступна, когда заказ будет доставлен покупателю.",
+  delivery_required: "Выплата станет доступна, когда покупатель примет заказ.",
   nothing_to_payout: "Сейчас нечего выплачивать.",
   bank_required: "Выплаты включатся после подключения банка-партнёра. Деньги не пропадут: они числятся за вами.",
   succeeded: "Выплата отправлена.",
@@ -52,11 +53,14 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
           {params.test === "1" && " Тестовый режим: деньги не переводились."}
         </p>
       )}
+      <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">
+        🛡 Безопасная сделка: деньги покупателя лежат на счёте площадки, пока он не получит и не примет заказ. Если покупатель не нажмёт «Товар получен» и не откроет спор, заказ примется сам через {ACCEPT_DAYS} дней после доставки.
+      </p>
       <div className="grid gap-3 sm:grid-cols-4">
         <Stat label="Оборот" value={rub(statement.totals.grossKopecks)} />
         <Stat label="Комиссия площадки" value={rub(statement.totals.platformFeeKopecks)} />
         <Stat label="Доступно к выплате" value={rub(available)} />
-        <Stat label="Ждёт доставки" value={rub(waiting)} />
+        <Stat label="Ждёт доставки и приёмки" value={rub(waiting)} />
       </div>
       {registry && <BankDetailsForm current={bank} />}
       <form method="post" action="/api/seller/payouts">
@@ -83,8 +87,8 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
       </div>
       <p className="text-sm text-ink-faint">
         {registry
-          ? "Выплата доступна по доставленным заказам. Деньги переводятся банковским переводом на реквизиты выше."
-          : "Выплата доступна по доставленным заказам и выполняется банком-партнёром."}
+          ? "Выплата доступна по принятым покупателем заказам. Деньги переводятся банковским переводом на реквизиты выше."
+          : "Выплата доступна по принятым покупателем заказам и выполняется банком-партнёром."}
       </p>
     </main>
   );
