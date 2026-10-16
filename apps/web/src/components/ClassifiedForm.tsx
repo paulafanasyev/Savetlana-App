@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ATTR_PREFIX,
   MAX_PHOTOS,
@@ -10,14 +10,16 @@ import {
   type FieldDef,
 } from "@/lib/classified-fields";
 import { VacancyDraftHelper, type VacancyDraftResult } from "@/components/VacancyDraftHelper";
+import { CityCombobox } from "@/components/CityCombobox";
 import { removedNote, scrubResumeListing } from "@/lib/domains/contact-scrub";
 import { cityFromText } from "@/lib/city-from-text";
 import { formPreset } from "@/lib/freelance-section";
+import type { PickCity } from "@/lib/city-pick";
 
 export interface GeoOption {
   id: string;
   name: string;
-  regions: { id: string; name: string; cities: { id: string; name: string }[] }[];
+  regions: { id: string; name: string; cities: { id: string; name: string; population?: number }[] }[];
 }
 
 const DEALS: Record<string, { value: string; label: string }[]> = {
@@ -123,8 +125,18 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [cityNote, setCityNote] = useState<string | null>(null);
+  const [cityId, setCityId] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const [resumeText, setResumeText] = useState("");
+
+  // Все города одним списком, крупные первыми: так подсказки показывают нужное сразу.
+  const cities = useMemo<PickCity[]>(
+    () =>
+      tree
+        .flatMap((d) => d.regions.flatMap((r) => r.cities.map((c) => ({ id: c.id, name: c.name, regionName: r.name, population: c.population ?? 0 }))))
+        .sort((a, b) => b.population - a.population),
+    [tree],
+  );
 
   // Ссылка из раздела «Фриланс»: /classifieds/new?vertical=SERVICE&deal=SERVICE_REQUEST открывает
   // форму сразу на нужном типе. Ссылка из чата со Светланой: ?resume=… открывает
@@ -158,10 +170,9 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
     for (const [key, value] of Object.entries(d.attrs)) put(ATTR_PREFIX + key, value);
     // «Живу в Казани»: город сначала из слов самого человека (модель могла переписать
     // описание без города), потом из черновика. Нет в справочнике: поле не трогаем.
-    const cities = tree.flatMap((g) => g.regions.flatMap((r) => r.cities));
     const city = cityFromText(sourceText, cities) ?? cityFromText(`${d.title}\n${d.description}`, cities);
     if (city) {
-      put("cityId", city.id);
+      setCityId(city.id);
       setCityNote(`Город «${city.name}» взяла из текста. Если не тот, выберите другой.`);
     } else {
       setCityNote(null);
@@ -188,6 +199,12 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
     setBusy(true);
     setError(null);
     setNotice(null);
+    if (!cityId) {
+      setError("Выберите город: начните вводить название и нажмите на подходящий вариант");
+      setBusy(false);
+      document.getElementById("cityId")?.focus();
+      return;
+    }
     // Резюме: телефон и почту в открытом объявлении собирают мошенники. Убираем и показываем, что изменилось.
     if (vertical === "JOB" && dealType === "RESUME") {
       const titleEl = e.currentTarget.elements.namedItem("title");
@@ -327,20 +344,18 @@ export function ClassifiedForm({ tree }: { tree: GeoOption[] }) {
 
       <div>
         <label className="mb-1 block text-sm font-medium" htmlFor="cityId">Город</label>
-        <select id="cityId" name="cityId" required className={input} onChange={() => setCityNote(null)}>
-          {tree.map((d) => (
-            <optgroup key={d.id} label={d.name}>
-              {d.regions.map((r) =>
-                r.cities.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({r.name})
-                  </option>
-                ))
-              )}
-            </optgroup>
-          ))}
-        </select>
+        <CityCombobox
+          id="cityId"
+          name="cityId"
+          cities={cities}
+          value={cityId}
+          onChange={(c) => {
+            setCityId(c?.id ?? "");
+            setCityNote(null);
+          }}
+        />
         {cityNote && <p className="mt-1 text-xs text-svetlana-700" role="status">{cityNote}</p>}
+        {cities.length === 0 && <p className="mt-1 text-xs text-red-700" role="alert">Список городов не загрузился. Обновите страницу через минуту.</p>}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

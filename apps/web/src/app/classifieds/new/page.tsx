@@ -1,4 +1,5 @@
 import { getGeoTree } from "@/lib/domains/classifieds";
+import { ensureGeoSeeded } from "@/lib/domains/geo";
 import { requireUserServer } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { ClassifiedForm, type GeoOption } from "@/components/ClassifiedForm";
@@ -21,12 +22,14 @@ export default async function NewClassifiedPage({ searchParams }: PageProps) {
   const error = first(params.error)?.slice(0, 400);
   const sent = first(params.sent) === "moderation";
 
+  // Новая база без городов: заполняем справочник, иначе поле «Город» пустое.
+  await ensureGeoSeeded();
   const tree = await getGeoTree();
-  // В браузер передаём только названия и id, без лишних полей базы.
+  // В браузер передаём только названия, id и население (для порядка подсказок).
   const geo: GeoOption[] = tree.map((d) => ({
     id: d.id,
     name: d.name,
-    regions: d.regions.map((r) => ({ id: r.id, name: r.name, cities: r.cities.map((c) => ({ id: c.id, name: c.name })) })),
+    regions: d.regions.map((r) => ({ id: r.id, name: r.name, cities: r.cities.map((c) => ({ id: c.id, name: c.name, population: c.population ?? 0 })) })),
   }));
 
   return (

@@ -4,11 +4,11 @@
  * (своя тестовая база, без настоящих ключей и денег).
  *
  * Сценарий: главная, каталог, «Фриланс», регистрация, форма заказа сразу
- * на услуге, портфолио (о себе, навыки, работа с фото), публичный профиль
- * исполнителя, удаление работы вместе с фото.
+ * на услуге, выбор города поиском, портфолио (о себе, навыки, работа с фото),
+ * публичный профиль исполнителя, удаление работы вместе с фото.
  *
- * Итог пишется в сводку GitHub (GITHUB_STEP_SUMMARY), скриншоты упавших шагов
- * и лог сервера лежат в артефакте «browser-check».
+ * Итог пишется в сводку GitHub (GITHUB_STEP_SUMMARY) и в аннотации запуска,
+ * скриншоты упавших шагов лежат в артефакте «browser-check».
  */
 import { chromium } from "playwright";
 import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
@@ -98,6 +98,16 @@ await step("Форма объявления открывается сразу н
   });
 });
 
+await step("Город в объявлении выбирается поиском", async () => {
+  const field = page.locator("#cityId");
+  await field.fill("Каза");
+  await page.getByRole("option", { name: /Казань/ }).first().click();
+  const label = await field.inputValue();
+  expect(label.startsWith("Казань"), `в поле города: ${label}`);
+  const id = await page.locator('input[type="hidden"][name="cityId"]').inputValue();
+  expect(id.length > 0, "id города не попал в форму");
+});
+
 await step("Портфолио: о себе и навыки сохраняются (дефисы на месте)", async () => {
   await open("/profile/portfolio");
   await page.getByRole("heading", { name: "Портфолио исполнителя" }).waitFor();
@@ -165,4 +175,9 @@ const report = lines.join("\n");
 writeFileSync(join(OUT, "report.md"), report);
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
 console.log(report);
+// Короткий итог в аннотациях GitHub: их видно в API без входа.
+console.log(`::notice title=Проверка в браузере::Шагов ${results.length}, упало ${failed}`);
+for (const line of results.filter((r) => r.startsWith("| ❌")).slice(0, 9)) {
+  console.log(`::error title=Шаг упал::${line.replace(/^\| ❌ \| /, "").replace(/ \|.*$/, "")}`);
+}
 process.exit(failed > 0 ? 1 : 0);
