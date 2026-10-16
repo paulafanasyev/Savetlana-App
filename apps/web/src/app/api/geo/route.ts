@@ -1,11 +1,14 @@
 import { apiRoute } from "@/lib/api-helpers";
 import { getGeoTree, searchCities } from "@/lib/domains/classifieds";
+import { ensureGeoSeeded } from "@/lib/domains/geo";
 
 export const dynamic = "force-dynamic";
 
 // Full geo tree: federal districts -> regions -> cities. Public; used by the
 // classified picker so every ad carries a real, filterable location.
+// Пустой справочник заполняется сам при первом запросе.
 export const GET = apiRoute(async (request) => {
+  await ensureGeoSeeded();
   const url = new URL(request.url);
   const query = url.searchParams.get("q");
 
