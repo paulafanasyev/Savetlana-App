@@ -5,6 +5,7 @@ import { SvetlanaDock } from "@/components/SvetlanaDock";
 import { GuestCartSync } from "@/components/GuestCartSync";
 import { ConsentGateServer } from "@/components/ConsentGateServer";
 import { WeatherWidget } from "@/components/WeatherWidget";
+import { PromoRail } from "@/components/PromoRail";
 import { env } from "@/lib/env";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/seo";
 
@@ -42,7 +43,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
         <Header />
-        <main className="flex-1">{children}</main>
+        {/* На широком экране справа колонка продвижения, на остальных её нет. */}
+        <div className="flex flex-1">
+          <main className="min-w-0 flex-1">{children}</main>
+          <PromoRail />
+        </div>
         <footer className="border-t border-surface-line bg-white px-4 py-8 text-center text-xs text-ink-soft">
           <div className="mx-auto max-w-6xl space-y-2">
             <div className="font-semibold text-ink">{SITE_NAME}</div>
@@ -53,6 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/favorites" className="hover:text-svetlana-700">Избранное</a>
               <a href="/seller" className="hover:text-svetlana-700">Кабинет продавца</a>
               <a href="/city" className="hover:text-svetlana-700">Мой город и погода</a>
+              <a href="/promote" className="hover:text-svetlana-700">Продвижение от 5 ₽</a>
             </div>
             <div className="flex flex-wrap justify-center gap-4">
               <a href="/legal/payment-delivery" className="hover:text-svetlana-700">Оплата и доставка</a>
