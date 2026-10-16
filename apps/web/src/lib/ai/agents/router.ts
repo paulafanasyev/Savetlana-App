@@ -70,6 +70,8 @@ const RULES: RouteRule[] = [
   // Работа, сотрудники, исполнители и фриланс: поиск по объявлениям (search_classifieds).
   { side: "buyer", agent: "search", pattern: /ваканси|работу(?![а-яё])|работы(?![а-яё])|подработ|трудоустро|сотрудник|соискател|фриланс|исполнител|мастер(?:а|ов)?\s+(?:на|по|для)\s|услуг[иуа]?(?![а-яё])/i },
   { side: "buyer", agent: "support", pattern: /сообщени|переписк|ответил.* продав|написал.* продав/i },
+  // Безопасная сделка: «товар получен, всё в порядке» (confirm_receipt).
+  { side: "buyer", agent: "order", pattern: /(?:товар|заказ|посылк)\S*\s+получен|получил\S*\s+(?:товар|заказ|посылк)|подтверд\S*\s+получен|прими\s+заказ|принять\s+заказ/i },
   { side: "buyer", agent: "gift", pattern: /подар(ок|ок|ить)|что подарить|день рождения|групповой подарок/i },
   { side: "buyer", agent: "relationship", pattern: /друг|родственник|мама|папа|сестра|брат|коллега|семья|мои связи/i },
   { side: "buyer", agent: "order", pattern: /где мой заказ|статус заказа|мои заказы|отмени заказ|доставк[а|у] заказа/i },
@@ -114,14 +116,14 @@ export function routeAgent(text: string, side: "buyer" | "seller"): RouteResult 
  * role-level permissions via the registry; this just shapes the prompt.
  */
 export const AGENT_TOOLS: Record<AgentKey, string[]> = {
-  buyer: ["search_products", "search_classifieds", "compare_products", "get_product", "search_sellers", "get_reviews", "check_inventory", "cart_add", "create_order", "get_order", "cancel_order", "get_tracking", "get_payment_status", "request_return", "create_dispute", "wishlist_add", "recall_memory", "remember_preference", "seller_messages", "seller_today"],
+  buyer: ["search_products", "search_classifieds", "compare_products", "get_product", "search_sellers", "get_reviews", "check_inventory", "cart_add", "create_order", "get_order", "cancel_order", "get_tracking", "get_payment_status", "request_return", "create_dispute", "confirm_receipt", "wishlist_add", "recall_memory", "remember_preference", "seller_messages", "seller_today"],
   seller: ["analyze_seller_sales", "seller_customers", "seller_today", "seller_messages", "start_promotion", "end_promotion", "extend_promotion", "product_health", "advise_price", "change_price", "confirm_inventory", "extend_listing", "create_product_draft", "publish_product", "find_competitors", "scan_global_competitors", "global_search", "delivery_quotes", "document_requirements", "create_workflow_rule"],
   search: ["search_products", "search_cheaper", "compare_products", "get_product", "search_sellers", "global_search", "search_classifieds", "check_vin"],
   vision: ["vision_search", "search_products", "search_cheaper", "compare_products"],
   recommendation: ["search_products", "recall_memory"],
   gift: ["plan_gift", "upcoming_events", "gift_context"],
   relationship: ["declare_relationship", "verified_circle"],
-  order: ["get_order", "cancel_order", "cart_add"],
+  order: ["get_order", "cancel_order", "cart_add", "confirm_receipt"],
   delivery: ["get_tracking", "get_order", "delivery_quotes"],
   payment: ["get_payment_status", "get_order"],
   risk: ["assess_order_risk"],
@@ -135,5 +137,5 @@ export const AGENT_TOOLS: Record<AgentKey, string[]> = {
   document: ["document_requirements"],
   memory: ["remember_preference", "recall_memory"],
   notification: ["create_workflow_rule", "seller_messages"],
-  support: ["get_order", "get_product", "get_tracking", "get_payment_status", "request_return", "create_dispute", "seller_messages"],
+  support: ["get_order", "get_product", "get_tracking", "get_payment_status", "request_return", "create_dispute", "confirm_receipt", "seller_messages"],
 };

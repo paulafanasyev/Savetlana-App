@@ -27,6 +27,7 @@ export type ToolPermission =
   | "CANCEL_ORDER"
   | "REQUEST_RETURN"
   | "CREATE_DISPUTE"
+  | "CONFIRM_RECEIPT"
   | "CREATE_PRODUCT_DRAFT"
   | "EDIT_PRODUCT_DRAFT"
   | "PUBLISH_PRODUCT"
@@ -106,6 +107,7 @@ const ROLE_PERMISSIONS: Record<string, ToolPermission[]> = {
     "CANCEL_ORDER",
     "REQUEST_RETURN",
     "CREATE_DISPUTE",
+    "CONFIRM_RECEIPT",
     "READ_MEMORY",
     "WRITE_MEMORY",
     "GIFT_WRITE",
