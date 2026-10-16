@@ -67,7 +67,7 @@ export function cleanAbout(raw: unknown): string {
 export function isPortfolioImageUrl(url: unknown, userId: string): url is string {
   if (typeof url !== "string" || url.length > 500 || !/^[A-Za-z0-9_-]+$/.test(userId)) return false;
   const local = new RegExp(`^/api/storage/(database/)?public/portfolio/${userId}/[A-Za-z0-9._%-]+$`);
-  const blob = new RegExp(`^https://[a-z0-9]+\\.public\\.blob\\.vercel-storage\\.com/public/portfolio/${userId}/[A-Za-z0-9._%-]+$`);
+  const blob = new RegExp(`^https://[A-Za-z0-9]+\\.public\\.blob\\.vercel-storage\\.com/public/portfolio/${userId}/[A-Za-z0-9._%-]+$`);
   return local.test(url) || blob.test(url);
 }
 
