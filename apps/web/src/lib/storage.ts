@@ -1,6 +1,7 @@
 import { env } from "./env";
 import { prisma } from "./prisma";
 import { sha256Hex } from "./utils";
+import { blobStoreId, isPublicBlobUrl } from "./blob-url";
 
 export type StorageClass = "public" | "private";
 export interface UploadResult { key: string; url: string; sha256: string; sizeBytes: number; mimeType: string; storageClass: StorageClass; provider: string; }
@@ -49,7 +50,7 @@ function storagePath(key: string): string {
 
 /**
  * Хранит файлы в базе (IntegrationLink.secretBlob). Используется, когда нет токена
- * Vercel Blob: фото товаров работают сразу, без отдельного хранилища.
+ * Vercel Blob, для приватных файлов и как запасной вариант, если Blob не принял файл.
  * Ключ: database/<bucket>/<sha256>; bucket начинается с public/, private/, documents/ или evidence/.
  */
 class DatabaseStorageProvider implements StorageProvider {
@@ -96,33 +97,77 @@ class LocalStorageProvider implements StorageProvider {
   }
 }
 
-interface BlobModule {
-  put(pathname: string, body: Buffer, options: Record<string, unknown>): Promise<{ url: string }>;
-  getDownloadUrl(key: string, version?: string, options?: Record<string, unknown>): Promise<string | null>;
-  del(key: string, options?: Record<string, unknown>): Promise<void>;
-}
+// Протокол Vercel Blob (как в их SDK): PUT /?pathname=… и POST /delete. Своим кодом, без пакета.
+const BLOB_API_URL = "https://vercel.com/api/blob";
+const BLOB_API_VERSION = "13";
+const BLOB_TIMEOUT_MS = 20_000;
 
-async function loadBlob(): Promise<BlobModule> {
-  try {
-    const { createRequire } = await import("node:module");
-    return createRequire(import.meta.url)("@vercel/blob") as BlobModule;
-  } catch {
-    throw new Error("Для хранилища Vercel Blob не найден пакет");
-  }
-}
-
+/**
+ * Публичные фото (товары, объявления, портфолио) идут в Vercel Blob и отдаются с их CDN.
+ * Приватные файлы (документы продавца, доказательства в споре) остаются в базе: их
+ * выдаёт наш сервер только после проверки прав. Если Blob ответил ошибкой, фото
+ * сохраняется в базу, и загрузка у человека не ломается.
+ */
 class VercelBlobProvider implements StorageProvider {
   readonly key = "vercel-blob";
+  private readonly database = new DatabaseStorageProvider();
   available(): boolean { return Boolean(env.blobReadWriteToken); }
+
+  private async request(path: string, method: string, headers: Record<string, string>, body: Uint8Array | string): Promise<Response> {
+    const token = env.blobReadWriteToken ?? "";
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(`${BLOB_API_URL}${path}`, {
+          method,
+          body,
+          headers: {
+            authorization: `Bearer ${token}`,
+            "x-api-version": BLOB_API_VERSION,
+            "x-vercel-blob-store-id": blobStoreId(token),
+            "x-api-blob-request-attempt": String(attempt),
+            ...headers,
+          },
+          signal: AbortSignal.timeout(BLOB_TIMEOUT_MS),
+        });
+        if (res.status < 500) return res;
+        lastError = new Error(`Vercel Blob ответил ${res.status}`);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("Vercel Blob недоступен");
+  }
+
   async put(params: PutParams): Promise<{ key: string; url: string }> {
+    if (params.storageClass !== "public") return this.database.put(params);
     const pathname = `${params.bucket}/${params.filename}`;
-    const result = await (await loadBlob()).put(pathname, params.bytes, { access: params.storageClass === "public" ? "public" : "private", contentType: params.mimeType, addRandomSuffix: true, token: env.blobReadWriteToken });
-    return { key: pathname, url: result.url };
+    try {
+      const res = await this.request(
+        `/?${new URLSearchParams({ pathname }).toString()}`,
+        "PUT",
+        { "x-vercel-blob-access": "public", "x-content-type": params.mimeType, "x-add-random-suffix": "1" },
+        new Uint8Array(params.bytes),
+      );
+      const json = (await res.json().catch(() => ({}))) as { url?: unknown; error?: { message?: string } };
+      if (!res.ok || !isPublicBlobUrl(json.url)) throw new Error(json.error?.message ?? `Vercel Blob ответил ${res.status}`);
+      return { key: json.url, url: json.url };
+    } catch (error) {
+      console.warn("[storage] Vercel Blob не принял файл, сохраняем в базу:", error instanceof Error ? error.message : error);
+      return this.database.put(params);
+    }
   }
-  async signedReadUrl(key: string, expiresInSec = 60): Promise<string> {
-    return (await (await loadBlob()).getDownloadUrl(key, undefined, { expires: expiresInSec, token: env.blobReadWriteToken })) ?? storagePath(key);
+
+  async signedReadUrl(key: string): Promise<string> {
+    if (isPublicBlobUrl(key)) return key;
+    return storagePath(key);
   }
-  async delete(key: string): Promise<void> { await (await loadBlob()).del(key, { token: env.blobReadWriteToken }); }
+
+  async delete(key: string): Promise<void> {
+    if (!isPublicBlobUrl(key)) return this.database.delete(key);
+    const res = await this.request("/delete", "POST", { "content-type": "application/json" }, JSON.stringify({ urls: [key] }));
+    if (!res.ok) throw new Error(`Vercel Blob не удалил файл: ${res.status}`);
+  }
 }
 
 let resolved: StorageProvider | null = null;
@@ -153,5 +198,6 @@ export async function storeUpload(params: { bucket: string; filename: string; by
   const provider = getStorageProvider();
   if (!provider.available()) throw new Error("Хранилище недоступно: нет ключа доступа");
   const result = await provider.put({ bucket: params.bucket, filename: params.filename, bytes: params.bytes, mimeType: verification.sniffedMimeType, storageClass: verification.storageClass });
-  return { ...result, sha256: verification.sha256, sizeBytes: verification.sizeBytes, mimeType: verification.sniffedMimeType, storageClass: verification.storageClass, provider: provider.key };
+  const provenance = result.key.startsWith("database/") ? "database" : provider.key;
+  return { ...result, sha256: verification.sha256, sizeBytes: verification.sizeBytes, mimeType: verification.sniffedMimeType, storageClass: verification.storageClass, provider: provenance };
 }
