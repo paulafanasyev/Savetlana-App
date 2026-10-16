@@ -23,6 +23,8 @@ export interface FieldDef {
   maxLength?: number;
   /** Не показывать покупателю целиком (VIN). */
   masked?: boolean;
+  /** Число без разделителя разрядов (год: 2020, а не «2 020»). */
+  plain?: boolean;
 }
 
 const yesNo: FieldOption[] = [
@@ -51,7 +53,7 @@ export const REAL_ESTATE_FIELDS: FieldDef[] = [
   { key: "areaKitchen", label: "Площадь кухни", type: "number", unit: "м²", min: 1, max: 1000, step: 0.1 },
   { key: "floor", label: "Этаж", type: "number", min: -5, max: 200 },
   { key: "floorsTotal", label: "Этажей в доме", type: "number", min: 1, max: 200 },
-  { key: "buildingYear", label: "Год постройки", type: "number", min: 1700, max: 2100 },
+  { key: "buildingYear", label: "Год постройки", type: "number", min: 1700, max: 2100, plain: true },
   { key: "plotArea", label: "Площадь участка", type: "number", unit: "сот.", min: 0, max: 1000000, step: 0.1 },
   {
     key: "renovation", label: "Ремонт", type: "select", options: [
@@ -68,7 +70,7 @@ export const REAL_ESTATE_FIELDS: FieldDef[] = [
 export const AUTO_FIELDS: FieldDef[] = [
   { key: "brand", label: "Марка", type: "text", maxLength: 40, placeholder: "Toyota" },
   { key: "model", label: "Модель", type: "text", maxLength: 40, placeholder: "Camry" },
-  { key: "year", label: "Год выпуска", type: "number", min: 1950, max: 2100 },
+  { key: "year", label: "Год выпуска", type: "number", min: 1950, max: 2100, plain: true },
   { key: "mileageKm", label: "Пробег", type: "number", unit: "км", min: 0, max: 3000000 },
   {
     key: "bodyType", label: "Кузов", type: "select", options: [
@@ -266,7 +268,7 @@ export function describeAttrs(vertical: string, attrs: Record<string, unknown>):
     if (v === undefined || v === null || v === "") continue;
     let value: string;
     if (f.type === "select") value = f.options?.find((o) => o.value === String(v))?.label ?? String(v);
-    else if (f.type === "number" && typeof v === "number") value = v.toLocaleString("ru-RU");
+    else if (f.type === "number" && typeof v === "number") value = f.plain ? String(v) : v.toLocaleString("ru-RU");
     else value = String(v);
     if (f.masked && value.length >= 8) value = `${value.slice(0, 4)}${"•".repeat(Math.max(4, value.length - 8))}${value.slice(-4)}`;
     rows.push({ label: f.label, value: f.unit ? `${value} ${f.unit}` : value });
