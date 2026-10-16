@@ -2,6 +2,7 @@
  * Демо-каталог: включается администратором одной кнопкой, чтобы площадку и
  * Светлану можно было проверить на живых товарах. Всё помечено как демо
  * (продавцы «Демо-магазин …», артикулы DEMO-…) и убирается второй кнопкой.
+ * Вместе с ним грузятся демо-оптовики B2B с правилами торга (demo-b2b.ts).
  *
  * Демо-аккаунты получают случайный пароль, который нигде не хранится: войти
  * под ними нельзя, репозиторий публичный.
@@ -9,19 +10,24 @@
 import { randomBytes } from "node:crypto";
 import { prisma } from "../prisma";
 import { hashPassword } from "../auth";
+import { B2B_CATEGORIES, B2B_POLICIES, B2B_PRODUCTS, B2B_SELLERS } from "./demo-b2b";
+import { saveSellerNegotiationPolicy } from "./negotiation-policy";
 
 export const DEMO_SKU_PREFIX = "DEMO-";
 const DEMO_EMAIL_DOMAIN = "demo.svetlana.local";
 const DEMO_NOTE = "Демонстрационный товар: так будет выглядеть карточка на площадке.";
 
-interface DemoSeller {
+export type DemoSeller = {
   slug: string;
   name: string;
   description: string;
   sellerType: "IP" | "COMPANY" | "SELF_EMPLOYED";
-}
+  /** Условные реквизиты (только у демо-оптовиков). */
+  inn?: string;
+  ogrn?: string;
+};
 
-interface DemoProduct {
+export type DemoProduct = {
   sku: string;
   seller: string;
   category: string;
@@ -35,7 +41,7 @@ interface DemoProduct {
   attributes: Record<string, string>;
   keywords: string[];
   reviews?: { rating: number; body: string }[];
-}
+};
 
 const CATEGORIES: { slug: string; name: string; parent?: string }[] = [
   { slug: "electronics", name: "Электроника" },
@@ -123,7 +129,7 @@ export async function demoCatalogStatus(): Promise<DemoStatus> {
 
 /** Идемпотентно: повторный запуск обновляет цены и остатки, но не плодит копии. */
 export async function loadDemoCatalog(): Promise<DemoStatus> {
-  for (const cat of CATEGORIES) {
+  for (const cat of [...CATEGORIES, ...B2B_CATEGORIES]) {
     const parent = cat.parent ? await prisma.category.findUnique({ where: { slug: cat.parent } }) : null;
     await prisma.category.upsert({
       where: { slug: cat.slug },
@@ -133,8 +139,10 @@ export async function loadDemoCatalog(): Promise<DemoStatus> {
   }
 
   const sellerIds = new Map<string, string>();
-  for (const s of SELLERS) {
+  const sellerUsers = new Map<string, string>();
+  for (const s of [...SELLERS, ...B2B_SELLERS]) {
     const user = await demoUser(demoEmail(s.slug), s.name, "SELLER");
+    const requisites = s.inn ? { inn: s.inn, ogrn: s.ogrn ?? null } : {};
     const profile = await prisma.sellerProfile.upsert({
       where: { slug: s.slug },
       create: {
@@ -146,16 +154,18 @@ export async function loadDemoCatalog(): Promise<DemoStatus> {
         identityStatus: "VERIFIED",
         businessStatus: "VERIFIED",
         isActivated: true,
+        ...requisites,
       },
-      update: { displayName: s.name, description: s.description, isActivated: true },
+      update: { displayName: s.name, description: s.description, isActivated: true, ...requisites },
     });
     sellerIds.set(s.slug, profile.id);
+    sellerUsers.set(s.slug, profile.userId);
   }
 
   const reviewer = await demoUser(`reviewer@${DEMO_EMAIL_DOMAIN}`, "Демо-покупатель", "BUYER");
   const saleUntil = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 
-  for (const p of PRODUCTS) {
+  for (const p of [...PRODUCTS, ...B2B_PRODUCTS]) {
     const sellerId = sellerIds.get(p.seller);
     if (!sellerId) continue;
     const category = await prisma.category.findUnique({ where: { slug: p.category } });
@@ -202,6 +212,13 @@ export async function loadDemoCatalog(): Promise<DemoStatus> {
         ? { rating: Math.round((agg._avg.rating ?? 0) * 10) / 10, reviewsCount: agg._count }
         : { rating: 0, reviewsCount: 0 },
     });
+  }
+
+  // Правила торга демо-оптовиков (так же, как их сохранил бы продавец в кабинете).
+  for (const [slug, policy] of Object.entries(B2B_POLICIES)) {
+    const id = sellerIds.get(slug);
+    const uid = sellerUsers.get(slug);
+    if (id && uid) await saveSellerNegotiationPolicy(id, uid, policy);
   }
   return demoCatalogStatus();
 }
