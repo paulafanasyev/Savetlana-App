@@ -1,0 +1,103 @@
+name: Browser E2E check
+
+on:
+  pull_request:
+    branches:
+      - svetlana/initial-implementation
+  push:
+    branches:
+      - svetlana/initial-implementation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: svetlana_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d svetlana_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/svetlana_e2e?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://postgres:postgres@localhost:5432/svetlana_e2e?schema=public
+      NEXTAUTH_SECRET: e2e-only-not-a-production-secret
+      AUTH_SECRET: e2e-only-not-a-production-secret
+      SESSION_SECRET: e2e-only-not-a-production-secret
+      JWT_SECRET: e2e-only-not-a-production-secret
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium for Playwright
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Generate Prisma client
+        run: npm run db:generate:production
+
+      - name: Prepare isolated test database
+        run: npx prisma db push --schema=apps/web/prisma-postgres/schema.prisma
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Start web app
+        run: |
+          npm run start > /tmp/svetlana-web.log 2>&1 &
+          echo $! > /tmp/svetlana-web.pid
+          for i in $(seq 1 60); do
+            if curl --fail --silent http://localhost:3000/ > /dev/null; then
+              echo "Web app is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Web app failed to become ready"
+          cat /tmp/svetlana-web.log
+          exit 1
+
+      - name: Run browser scenario
+        run: node apps/web/e2e/smoke.mjs
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-check
+          path: |
+            e2e-artifacts/
+            /tmp/svetlana-web.log
+          if-no-files-found: warn
+          retention-days: 14
