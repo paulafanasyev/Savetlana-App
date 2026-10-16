@@ -20,6 +20,12 @@ describe("профиль исполнителя", () => {
     expect(sinceText(new Date(2026, 0, 5))).toBe("На площадке с января 2026");
   });
 
+  it("оценка только из отзывов заказчиков", () => {
+    const facts = performerFacts({ stats: { ...empty, completed: 2 }, since: new Date(2026, 9, 1), ratings: [5, 4] });
+    expect(facts[1]).toBe("Оценка 4,5 из 5 · 2 отзыва");
+    expect(performerFacts({ stats: empty, since: new Date(2026, 9, 1) }).some((f) => f.startsWith("Оценка"))).toBe(false);
+  });
+
   it("профиль есть только у тех, кто работает исполнителем", () => {
     expect(isPerformer(empty, 0)).toBe(false);
     expect(isPerformer({ ...empty, bids: 1 }, 0)).toBe(true);
