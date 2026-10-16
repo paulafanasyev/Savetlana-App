@@ -79,11 +79,16 @@ export default async function ClassifiedRepliesPage({
                 <li key={b.applicantId} className="py-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-ink">{b.name}{b.chosen ? " · ✅ выбран" : ""}</p>
+                      <p className="font-medium text-ink">
+                        <Link href={`/performers/${b.applicantId}`} className="hover:text-svetlana-700 hover:underline">{b.name}</Link>
+                        {b.chosen ? " · ✅ выбран" : ""}
+                      </p>
                       <p className="whitespace-pre-line text-sm text-ink-soft">{b.text}</p>
                       <p className="mt-1 text-xs text-ink-faint">
                         {timeAgo(b.createdAt)} ·{" "}
                         <Link href={`/classifieds/${ad.id}/replies/${b.applicantId}`} className="underline">переписка</Link>
+                        {" · "}
+                        <Link href={`/performers/${b.applicantId}`} className="underline">профиль исполнителя</Link>
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
