@@ -39,7 +39,7 @@ export function negotiationQuery(text: string): string | undefined {
   return undefined;
 }
 
-export interface NegotiationArgs {
+export type NegotiationArgs = {
   quantity?: number;
   targetPriceRub?: number;
   maxPriceRub?: number;
@@ -48,7 +48,7 @@ export interface NegotiationArgs {
   payment?: PaymentTerms;
   deferralDays?: number;
   note: string;
-}
+};
 
 /** Количество, желаемая цена, потолок бюджета (в рублях), товар, срок и оплата из текста. Чего нет, того нет. */
 export function negotiationArgs(text: string): NegotiationArgs {
