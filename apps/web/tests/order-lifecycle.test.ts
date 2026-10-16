@@ -279,6 +279,20 @@ describe("order lifecycle (release gate)", () => {
     });
     expect(before.length).toBeGreaterThan(0);
 
+    // Безопасная сделка: пока покупатель не принял заказ, выплатить нечего.
+    const held = await createConsolidatedPayout({
+      sellerId: TEST_SELLER_ID,
+      actorId: TEST_USER_ID,
+      idempotencyKey: "payout-escrow-held",
+    });
+    expect(held.status).toBe("NOTHING_TO_PAYOUT");
+
+    // Покупатель принял заказ: деньги становятся доступны продавцу.
+    await prisma.order.updateMany({
+      where: { id: { in: before.map((s) => s.orderId) } },
+      data: { status: "COMPLETED", completedAt: new Date() },
+    });
+
     const result = await createConsolidatedPayout({
       sellerId: TEST_SELLER_ID,
       actorId: TEST_USER_ID,
