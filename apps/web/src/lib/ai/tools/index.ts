@@ -15,6 +15,7 @@ import { sellerCustomerReport, SEGMENT_LABELS } from "../../domains/seller-crm";
 import { startPromotionTool, endPromotionTool, sellerMessagesTool, confirmPreview as engagementPreview } from "./engagement";
 import { extendPromotionTool, extendPromotionPreview } from "./promo-extend-tool";
 import { sellerTodayTool } from "./seller-today-tool";
+import { smartSearchClassifiedsTool } from "./classified-search-tool";
 import { promoState } from "../../domains/engagement-rules";
 import { ruText } from "../ru-text";
 
@@ -26,7 +27,6 @@ import {
   visionSearchTool,
   getReviewsTool,
   searchSellersTool,
-  searchClassifiedsTool,
   vinCheckTool,
 } from "./catalog";
 import {
@@ -299,7 +299,8 @@ const ALL_TOOLS: ToolDefinition[] = [
   visionSearchTool,
   getReviewsTool,
   searchSellersTool,
-  searchClassifiedsTool,
+  // Работа, услуги и фриланс, недвижимость и авто из раздела «Объявления».
+  smartSearchClassifiedsTool,
   vinCheckTool,
   // Commerce
   sellerAwareGetOrderTool,
