@@ -7,7 +7,9 @@
 import { randomBytes } from "node:crypto";
 import { prisma } from "../prisma";
 import { ensureGeoSeeded } from "./geo";
-import { DEMO_ADS, DEMO_AUTHOR_EMAIL, DEMO_NOTE, DEMO_TITLE_PREFIX, shouldRemoveDemo } from "../demo-classifieds";
+import { DEMO_ADS, DEMO_AUTHOR_EMAIL, DEMO_NOTE, DEMO_TITLE_PREFIX, DEMO_VERSION, shouldRemoveDemo } from "../demo-classifieds";
+
+const VERSION_MARK = `"demoVersion":${DEMO_VERSION}`;
 
 let checked = false;
 let pending: Promise<void> | null = null;
@@ -39,11 +41,17 @@ async function run(): Promise<void> {
     const real = await prisma.classified.count({ where: { status: "PUBLISHED", authorId: { not: demoUser.id } } });
     if (shouldRemoveDemo(real)) {
       await prisma.classified.deleteMany({ where: { authorId: demoUser.id } });
+      return;
     }
+    // Старый набор примеров заменяем новым; если примеров нет, а настоящие есть, не добавляем.
+    const stale = await prisma.classified.count({ where: { authorId: demoUser.id, NOT: { attrs: { contains: VERSION_MARK } } } });
+    const current = await prisma.classified.count({ where: { authorId: demoUser.id, attrs: { contains: VERSION_MARK } } });
+    if (stale === 0 && current > 0) return;
+    if (stale === 0 && current === 0 && real > 0) return;
+    await prisma.classified.deleteMany({ where: { authorId: demoUser.id } });
+  } else if ((await prisma.classified.count()) > 0) {
     return;
   }
-
-  if ((await prisma.classified.count()) > 0) return;
 
   await ensureGeoSeeded();
   const names = [...new Set(DEMO_ADS.map((a) => a.city))];
@@ -63,7 +71,7 @@ async function run(): Promise<void> {
         title: `${DEMO_TITLE_PREFIX}${ad.title}`,
         description: `${ad.text}\n\n${DEMO_NOTE}`,
         category: ad.category,
-        attrs: JSON.stringify({ ...ad.attrs, demo: true }),
+        attrs: JSON.stringify({ ...ad.attrs, demo: true, demoVersion: DEMO_VERSION }),
         priceKopecks: ad.rub * 100,
         cityId: city.id,
         regionId: city.regionId,
