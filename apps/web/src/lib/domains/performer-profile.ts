@@ -1,12 +1,15 @@
 /**
  * Данные для публичного профиля исполнителя. Только счётчики, опубликованные
- * услуги и отзывы заказчиков (без имён): ни почты, ни телефона, ни сумм чужих заказов.
+ * услуги, портфолио и отзывы заказчиков (без имён): ни почты, ни телефона,
+ * ни сумм чужих заказов.
  */
 import { prisma } from "../prisma";
 import { SERVICE_ADDRESS_PREFIX } from "../service-deal";
 import { BID_MARK } from "../freelance-bids";
 import { isPerformer, type PerformerStats } from "../performer-profile";
+import { isEmptyPortfolio, type Portfolio } from "../portfolio";
 import { listServiceReviews, type ServiceReviewView } from "./service-reviews";
+import { loadPortfolio } from "./portfolio";
 
 export interface PerformerOffer {
   id: string;
@@ -26,6 +29,7 @@ export interface PerformerView {
   /** Все оценки (для средней) и последние отзывы для показа. */
   ratings: number[];
   reviews: ServiceReviewView[];
+  portfolio: Portfolio;
 }
 
 export async function loadPerformer(userId: string): Promise<PerformerView | null> {
@@ -37,7 +41,7 @@ export async function loadPerformer(userId: string): Promise<PerformerView | nul
   if (!user || user.isBlocked) return null;
   const sellerId = user.sellerProfile?.id ?? null;
   const service = { startsWith: SERVICE_ADDRESS_PREFIX };
-  const [completed, inWork, disputed, bids, offers, reviews] = await Promise.all([
+  const [completed, inWork, disputed, bids, offers, reviews, portfolio] = await Promise.all([
     sellerId ? prisma.order.count({ where: { sellerId, deliveryAddress: service, status: "COMPLETED" } }) : Promise.resolve(0),
     sellerId ? prisma.order.count({ where: { sellerId, deliveryAddress: service, status: { in: ["PAID", "CONFIRMED", "DELIVERED"] } } }) : Promise.resolve(0),
     sellerId ? prisma.order.count({ where: { sellerId, deliveryAddress: service, status: { in: ["DISPUTED", "RETURN_REQUESTED", "RETURNING"] } } }) : Promise.resolve(0),
@@ -49,9 +53,10 @@ export async function loadPerformer(userId: string): Promise<PerformerView | nul
       select: { id: true, title: true, priceKopecks: true, city: { select: { name: true } } },
     }),
     listServiceReviews(user.id),
+    loadPortfolio(user.id),
   ]);
   const stats = { completed, inWork, disputed, bids };
-  if (!isPerformer(stats, offers.length)) return null;
+  if (!isPerformer(stats, offers.length + (isEmptyPortfolio(portfolio) ? 0 : 1))) return null;
   return {
     id: user.id,
     name: user.name?.trim() || "Исполнитель",
@@ -62,5 +67,6 @@ export async function loadPerformer(userId: string): Promise<PerformerView | nul
     offers: offers.map((o) => ({ id: o.id, title: o.title, priceKopecks: o.priceKopecks, city: o.city?.name ?? null })),
     ratings: reviews.map((r) => r.rating),
     reviews: reviews.slice(0, 30),
+    portfolio,
   };
 }

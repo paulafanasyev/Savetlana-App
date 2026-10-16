@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { freelanceHref, freelanceTab, pickCategory, TAB_DEAL_TYPE } from "../src/lib/freelance-section";
+import { formPreset, freelanceFormHref, freelanceHref, freelanceTab, pickCategory, TAB_DEAL_TYPE } from "../src/lib/freelance-section";
 
 describe("раздел «Фриланс»", () => {
   it("вкладки и типы объявлений", () => {
@@ -18,5 +18,12 @@ describe("раздел «Фриланс»", () => {
   it("ссылки", () => {
     expect(freelanceHref("orders")).toBe("/freelance");
     expect(freelanceHref("offers", "Дизайн сайтов")).toBe("/freelance?tab=offers&category=%D0%94%D0%B8%D0%B7%D0%B0%D0%B9%D0%BD+%D1%81%D0%B0%D0%B9%D1%82%D0%BE%D0%B2");
+  });
+
+  it("форма объявления открывается сразу на услуге", () => {
+    expect(freelanceFormHref("orders")).toBe("/classifieds/new?vertical=SERVICE&deal=SERVICE_REQUEST");
+    expect(formPreset("SERVICE", "SERVICE_REQUEST")).toEqual({ vertical: "SERVICE", dealType: "SERVICE_REQUEST" });
+    expect(formPreset("SERVICE", "SELL")).toBeNull();
+    expect(formPreset(null, "RESUME")).toBeNull();
   });
 });

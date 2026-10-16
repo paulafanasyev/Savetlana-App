@@ -35,3 +35,20 @@ export function freelanceHref(tab: FreelanceTab, category?: string | null): stri
   const s = q.toString();
   return s ? `/freelance?${s}` : "/freelance";
 }
+
+/** Какие раздел и тип сделки можно сразу выбрать в форме объявления по ссылке. */
+const FORM_PRESETS: Record<string, string[]> = {
+  SERVICE: ["SERVICE_REQUEST", "SERVICE_OFFER"],
+  JOB: ["VACANCY", "RESUME"],
+};
+
+/** /classifieds/new?vertical=SERVICE&deal=SERVICE_REQUEST: форма сразу на нужном типе. */
+export function formPreset(vertical: unknown, deal: unknown): { vertical: string; dealType: string } | null {
+  if (typeof vertical !== "string" || typeof deal !== "string") return null;
+  return FORM_PRESETS[vertical]?.includes(deal) ? { vertical, dealType: deal } : null;
+}
+
+/** Ссылка на форму: заказ услуги или предложение услуги. */
+export function freelanceFormHref(tab: FreelanceTab): string {
+  return `/classifieds/new?vertical=SERVICE&deal=${TAB_DEAL_TYPE[tab]}`;
+}

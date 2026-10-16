@@ -3,7 +3,8 @@
  * server-side: documents/<sellerProfileId> only for that seller,
  * evidence/<disputeId> only for dispute participants or admins,
  * public/products/<productId> only for the seller who owns the product
- * (each stored photo becomes a ProductImage, the first one is primary).
+ * (each stored photo becomes a ProductImage, the first one is primary),
+ * public/portfolio/<userId> only for that user (фото работ в портфолио).
  */
 import { apiRoute, rateLimit, tooManyRequests } from "@/lib/api-helpers";
 import { requireUser, ApiError } from "@/lib/auth";
@@ -35,6 +36,9 @@ export const POST = apiRoute(async (request) => {
     if (storageClass !== "public") throw new ApiError(400, "Фото товара должны быть публичными");
   } else if (productId) {
     throw new ApiError(400, "Фото товара загружаются только в его хранилище");
+  } else if (parts[0] === "public" && parts[1] === "portfolio") {
+    if (parts.length !== 3 || parts[2] !== ctx.user.id) throw new ApiError(403, "Фото портфолио загружаются только в свою папку");
+    if (storageClass !== "public") throw new ApiError(400, "Фото портфолио должны быть публичными");
   } else if (parts[0] === "documents") {
     const seller = await prisma.sellerProfile.findUnique({ where: { userId: ctx.user.id }, select: { id: true } });
     if (!seller || parts[1] !== seller.id) throw new ApiError(403, "Нет прав на запись в документы продавца");

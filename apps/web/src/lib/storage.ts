@@ -30,7 +30,8 @@ export function sniffMimeType(bytes: Buffer): string {
 
 export async function verifyUpload(params: { bucket: string; filename: string; bytes: Buffer; declaredMimeType?: string; storageClass: StorageClass }): Promise<FileVerification> {
   const sniffedMimeType = sniffMimeType(params.bytes);
-  const isProduct = params.bucket.startsWith("public/products/");
+  // Фото товаров и работ в портфолио показываются всем: держим их лёгкими.
+  const isProduct = params.bucket.startsWith("public/products/") || params.bucket.startsWith("public/portfolio/");
   const limit = isProduct ? MAX_PRODUCT_IMAGE_BYTES : params.storageClass === "public" ? MAX_PUBLIC_BYTES : MAX_PRIVATE_BYTES;
   const allowed = params.storageClass === "public" ? IMAGE_TYPES : new Set(["application/pdf", ...IMAGE_TYPES]);
   const fail = (reason: string): FileVerification => ({ allowed: false, reason, sha256: "", sizeBytes: params.bytes.length, sniffedMimeType, storageClass: params.storageClass });
