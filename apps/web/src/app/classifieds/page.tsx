@@ -12,6 +12,7 @@ import { readCityCookie } from "@/lib/my-city";
 import { normalize, type PickCity } from "@/lib/city-pick";
 import { kmBetween, kmLabel, nearbyCities } from "@/lib/nearby";
 import { listMeta } from "@/lib/ad-meta";
+import { activeAdClause } from "@/lib/ad-active";
 import { CityFilter } from "./CityFilter";
 
 export const dynamic = "force-dynamic";
@@ -41,9 +42,15 @@ interface NearbyAd {
   priceKopecks: number;
   vertical: string;
   dealType: string;
+  attrs: Record<string, unknown>;
   cityName: string;
   km: number;
   cover: string | null;
+}
+
+/** Характеристики из базы как обычный объект (для зарплаты «до» и периода). */
+function attrsObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 export default async function ClassifiedsPage({
@@ -103,6 +110,8 @@ export default async function ClassifiedsPage({
         where: {
           status: "PUBLISHED",
           cityId: { in: ids },
+          // Истёкшие объявления не показываем и в блоке «Рядом».
+          AND: [activeAdClause()],
           ...(query.vertical ? { vertical: query.vertical } : {}),
           ...(query.dealType ? { dealType: query.dealType } : {}),
           ...(q && q.length >= 2 ? { OR: [{ title: { contains: q } }, { description: { contains: q } }] } : {}),
@@ -115,6 +124,7 @@ export default async function ClassifiedsPage({
           priceKopecks: true,
           vertical: true,
           dealType: true,
+          attrs: true,
           city: { select: { name: true } },
           images: { select: { url: true }, orderBy: { isCover: "desc" }, take: 1 },
         },
@@ -126,6 +136,7 @@ export default async function ClassifiedsPage({
           priceKopecks: r.priceKopecks,
           vertical: r.vertical,
           dealType: r.dealType,
+          attrs: attrsObject(r.attrs),
           cityName: r.city.name,
           km: kmByName.get(normalize(r.city.name)) ?? 0,
           cover: r.images[0]?.url ?? null,
@@ -326,7 +337,7 @@ export default async function ClassifiedsPage({
                   )}
                   <div className="p-3">
                     <h3 className="line-clamp-2 text-sm font-semibold hover:underline">{ad.title}</h3>
-                    <p className="mt-1 text-sm font-bold">{ad.priceKopecks > 0 ? priceText(ad.dealType, {}, rub(ad.priceKopecks)) : "Цена не указана"}</p>
+                    <p className="mt-1 text-sm font-bold">{ad.priceKopecks > 0 ? priceText(ad.dealType, ad.attrs, rub(ad.priceKopecks)) : "Цена не указана"}</p>
                     <p className="mt-1 text-xs text-zinc-600">{ad.cityName} · ≈ {ad.km} км</p>
                   </div>
                 </Link>
