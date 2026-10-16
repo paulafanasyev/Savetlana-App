@@ -13,6 +13,9 @@ export const SERVICE_KIND = "SERVICE";
 export const WORK_REPORT_MIN = 10;
 export const WORK_REPORT_MAX = 1000;
 
+/** С чего начинается поле адреса у заказа услуги: по нему считаем такие заказы в базе. */
+export const SERVICE_ADDRESS_PREFIX = '{"kind":"SERVICE"';
+
 export interface ServiceMeta {
   kind: typeof SERVICE_KIND;
   classifiedId: string;
