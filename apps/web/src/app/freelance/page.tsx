@@ -1,0 +1,94 @@
+import Link from "next/link";
+import type { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { rub, timeAgo } from "@/lib/format";
+import { FREELANCE_TABS, TAB_DEAL_TYPE, freelanceHref, freelanceTab, pickCategory, type FreelanceTab } from "@/lib/freelance-section";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * Раздел «Фриланс»: заказы на услуги (исполнители предлагают цену и срок) и
+ * услуги исполнителей, с фильтром по категориям. Оплата через безопасную сделку.
+ */
+export default async function FreelancePage({ searchParams }: { searchParams?: Promise<{ tab?: string; category?: string }> }) {
+  const sp = (await searchParams) ?? {};
+  const tab = freelanceTab(sp.tab);
+  const now = new Date();
+  const base: Prisma.ClassifiedWhereInput = {
+    vertical: "SERVICE",
+    dealType: TAB_DEAL_TYPE[tab],
+    status: "PUBLISHED",
+    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+  };
+  const groups = await prisma.classified.groupBy({ by: ["category"], where: base, _count: { _all: true } });
+  const categories = groups
+    .map((g) => ({ name: g.category, count: g._count._all }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ru"));
+  const category = pickCategory(sp.category, categories.map((c) => c.name));
+  const ads = await prisma.classified.findMany({
+    where: category ? { ...base, category } : base,
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: { id: true, title: true, priceKopecks: true, createdAt: true, category: true, authorId: true, city: { select: { name: true } } },
+  });
+  const total = categories.reduce((s, c) => s + c.count, 0);
+  return (
+    <main className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Фриланс</h1>
+          <p className="text-sm text-ink-soft">🛡 Деньги за работу хранятся у площадки и приходят исполнителю только после приёмки.</p>
+        </div>
+        <Link href="/classifieds/new" className="btn btn-primary">{tab === "orders" ? "Разместить заказ" : "Предложить услугу"}</Link>
+      </div>
+
+      <nav className="flex gap-2" aria-label="Вкладки раздела">
+        {(Object.keys(FREELANCE_TABS) as FreelanceTab[]).map((t) => (
+          <Link key={t} href={freelanceHref(t)} className={t === tab ? "btn btn-primary px-3 py-2 text-sm" : "btn btn-ghost px-3 py-2 text-sm"} aria-current={t === tab ? "page" : undefined}>
+            {FREELANCE_TABS[t]}
+          </Link>
+        ))}
+      </nav>
+
+      {categories.length > 0 && (
+        <nav className="flex flex-wrap gap-2 text-sm" aria-label="Категории">
+          <Link href={freelanceHref(tab)} className={!category ? "chip bg-svetlana-600 text-white" : "chip"}>Все · {total}</Link>
+          {categories.map((c) => (
+            <Link key={c.name} href={freelanceHref(tab, c.name)} className={c.name === category ? "chip bg-svetlana-600 text-white" : "chip"}>
+              {c.name} · {c.count}
+            </Link>
+          ))}
+        </nav>
+      )}
+
+      {ads.length === 0 ? (
+        <p className="card p-6 text-sm text-ink-soft">
+          {tab === "orders" ? "Заказов пока нет. Разместите свой: исполнители предложат цену и срок." : "Услуг пока нет."}
+        </p>
+      ) : (
+        <ul className="card divide-y divide-surface-line">
+          {ads.map((a) => (
+            <li key={a.id} className="flex flex-wrap items-start justify-between gap-3 p-4">
+              <div className="min-w-0 flex-1">
+                <Link href={`/classifieds/${a.id}`} className="font-medium text-ink hover:text-svetlana-700 hover:underline">{a.title}</Link>
+                <p className="text-xs text-ink-faint">
+                  {a.category}{a.city?.name ? ` · ${a.city.name}` : ""} · {timeAgo(a.createdAt)}
+                  {tab === "offers" && (
+                    <>
+                      {" · "}
+                      <Link href={`/performers/${a.authorId}`} className="underline">профиль исполнителя</Link>
+                    </>
+                  )}
+                </p>
+              </div>
+              <div className="shrink-0 text-right text-sm">
+                <p className="font-semibold">{a.priceKopecks > 0 ? rub(a.priceKopecks) : "цена договорная"}</p>
+                <p className="text-xs text-ink-soft">{tab === "orders" ? "бюджет" : "стоимость"}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </main>
+  );
+}

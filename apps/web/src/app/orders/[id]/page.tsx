@@ -8,6 +8,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { rub, orderStatusLabel, timeAgo } from "@/lib/format";
 import { safeDealBuyerNote } from "@/lib/safe-deal";
 import { serviceCustomerNote } from "@/lib/service-deal";
+import { ServiceReviewForm } from "./ServiceReviewForm";
 
 interface TrackingResponse {
   order: {
@@ -27,6 +28,8 @@ interface TrackingResponse {
     serviceTitle?: string | null;
     /** Что исполнитель написал, когда сдавал работу. */
     workReport?: string | null;
+    /** Заказчик уже оставил отзыв о работе исполнителя. */
+    serviceReviewed?: boolean;
   };
   reviewedProductIds: string[];
   /** Отзывы, которые антифрод скрыл до проверки модератором. */
@@ -177,6 +180,7 @@ export default function OrderDetailPage() {
             {inFlight && <ReturnActions orderId={order.id} onChanged={load} mode="dispute" />}
           </>
         )}
+        {isService && order.status === "COMPLETED" && <ServiceReviewForm orderId={order.id} already={Boolean(order.serviceReviewed)} onDone={load} />}
       </div>
 
       {!isService && (

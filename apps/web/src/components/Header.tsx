@@ -11,6 +11,7 @@ const PRIMARY = [
   { href: "/", label: "Главная" },
   { href: "/catalog", label: "Каталог" },
   { href: "/classifieds", label: "Объявления" },
+  { href: "/freelance", label: "Фриланс" },
   { href: "/svetlana", label: "Светлана" },
 ];
 

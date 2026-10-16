@@ -2,8 +2,10 @@
  * Профиль исполнителя: что о нём честно можно сказать заказчику. Только факты
  * площадки: сколько сделок завершено через безопасную сделку, сколько сейчас в
  * работе, были ли споры, что проверено (самозанятость, личность). Никаких
- * выдуманных рейтингов. Здесь только чистые правила.
+ * выдуманных рейтингов: оценка только из отзывов заказчиков по принятой работе.
+ * Здесь только чистые правила.
  */
+import { ratingText } from "./service-reviews";
 
 const MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 
@@ -19,6 +21,8 @@ export interface PerformerFactsInput {
   npdStatus?: string | null;
   identityStatus?: string | null;
   since: Date;
+  /** Оценки из отзывов заказчиков (1..5). */
+  ratings?: number[];
 }
 
 function n0(v: number): number {
@@ -35,6 +39,8 @@ export function performerFacts(input: PerformerFactsInput): string[] {
   const out: string[] = [];
   const completed = n0(s.completed);
   out.push(completed > 0 ? `Завершённых сделок через безопасную сделку: ${completed}` : "Завершённых сделок на площадке пока нет");
+  const rating = ratingText(input.ratings ?? []);
+  if (rating) out.push(rating);
   if (n0(s.inWork) > 0) out.push(`Сейчас в работе: ${n0(s.inWork)}`);
   if (n0(s.disputed) > 0) out.push(`Открытых споров: ${n0(s.disputed)}`);
   if (n0(s.bids) > 0) out.push(`Предложений по заказам: ${n0(s.bids)}`);
