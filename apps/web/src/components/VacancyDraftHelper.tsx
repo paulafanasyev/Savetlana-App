@@ -40,7 +40,8 @@ export function VacancyDraftHelper({
   kind = "vacancy",
   initialText = "",
 }: {
-  onDraft: (draft: VacancyDraftResult) => void;
+  /** sourceText: то, что человек написал сам (модель могла переписать описание и выкинуть город). */
+  onDraft: (draft: VacancyDraftResult, sourceText: string) => void;
   kind?: "vacancy" | "resume";
   /** Текст из чата со Светланой: уже вставлен, остаётся нажать «Заполнить форму». */
   initialText?: string;
@@ -64,7 +65,7 @@ export function VacancyDraftHelper({
       const data = await res.json().catch(() => ({}));
       if (res.status === 401) throw new Error(copy.login);
       if (!res.ok || !data.draft) throw new Error(data.error ?? copy.fail);
-      onDraft(data.draft as VacancyDraftResult);
+      onDraft(data.draft as VacancyDraftResult, text);
       const removed = Array.isArray(data.removed) ? (data.removed as ContactKind[]) : [];
       setNote([data.source === "model" ? copy.model : copy.rules, removedNote(removed)].filter(Boolean).join(" "));
     } catch (e) {
