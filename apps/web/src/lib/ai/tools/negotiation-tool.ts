@@ -10,6 +10,7 @@
  * Два режима: с productId — торг с одним продавцом; с query — запрос цены
  * у нескольких продавцов (реверсивный аукцион), КП уходит лучшему. К цене
  * применяются условия: срок поставки, предоплата, отсрочка (negotiation-terms.ts).
+ * Каждый запуск записывается в журнал аудита для дашборда эффективности.
  */
 import { looseObjectSchema } from "./registry";
 import type { ToolDefinition, ToolContext, ToolResult } from "./registry";
@@ -17,6 +18,8 @@ import { prisma } from "../../prisma";
 import { negotiate, type NegotiationResult } from "../../negotiation";
 import { getSellerNegotiationPolicy } from "../../domains/negotiation-policy";
 import { createQuote } from "../../domains/b2b-quotes";
+import { audit } from "../../domains/audit";
+import { NEGOTIATION_AUDIT, type NegotiationAuditEntry } from "../../domains/agent-effectiveness";
 import { applyTerms, PAYMENT_LABEL, type AppliedTerms, type PaymentTerms, type SellerTerms, type TermsRequest } from "../../negotiation-terms";
 
 function positiveRub(v: unknown): number | null {
@@ -25,6 +28,11 @@ function positiveRub(v: unknown): number | null {
 }
 
 const rub = (k: number) => `${Math.round(k / 100).toLocaleString("ru-RU")} ₽`;
+
+/** Запись запуска торга в журнал аудита (для дашборда админки). */
+async function logNegotiation(ctx: ToolContext, targetType: string, targetId: string, entry: NegotiationAuditEntry): Promise<void> {
+  await audit({ actorId: ctx.userId ?? undefined, actorRole: "buyer", action: NEGOTIATION_AUDIT, targetType, targetId: targetId.slice(0, 120), after: entry });
+}
 
 /** Условия, о которых просил покупатель: срок и оплата. Ничего не просил — null. */
 export function termsRequest(args: Record<string, unknown>): TermsRequest | null {
@@ -176,6 +184,15 @@ export const negotiateQuoteTool: ToolDefinition = {
         quoteNote = "";
       }
     }
+    await logNegotiation(ctx, "Product", product.id, {
+      mode: "single",
+      status: result.status,
+      rounds: result.rounds,
+      sellers: 1,
+      agreedSellers: result.status === "AGREED" ? 1 : 0,
+      quoteCreated: quoteId !== null,
+      ignoredInstructions: Boolean(result.ignoredInstructions),
+    });
     return {
       ok: true,
       data: { productId: product.id, title: product.title, listPriceKopecks: list, sellerRules: policy.custom ? "seller" : "default", quoteId, ...result, terms: applied, finalUnitPriceKopecks: finalUnit },
@@ -332,6 +349,16 @@ async function rfq(ctx: ToolContext, query: string, args: Record<string, unknown
       quoteNote = "";
     }
   }
+
+  await logNegotiation(ctx, "b2b_rfq", query, {
+    mode: "rfq",
+    status: winner ? "AGREED" : offers.some((o) => o.status === "NEEDS_HUMAN") ? "NEEDS_HUMAN" : "NO_DEAL",
+    rounds: offers.reduce((sum, o) => sum + o.rounds, 0),
+    sellers: offers.length,
+    agreedSellers: agreed.length,
+    quoteCreated: quoteId !== null,
+    ignoredInstructions: [...deals.values()].some((d) => Boolean(d.ignoredInstructions)),
+  });
 
   const lines = ranked.map((o, i) => {
     const price = o.status === "AGREED" ? `${rub(o.priceKopecks)} за шт. (прайс ${rub(o.listPriceKopecks)})` : `${rub(o.listPriceKopecks)} по прайсу`;
