@@ -113,7 +113,7 @@ class VercelBlobProvider implements StorageProvider {
   private readonly database = new DatabaseStorageProvider();
   available(): boolean { return Boolean(env.blobReadWriteToken); }
 
-  private async request(path: string, method: string, headers: Record<string, string>, body: Uint8Array | string): Promise<Response> {
+  private async request(path: string, method: string, headers: Record<string, string>, body: BodyInit): Promise<Response> {
     const token = env.blobReadWriteToken ?? "";
     let lastError: unknown = null;
     for (let attempt = 0; attempt < 2; attempt++) {
