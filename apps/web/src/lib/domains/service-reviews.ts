@@ -1,12 +1,16 @@
 /**
  * Отзывы о работе исполнителя: только заказчик, только по завершённой сделке,
  * один отзыв на заказ. Исполнитель удалить отзыв не может: уведомления
- * можно только прочитать.
+ * можно только прочитать. У записи отзыва постоянный ключ по заказу, поэтому
+ * двойное нажатие не создаст второй отзыв.
  */
 import { prisma } from "../prisma";
 import { UserFacingError } from "./engagement-rules";
 import { serviceMeta } from "../service-deal";
 import { REVIEWABLE_STATUSES, SERVICE_REVIEW_KIND, cleanServiceReview, parseReviewBody, reviewBody, reviewPrefix, type ServiceReview } from "../service-reviews";
+
+/** Постоянный ключ записи отзыва: один на заказ. */
+export const serviceReviewId = (orderId: string) => `svcrev_${orderId}`;
 
 export async function hasServiceReview(performerUserId: string, orderNumber: string): Promise<boolean> {
   const n = await prisma.notification.count({
@@ -26,16 +30,25 @@ export async function leaveServiceReview(buyerId: string, orderId: string, input
   if (!order || !meta) throw new UserFacingError("Заказ не найден", 404);
   if (order.buyerId !== buyerId) throw new UserFacingError("Отзыв может оставить только заказчик", 403);
   if (!REVIEWABLE_STATUSES.includes(order.status)) throw new UserFacingError("Отзыв можно оставить после того, как работа принята", 409);
-  if (await hasServiceReview(meta.performerId, order.number)) throw new UserFacingError("Вы уже оставили отзыв по этому заказу", 409);
-  await prisma.notification.create({
-    data: {
-      userId: meta.performerId,
-      kind: SERVICE_REVIEW_KIND,
-      title: `Новый отзыв о вашей работе: ${review.rating} из 5`,
-      body: reviewBody(order.number, review.rating, review.text),
-      url: `/performers/${meta.performerId}`,
-    },
-  });
+  const already = new UserFacingError("Вы уже оставили отзыв по этому заказу", 409);
+  if (await hasServiceReview(meta.performerId, order.number)) throw already;
+  try {
+    await prisma.notification.create({
+      data: {
+        id: serviceReviewId(order.id),
+        userId: meta.performerId,
+        kind: SERVICE_REVIEW_KIND,
+        title: `Новый отзыв о вашей работе: ${review.rating} из 5`,
+        body: reviewBody(order.number, review.rating, review.text),
+        url: `/performers/${meta.performerId}`,
+      },
+    });
+  } catch (e) {
+    // Второе одновременное нажатие упирается в тот же ключ.
+    const exists = await prisma.notification.findUnique({ where: { id: serviceReviewId(order.id) }, select: { id: true } });
+    if (exists) throw already;
+    throw e;
+  }
   return { rating: review.rating };
 }
 
