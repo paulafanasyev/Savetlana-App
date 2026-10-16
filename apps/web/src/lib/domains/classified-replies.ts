@@ -12,6 +12,7 @@
  * объявлению нельзя. Каждое сообщение проходит антифрод (message-guard.ts).
  * Предложения исполнителей по заказу услуги (freelance-bids.ts) идут тем же путём.
  * Примерам от площадки (attrs.demo) писать нельзя: их автор не человек.
+ * По истёкшему объявлению новую переписку начать нельзя, уже начатая продолжается.
  */
 import { prisma } from "../prisma";
 import { readObject } from "../db/json";
@@ -20,6 +21,7 @@ import { notify } from "./notifications";
 import { guardOutgoingMessage, warnRecipient } from "./message-guard";
 import { BID_MARK } from "../freelance-bids";
 import { isDemoAd } from "../location-line";
+import { isAdActive } from "../ad-active";
 
 const THREAD_HOURLY_LIMIT = 20;
 const SENDER_HOURLY_LIMIT = 30;
@@ -28,6 +30,7 @@ export const authorThreadUrl = (classifiedId: string, applicantId: string) => `/
 export const applicantThreadUrl = (classifiedId: string) => `/classifieds/${classifiedId}/chat`;
 
 export const DEMO_REPLY_BLOCKED = "Это пример объявления от площадки, написать автору нельзя";
+export const EXPIRED_REPLY_BLOCKED = "Срок объявления истёк, начать новую переписку нельзя";
 
 export interface ReplyMessage {
   id: string;
@@ -45,6 +48,8 @@ interface AdForReply {
   dealType: string;
   /** Пример от площадки: переписка запрещена. */
   demo: boolean;
+  /** Срок объявления истёк. */
+  expired: boolean;
 }
 
 /** Что написать на кнопке и в заголовке уведомления. */
@@ -58,11 +63,11 @@ export function replyWording(ad: { vertical: string; dealType: string }): { butt
 export async function adForReply(classifiedId: string): Promise<AdForReply> {
   const ad = await prisma.classified.findUnique({
     where: { id: classifiedId },
-    select: { id: true, title: true, authorId: true, status: true, vertical: true, dealType: true, attrs: true },
+    select: { id: true, title: true, authorId: true, status: true, vertical: true, dealType: true, attrs: true, expiresAt: true },
   });
   if (!ad) throw new UserFacingError("Объявление не найдено", 404);
-  const { attrs, ...rest } = ad;
-  return { ...rest, demo: isDemoAd(readObject(attrs)) };
+  const { attrs, expiresAt, ...rest } = ad;
+  return { ...rest, demo: isDemoAd(readObject(attrs)), expired: !isAdActive(expiresAt) };
 }
 
 async function sentLastHour(where: Record<string, unknown>): Promise<number> {
@@ -77,6 +82,11 @@ export async function sendToAuthor(sender: { id: string; name: string | null }, 
   if (ad.authorId === sender.id) throw new UserFacingError("Это ваше объявление: писать самому себе не нужно", 400);
   if (ad.status !== "PUBLISHED") throw new UserFacingError("Объявление снято с публикации, отправить отклик нельзя", 409);
   const url = authorThreadUrl(ad.id, sender.id);
+  if (ad.expired) {
+    // Уже начатую переписку не обрываем: люди могут договариваться и после срока.
+    const had = await prisma.notification.findFirst({ where: { userId: ad.authorId, kind: "classified_reply", url }, select: { id: true } });
+    if (!had) throw new UserFacingError(EXPIRED_REPLY_BLOCKED, 409);
+  }
   if ((await sentLastHour({ userId: ad.authorId, kind: "classified_reply", url })) >= THREAD_HOURLY_LIMIT) {
     throw new UserFacingError("Слишком много сообщений подряд. Дождитесь ответа автора", 429);
   }
