@@ -2,8 +2,12 @@ import { apiRoute, tooManyRequests, rateLimit } from "@/lib/api-helpers";
 import { requireBuyer } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { syncTracking } from "@/lib/domains/delivery";
+import { serviceMeta } from "@/lib/service-deal";
 
 export const dynamic = "force-dynamic";
+
+// Статусы, для которых нужна запись «доставлено / работа сдана».
+const AFTER_DELIVERY = ["DELIVERED", "COMPLETED", "DISPUTED"];
 
 /**
  * Unified tracking screen (spec §24). The buyer sees the order status, the
@@ -12,6 +16,7 @@ export const dynamic = "force-dynamic";
  * Also returns the price breakdown and which products the buyer has already
  * reviewed, so the order page can offer a review form after delivery.
  * deliveredAt: когда заказ доставлен, чтобы показать дату автоприёмки безопасной сделки.
+ * kind: SERVICE для заказа услуги (фриланс), тогда workReport: что исполнитель написал при сдаче.
  */
 export const GET = apiRoute(async (request, { params }) => {
   const { user } = await requireBuyer(request);
@@ -28,6 +33,7 @@ export const GET = apiRoute(async (request, { params }) => {
       subtotalKopecks: true,
       deliveryKopecks: true,
       currency: true,
+      deliveryAddress: true,
       items: { select: { id: true, productId: true, titleSnapshot: true, quantity: true, priceKopecks: true } },
       payment: { select: { status: true, sandbox: true } },
     },
@@ -35,11 +41,14 @@ export const GET = apiRoute(async (request, { params }) => {
   if (order.buyerId !== user.id) {
     return Response.json({ error: "Нет доступа к этому заказу", code: "forbidden" }, { status: 403 });
   }
+  const meta = serviceMeta(order.deliveryAddress);
 
-  let shipment = await prisma.deliveryShipment.findFirst({
-    where: { orderId: order.id },
-    include: { events: { orderBy: { occurredAt: "asc" } } },
-  });
+  let shipment = meta
+    ? null
+    : await prisma.deliveryShipment.findFirst({
+        where: { orderId: order.id },
+        include: { events: { orderBy: { occurredAt: "asc" } } },
+      });
 
   // Refresh from the carrier when a shipment exists. A carrier outage must not
   // break the screen: fall back to the last known stored state.
@@ -56,13 +65,14 @@ export const GET = apiRoute(async (request, { params }) => {
     select: { productId: true, isHidden: true },
   });
 
-  const delivered = order.status === "DELIVERED"
+  const delivered = AFTER_DELIVERY.includes(order.status)
     ? await prisma.orderHistory.findFirst({
         where: { orderId: order.id, toStatus: "DELIVERED" },
         orderBy: { createdAt: "desc" },
-        select: { createdAt: true },
+        select: { createdAt: true, reason: true },
       })
     : null;
+  const workReport = meta && delivered?.reason ? delivered.reason.replace(/^работа сдана:\s*/i, "").trim() || null : null;
 
   return Response.json({
     order: {
@@ -75,7 +85,10 @@ export const GET = apiRoute(async (request, { params }) => {
       currency: order.currency,
       items: order.items,
       payment: order.payment ?? null,
-      deliveredAt: delivered?.createdAt ?? null,
+      deliveredAt: order.status === "DELIVERED" ? delivered?.createdAt ?? null : null,
+      kind: meta ? "SERVICE" : "GOODS",
+      serviceTitle: meta?.title ?? null,
+      workReport,
     },
     reviewedProductIds: reviews.map((r) => r.productId),
     // Отзывы, скрытые антифродом до проверки: автору честно пишем «на проверке».

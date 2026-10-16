@@ -5,7 +5,9 @@ import { resolveParams } from "@/lib/page-params";
 import { rub, timeAgo } from "@/lib/format";
 import { adForReply, listReplies } from "@/lib/domains/classified-replies";
 import { listBids } from "@/lib/domains/freelance-bids";
+import { serviceOrderForAd } from "@/lib/domains/service-deals";
 import { bidSort, daysText, isBidAd, sortBids, type BidSort } from "@/lib/freelance-bids";
+import { serviceCustomerNote } from "@/lib/service-deal";
 import { UserFacingError } from "@/lib/domains/engagement-rules";
 import { ChooseBidButton } from "./ChooseBidButton";
 
@@ -13,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 const SORT_LABEL: Record<BidSort, string> = { price: "Дешевле", days: "Быстрее", new: "Новые" };
 
-/** Отклики на объявление: видит только автор. У заказа услуги сверху предложения исполнителей. */
+/** Отклики на объявление: видит только автор. У заказа услуги сверху сделка и предложения исполнителей. */
 export default async function ClassifiedRepliesPage({
   params,
   searchParams,
@@ -33,6 +35,7 @@ export default async function ClassifiedRepliesPage({
   const bidMode = isBidAd(ad);
   const sort = bidSort(((await searchParams) ?? {}).sort);
   const { bids, chosenId } = bidMode ? await listBids(ad) : { bids: [], chosenId: null };
+  const deal = bidMode ? await serviceOrderForAd(ad.id) : null;
   const sorted = sortBids(bids, sort);
   return (
     <main className="mx-auto max-w-3xl space-y-5 px-4 py-6">
@@ -40,6 +43,16 @@ export default async function ClassifiedRepliesPage({
         <Link href={`/classifieds/${ad.id}`} className="text-sm text-ink-soft hover:text-svetlana-700">← К объявлению</Link>
         <h1 className="mt-1 text-2xl font-semibold">{isJob ? "Отклики" : bidMode ? "Предложения" : "Сообщения"}: {ad.title}</h1>
       </div>
+
+      {deal && (
+        <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <p className="font-medium">🛡 Безопасная сделка: заказ {deal.number} на {rub(deal.totalKopecks)}</p>
+          <p className="mt-1">{serviceCustomerNote(deal.status) ?? "Статус сделки смотрите на странице заказа."}</p>
+          <Link href={`/orders/${deal.id}`} className="btn btn-primary mt-2 inline-block">
+            {deal.status === "PAYMENT_PENDING" || deal.status === "CREATED" ? "Оплатить заказ" : "Открыть заказ"}
+          </Link>
+        </section>
+      )}
 
       {bidMode && (
         <section className="card space-y-3 p-4">
@@ -55,7 +68,7 @@ export default async function ClassifiedRepliesPage({
               </nav>
             )}
           </div>
-          {chosenId && (
+          {chosenId && !deal && (
             <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">Исполнитель выбран. Остальным исполнителям пришло уведомление, новые предложения больше не принимаются.</p>
           )}
           {sorted.length === 0 ? (

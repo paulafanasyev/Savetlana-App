@@ -13,6 +13,7 @@ import { generateOrderNumber } from "../utils";
 import { getCartView, type CartLine } from "./cart";
 import { computeSettlement } from "./payments";
 import { deliveryPrice, type DeliveryMethod } from "../delivery-options";
+import { SERVICE_EXTRA_TRANSITIONS, isServiceOrder } from "../service-deal";
 
 export const ORDER_STATES = [
   "CREATED",
@@ -53,8 +54,13 @@ const TRANSITIONS: Record<string, string[]> = {
   CANCELLED: [],
 };
 
-export function canTransition(from: string, to: string): boolean {
-  return (TRANSITIONS[from] ?? []).includes(to);
+/**
+ * service: заказ услуги (безопасная сделка для фриланса). У него нет доставки,
+ * поэтому исполнитель сдаёт работу сразу из «Оплачен». Товару этот переход закрыт.
+ */
+export function canTransition(from: string, to: string, service = false): boolean {
+  if ((TRANSITIONS[from] ?? []).includes(to)) return true;
+  return service && (SERVICE_EXTRA_TRANSITIONS[from] ?? []).includes(to);
 }
 
 export interface DeliveryChoice {
@@ -335,7 +341,7 @@ export async function transitionOrder(
     if (input.onlyFrom && !input.onlyFrom.includes(orderMeta.status)) {
       throw new Error(`переход недоступен из статуса ${orderMeta.status}`);
     }
-    if (!canTransition(orderMeta.status, to)) {
+    if (!canTransition(orderMeta.status, to, isServiceOrder(order.deliveryAddress))) {
       throw new Error(`недопустимый переход статуса заказа: ${orderMeta.status} → ${to}`);
     }
     // Условное обновление: если статус успел измениться (например, пришла оплата), ничего не пишем.

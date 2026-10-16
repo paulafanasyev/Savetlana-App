@@ -24,9 +24,12 @@ import { canTransition } from "./orders";
 import { toKopecks } from "../utils";
 import type { PayoutStatus } from "../db/enums";
 import { audit } from "./audit";
+import { notify } from "./notifications";
 import { YooKassaPaymentProvider, buildReceipt, type YooReceipt } from "./yookassa";
 import { TbankPaymentProvider } from "./tbank";
 import { RbsPaymentProvider } from "./rbs";
+import { PAYOUT_READY_ORDER_STATUSES } from "../safe-deal";
+import { serviceMeta } from "../service-deal";
 
 export const PLATFORM_FEE_PERCENT = env.platformFeePercent;
 
@@ -291,8 +294,12 @@ export async function capturePayment(orderId: string, method: PaymentMethod = "c
   let receipt: YooReceipt | undefined;
   if (provider.key === "yookassa" && env.yookassaReceipts) {
     const buyer = await prisma.user.findUnique({ where: { id: order.buyerId }, select: { email: true } });
+    // У заказа услуги нет товарных позиций: в чек идёт одна строка с названием услуги.
+    const receiptItems = order.items.length > 0
+      ? order.items
+      : [{ titleSnapshot: (order.note ?? `Заказ ${order.number}`).slice(0, 128), quantity: 1, priceKopecks: order.subtotalKopecks }];
     const built = buildReceipt({
-      items: order.items,
+      items: receiptItems,
       deliveryKopecks: order.deliveryKopecks,
       totalKopecks: order.totalKopecks,
       email: buyer?.email,
@@ -387,6 +394,21 @@ export async function markOrderPaid(orderId: string, sandbox: boolean): Promise<
       },
     });
   });
+  // Безопасная сделка для услуг: исполнитель узнаёт, что можно начинать.
+  const paid = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { number: true, deliveryAddress: true, sellerProfile: { select: { userId: true } } },
+  });
+  const meta = paid ? serviceMeta(paid.deliveryAddress) : null;
+  if (paid && meta) {
+    await notify({
+      userId: paid.sellerProfile.userId,
+      kind: "order_status",
+      title: `Заказ ${paid.number} оплачен: можно начинать`,
+      body: `Заказчик оплатил «${meta.title}». Деньги у площадки и придут вам после приёмки работы. Когда закончите, нажмите «Сдать работу» в переписке по заказу.`,
+      url: `/classifieds/${meta.classifiedId}/chat`,
+    }).catch(() => undefined);
+  }
 }
 
 export interface PayoutProvider {
@@ -522,8 +544,9 @@ async function reservePayout(input: {
       return { payoutId: existing.id, amountKopecks: existing.amountKopecks };
     }
 
+    // Безопасная сделка: только расчёты по принятым покупателем заказам.
     const pending = await tx.settlement.findMany({
-      where: { sellerId: input.sellerId, status: "PENDING", payoutId: null },
+      where: { sellerId: input.sellerId, status: "PENDING", payoutId: null, order: { status: { in: [...PAYOUT_READY_ORDER_STATUSES] } } },
       orderBy: { createdAt: "asc" },
     });
     if (pending.length === 0) return null;
