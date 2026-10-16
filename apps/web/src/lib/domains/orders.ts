@@ -33,6 +33,8 @@ export const ORDER_STATES = [
 ] as const;
 export type OrderState = (typeof ORDER_STATES)[number];
 
+// RETURN_REQUESTED → DELIVERED: продавец отказал в возврате. Деньги остаются в
+// безопасной сделке, у покупателя снова есть срок приёмки, чтобы открыть спор.
 const TRANSITIONS: Record<string, string[]> = {
   CREATED: ["PAYMENT_PENDING", "CANCELLED"],
   PAYMENT_PENDING: ["PAID", "CANCELLED"],
@@ -44,7 +46,7 @@ const TRANSITIONS: Record<string, string[]> = {
   IN_TRANSIT: ["DELIVERED", "DISPUTED"],
   DELIVERED: ["COMPLETED", "RETURN_REQUESTED", "DISPUTED"],
   COMPLETED: ["RETURN_REQUESTED", "DISPUTED"],
-  RETURN_REQUESTED: ["RETURNING", "COMPLETED", "DISPUTED"],
+  RETURN_REQUESTED: ["RETURNING", "COMPLETED", "DELIVERED", "DISPUTED"],
   RETURNING: ["REFUNDED", "COMPLETED", "DISPUTED"],
   REFUNDED: [],
   DISPUTED: ["COMPLETED", "REFUNDED", "CANCELLED"],
