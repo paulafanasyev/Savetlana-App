@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
  * comes from the carrier — the route never invents a status (spec §123).
  * Also returns the price breakdown and which products the buyer has already
  * reviewed, so the order page can offer a review form after delivery.
+ * deliveredAt: когда заказ доставлен, чтобы показать дату автоприёмки безопасной сделки.
  */
 export const GET = apiRoute(async (request, { params }) => {
   const { user } = await requireBuyer(request);
@@ -55,6 +56,14 @@ export const GET = apiRoute(async (request, { params }) => {
     select: { productId: true, isHidden: true },
   });
 
+  const delivered = order.status === "DELIVERED"
+    ? await prisma.orderHistory.findFirst({
+        where: { orderId: order.id, toStatus: "DELIVERED" },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      })
+    : null;
+
   return Response.json({
     order: {
       id: order.id,
@@ -66,6 +75,7 @@ export const GET = apiRoute(async (request, { params }) => {
       currency: order.currency,
       items: order.items,
       payment: order.payment ?? null,
+      deliveredAt: delivered?.createdAt ?? null,
     },
     reviewedProductIds: reviews.map((r) => r.productId),
     // Отзывы, скрытые антифродом до проверки: автору честно пишем «на проверке».

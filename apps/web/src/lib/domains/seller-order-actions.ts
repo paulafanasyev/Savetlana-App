@@ -9,6 +9,7 @@ import { processRefund } from "./payments";
 import { notify } from "./notifications";
 import { SELLER_ORDER_ACTIONS, actionReason, type SellerOrderAction } from "./order-rules";
 import { UserFacingError } from "./engagement-rules";
+import { ACCEPT_DAYS } from "../safe-deal";
 
 /**
  * Возвращает покупателю всю ещё не возвращённую сумму оплаты. Повторный вызов
@@ -50,7 +51,7 @@ export async function refundOrderPayment(input: { orderId: string; reason: strin
 const BUYER_TEXT: Record<SellerOrderAction, (number: string, reason: string) => { title: string; body: string }> = {
   reject: (n, r) => ({ title: `Продавец отменил заказ ${n}`, body: `Причина: ${r}. Деньги возвращаются на карту, обычно это занимает до 3 рабочих дней.` }),
   accept_return: (n) => ({ title: `Продавец принял возврат по заказу ${n}`, body: "Отправьте товар продавцу. Как только он получит посылку, деньги вернутся." }),
-  decline_return: (n, r) => ({ title: `Продавец отказал в возврате по заказу ${n}`, body: `Ответ продавца: ${r}. Если вы не согласны, откройте спор на странице заказа: решение примет площадка.` }),
+  decline_return: (n, r) => ({ title: `Продавец отказал в возврате по заказу ${n}`, body: `Ответ продавца: ${r}. Деньги пока у площадки. Если вы не согласны, откройте спор на странице заказа в течение ${ACCEPT_DAYS} дней: решение примет площадка. Иначе деньги уйдут продавцу.` }),
   refund_return: (n) => ({ title: `Возврат по заказу ${n} оформлен`, body: "Продавец получил товар. Деньги возвращаются на карту, обычно это занимает до 3 рабочих дней." }),
 };
 

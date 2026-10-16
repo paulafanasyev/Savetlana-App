@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { rub, orderStatusLabel, timeAgo } from "@/lib/format";
+import { safeDealBuyerNote } from "@/lib/safe-deal";
 
 interface TrackingResponse {
   order: {
@@ -18,6 +19,8 @@ interface TrackingResponse {
     currency: string;
     items: { id: string; productId: string; titleSnapshot: string; quantity: number; priceKopecks: number }[];
     payment: { status: string; sandbox: boolean } | null;
+    /** Когда заказ доставлен: от этой даты считается автоприёмка. */
+    deliveredAt?: string | null;
   };
   reviewedProductIds: string[];
   /** Отзывы, которые антифрод скрыл до проверки модератором. */
@@ -101,6 +104,7 @@ export default function OrderDetailPage() {
   const inFlight = IN_FLIGHT.includes(order.status);
   const subtotal = order.subtotalKopecks ?? order.items.reduce((sum, item) => sum + item.priceKopecks * item.quantity, 0);
   const delivery = order.deliveryKopecks ?? Math.max(0, order.totalKopecks - subtotal);
+  const safeNote = safeDealBuyerNote(order.status, order.deliveredAt ? new Date(order.deliveredAt) : null);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
@@ -138,9 +142,14 @@ export default function OrderDetailPage() {
           <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Тестовая оплата: банк ещё не подключён, деньги не списываются.</p>
         )}
 
+        {safeNote && (
+          <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900" role="status">🛡 {safeNote}</p>
+        )}
+
         {needsPayment && <PayButton orderId={order.id} onPaid={load} />}
         {needsPayment && <CancelButton orderId={order.id} onDone={load} />}
 
+        {order.status === "DELIVERED" && <ConfirmReceipt orderId={order.id} onDone={load} />}
         {delivered && <ReturnActions orderId={order.id} onChanged={load} mode="full" />}
         {inFlight && <ReturnActions orderId={order.id} onChanged={load} mode="dispute" />}
       </div>
@@ -192,6 +201,47 @@ export default function OrderDetailPage() {
           ))}
         </section>
       )}
+    </div>
+  );
+}
+
+/** Безопасная сделка: покупатель принимает товар, и деньги становятся доступны продавцу. */
+function ConfirmReceipt({ orderId, onDone }: { orderId: string; onDone: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function confirm() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/confirm`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage(body?.error ?? "Не удалось подтвердить получение");
+        return;
+      }
+      onDone();
+    } catch {
+      setMessage("Нет связи с сервером");
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 border-t border-line pt-4">
+      {confirming ? (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-ink-soft">Товар проверен и всё в порядке? После этого деньги уйдут продавцу.</span>
+          <button className="btn btn-primary px-3 py-1.5 text-xs" disabled={busy} onClick={() => void confirm()}>{busy ? "Подтверждаем…" : "Да, всё в порядке"}</button>
+          <button className="btn btn-ghost px-3 py-1.5 text-xs" disabled={busy} onClick={() => setConfirming(false)}>Нет</button>
+        </div>
+      ) : (
+        <button className="btn btn-primary w-full sm:w-auto" onClick={() => setConfirming(true)}>✓ Товар получен, всё в порядке</button>
+      )}
+      {message && <p className="mt-1 text-xs text-bad" role="alert">{message}</p>}
     </div>
   );
 }
@@ -469,7 +519,7 @@ function PayButton({ orderId, onPaid }: { orderId: string; onPaid: () => void })
           </button>
         </div>
       )}
-      <p className="mt-2 text-xs text-ink-soft">Карты «Мир», Visa, Mastercard, SberPay, T-Pay и СБП. Данные карты вводятся только на странице банка.</p>
+      <p className="mt-2 text-xs text-ink-soft">Карты «Мир», Visa, Mastercard, SberPay, T-Pay и СБП. Данные карты вводятся только на странице банка. Деньги продавец получит только после того, как вы примете товар.</p>
       {message && <p className={`mt-2 text-xs ${state === "ok" ? "text-good" : state === "wait" || state === "busy" ? "text-ink-soft" : "text-bad"}`}>{message}</p>}
     </div>
   );
