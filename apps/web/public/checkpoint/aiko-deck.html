@@ -108,7 +108,7 @@ h2{font-size:38px;margin-bottom:20px}
 <section class="slide dark"><div class="hero"><img src="/images/avatar/svetlana-master.jpg" alt="Светлана"><div>
 <div class="kicker">RLT.Startup · чек-поинт · Росэлторг.Университет</div><h1>АИКО</h1>
 <p style="font-size:28px;line-height:1.25;margin:14px 0 22px;font-weight:600">AI-нативный маркетплейс: ИИ-помощница «Светлана» и 23 агента ведут покупателя и продавца от запроса до выплаты</p>
-<span class="pill">товары и опт B2B</span><span class="pill">объявления и услуги</span><span class="pill">безопасная сделка</span><span class="pill">торг агентов</span>
+<span class="pill">товары и опт B2B</span><span class="pill">объявления и услуги</span><span class="pill">безопасная сделка</span><span class="pill">торг агентов</span><span class="pill">своя модель ИИ</span>
 <p class="soft" style="margin-top:20px">Павел Афанасьев · xongphavietnam@gmail.com · savetlana-app-web.vercel.app</p></div></div></section>
 
 <section class="slide tint">
@@ -150,7 +150,7 @@ h2{font-size:38px;margin-bottom:20px}
 <div><b>4</b><span>банка-эквайера: ЮKassa, Т-Банк, Сбер, Альфа</span></div>
 <div><b>54-ФЗ</b><span>чеки с агентским признаком</span></div>
 </div>
-<p class="soft" style="margin-top:18px">Next.js 15 · TypeScript · Prisma · PostgreSQL · Vercel · AI Gateway: модель «Светлана» / внешний LLM / резервный детерминированный движок</p>
+<p class="soft" style="margin-top:18px">ИИ-ядро: собственная обученная модель «Светлана» (сервер Svetlana Core) + резервный детерминированный движок · Next.js 15 · TypeScript · PostgreSQL</p>
 
 </section>
 
@@ -241,6 +241,19 @@ h2{font-size:38px;margin-bottom:20px}
 <tr><td><span class="tag bad">FINANCIAL</span></td><td>заказ, отмена, возврат, приёмка, цена, акции</td><td>да</td></tr></table>
 <div class="card violet"><h3>Агенты взаимодействуют</h3><ul><li><b>напрямую:</b> агент покупателя торгуется с агентами продавцов</li><li><b>через сервисы:</b> заказ проходит агента риска, оплаты, доставки и расчётов</li><li><b>лимиты:</b> до 8 шагов и 6 вызовов инструментов на запрос</li></ul></div></div>
 
+</section>
+
+<section class="slide tint">
+<div class="kicker">ИИ-ядро</div>
+<h2>Светлана работает на нашей собственной обученной модели</h2>
+<div class="grid g3">
+<div class="card violet"><h3>Своя модель «Светлана»</h3><p>модель обучена командой проекта и работает на собственном сервере Svetlana Core; характер, тон и знание площадки заложены при обучении</p></div>
+<div class="card violet"><h3>Модель понимает, код считает</h3><p>модель разбирает задачу и формулирует ответ, а цены, торг, скидки и проверки считает детерминированный серверный код: модель не может «придумать» цену</p></div>
+<div class="card violet"><h3>Резерв без простоя</h3><p>если модель недоступна, площадка продолжает работать на резервном движке, а ответы честно помечаются</p></div></div>
+<div class="grid g2" style="margin-top:18px">
+<div class="card accent"><h3>Дообучение (ближайший этап)</h3><p style="color:var(--ink)">дообучим модель на обезличенных торгах, КП, вопросах покупателей и карточках товаров площадки; персональные данные вычищаются до обучения</p></div>
+<div class="card"><h3>Как поймём, что стало лучше</h3><p>сравним до и после на дашборде эффективности: доля договорённостей, конверсия КП в заказ, точность поиска, доля ответов без резерва</p></div></div>
+<div class="bubble"><img src="/images/avatar/svetlana-master.jpg" alt=""><div>Я своя, не арендованная. И буду учиться на ваших сделках.</div></div>
 </section>
 
 <section class="slide tint">
@@ -338,7 +351,7 @@ h2{font-size:38px;margin-bottom:20px}
 <div class="kicker">Оценка эффективности агентов</div>
 <h2>Дашборд «Эффективность агента» в админке</h2>
 <div class="cols wide"><div><div class="shot"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/admin/agents</span></div><img class="real" src="/checkpoint/shots/agents.png" alt="" onerror="this.remove()"><div class="mock"><h4>Эффективность агента B2B <span class="mut">· 7 · 30 · 90 дн.</span></h4><p class="mut">Торг агентов</p><div class="kpi"><div><small>Торгов</small><b>24</b></div><div><small>Договорились</small><b>79%</b></div><div><small>Раундов</small><b>4,2</b></div><div><small>Продавцов</small><b>41</b></div></div><p class="mut">КП и заказы</p><div class="kpi"><div><small>КП</small><b>19</b></div><div><small>Приняли</small><b>84%</b></div><div><small>КП → заказ</small><b>62%</b></div><div><small>Ответ</small><b>18 мин</b></div></div><p class="mut">Безопасность</p><div class="kpi"><div><small>R5 блоки</small><b>2</b></div><div><small>Подделки КП</small><b>1</b></div><div><small>Инъекции</small><b>3</b></div><div><small>AI успех</small><b>99%</b></div></div></div></div><div class="cap">Макет экрана, цифры примерные. Живой экран: /admin/agents</div></div>
-<div><div class="card violet" style="margin-bottom:12px"><h3>Что измеряем</h3><ul><li>торг: доля сделок, раунды, охват продавцов</li><li>КП: принятие продавцами, конверсия в заказ, скорость ответа</li><li>деньги: оборот по КП, экономия покупателей, средняя скидка</li><li>безопасность: подмены цены, подделки КП, инъекции</li><li>модель: успешность, задержка, токены</li></ul></div>
+<div><div class="card violet" style="margin-bottom:12px"><h3>Что измеряем</h3><ul><li>торг: доля сделок, раунды, охват продавцов</li><li>КП: принятие продавцами, конверсия в заказ, скорость ответа</li><li>деньги: оборот по КП, экономия покупателей, средняя скидка</li><li>безопасность: подмены цены, подделки КП, инъекции</li><li>модель «Светлана»: успешность, задержка, качество ответов</li></ul></div>
 <div class="card"><h3>Только реальные данные</h3><p>журнал аудита, КП, события риска, вызовы модели</p></div></div></div>
 
 </section>
@@ -353,7 +366,7 @@ h2{font-size:38px;margin-bottom:20px}
 <tr><td>Госсервисы</td><td>ФНС «Мой налог» (НПД), Госуслуги (ЕСИА), ЕГРЮЛ через DaData, ЕИС (РНП)</td><td>ФНС работает; ЕСИА и DaData при ключах</td></tr>
 <tr><td>Каналы</td><td>Telegram-бот, вход через VK, Яндекс Маркет API, YML-фид</td><td>при ключах; Маркет по ключу продавца</td></tr>
 <tr><td>Конкуренты</td><td>Ozon, Wildberries, AliExpress, Taobao, Amazon</td><td>честно «нет доступа», если площадка недоступна</td></tr>
-<tr><td>ИИ</td><td>модель «Светлана», внешний LLM (OpenAI-совместимый), резервный движок</td><td>LIVE при ключе, иначе детерминированный режим</td></tr></table>
+<tr><td>ИИ</td><td>собственная модель «Светлана», обученная командой (сервер Svetlana Core); резервный детерминированный движок</td><td>своя модель; дообучение на данных площадки запланировано</td></tr></table>
 
 </section>
 
@@ -361,7 +374,7 @@ h2{font-size:38px;margin-bottom:20px}
 <div class="kicker">Статус и план</div>
 <h2>Прототип работает, следующий шаг — пилот с оптовиками</h2>
 <div class="grid g2"><div class="card"><h3>Работает сейчас</h3><ul><li>сайт и три кабинета, 23 агента, 50 инструментов</li><li>поиск задачей, сравнение, фото, отзывы, подарки</li><li>карточки из текста, импорт, Яндекс Маркет, акции, CRM, аналитика</li><li>торг, аукцион, условия, КП → заказ, договор / счёт / УПД</li><li>проверка контрагента, антифрод, аудит, дашборд эффективности</li><li>оплата, доставка, чеки в тестовом режиме</li></ul></div>
-<div class="card"><h3>До финала</h3><ul><li>боевой LLM, ключи DaData и платёжного партнёра</li><li>автоответ агента продавца в Telegram</li><li>НДС и реквизиты покупателя-организации, выгрузка в ЭДО</li><li>отсрочка платежа через партнёра (BNPL для бизнеса)</li><li>пилот с 2–3 реальными оптовиками и замер метрик дашборда</li></ul></div></div>
+<div class="card"><h3>До финала</h3><ul><li>дообучение модели «Светлана» на торгах, КП и диалогах площадки</li><li>ключи DaData и платёжного партнёра</li><li>автоответ агента продавца в Telegram</li><li>НДС и реквизиты покупателя-организации, выгрузка в ЭДО</li><li>отсрочка платежа через партнёра (BNPL для бизнеса)</li><li>пилот с 2–3 реальными оптовиками и замер метрик дашборда</li></ul></div></div>
 
 </section>
 
