@@ -7,7 +7,7 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 import { summarizeReviews, listReviews } from "@/lib/domains/reviews";
 import { shipCitiesBySeller } from "@/lib/domains/seller-ship-from";
-import { checkStatusLabel, sellerBadges, taxCheck } from "@/lib/domains/seller-trust-display";
+import { checkStatusLabel, isDemoSeller, sellerBadges, shownStatus, taxCheck } from "@/lib/domains/seller-trust-display";
 import { attrRows } from "@/lib/product-attrs";
 import { resolveParams } from "@/lib/page-params";
 import { resolveSession, serverRequest } from "@/lib/auth";
@@ -65,6 +65,7 @@ export default async function ProductPage({ params }: PageProps) {
   // Те же правила проверки, что и на странице продавца: налоговый статус по типу.
   const tax = taxCheck(product.sellerProfile);
   const verifiedSeller = sellerBadges(product.sellerProfile).some((b) => b.key === "verified_seller");
+  const demoSeller = isDemoSeller(product.sellerProfile);
   const outOfStock = !product.inventory || product.inventory.quantity <= 0 || product.inventory.availability === "OUT_OF_STOCK";
   const variants = product.variants.map((v) => ({ id: v.id, name: v.name, priceKopecks: product.priceKopecks + v.priceDelta }));
 
@@ -190,14 +191,17 @@ export default async function ProductPage({ params }: PageProps) {
             {verifiedSeller && (
               <span className="chip mt-2 bg-green-50 text-xs font-semibold text-green-700" title="Личность и налоговый статус подтверждены">✓ Проверенный продавец</span>
             )}
+            {demoSeller && (
+              <span className="chip mt-2 bg-amber-50 text-xs font-semibold text-amber-800" title="Магазин для демонстрации площадки: проверки не проводились">Демо-магазин: отметки условные</span>
+            )}
             {product.sellerProfile.description && (
               <p className="mt-1 text-xs text-ink-soft line-clamp-3">{product.sellerProfile.description}</p>
             )}
             <div className="mt-3 space-y-1 text-xs text-ink-soft">
               <div>{SELLER_TYPE[product.sellerProfile.sellerType] ?? "Продавец"}</div>
               {shipCity && <div>Город отгрузки: {shipCity}</div>}
-              <div>Личность: {checkStatusLabel(product.sellerProfile.identityStatus)}</div>
-              {tax && <div>{tax.label}: {checkStatusLabel(tax.status)}</div>}
+              <div>Личность: {checkStatusLabel(shownStatus(product.sellerProfile, product.sellerProfile.identityStatus))}</div>
+              {tax && <div>{tax.label}: {checkStatusLabel(shownStatus(product.sellerProfile, tax.status))}</div>}
               <div>На площадке с {new Date(product.sellerProfile.createdAt).getFullYear()}</div>
             </div>
             <Link

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPublicSellerProfile, listSellerProducts } from "@/lib/domains/sellers";
-import { checkStatusLabel, taxCheck } from "@/lib/domains/seller-trust-display";
+import { checkStatusLabel, isDemoSeller, shownStatus, taxCheck } from "@/lib/domains/seller-trust-display";
 import { rub, availabilityLabel, plural, REVIEW_FORMS } from "@/lib/format";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 import { resolveParams } from "@/lib/page-params";
@@ -21,6 +21,8 @@ export default async function SellerPage({ params }: PageProps) {
   const verifiedSeller = profile.badges.some((b) => b.key === "verified_seller");
   // Налоговый статус смотрим тот, что подходит к типу продавца (у физлица его нет).
   const tax = taxCheck(profile);
+  // Демо-магазин никто не проверял: пишем это прямо.
+  const demo = isDemoSeller(profile);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -43,6 +45,11 @@ export default async function SellerPage({ params }: PageProps) {
                   {verifiedSeller && (
                     <span title="Личность и налоговый статус подтверждены" className="chip bg-green-50 text-xs font-semibold text-green-700">
                       ✓ Проверенный продавец
+                    </span>
+                  )}
+                  {demo && (
+                    <span title="Магазин для демонстрации площадки: проверки не проводились" className="chip bg-amber-50 text-xs font-semibold text-amber-800">
+                      Демо-магазин: отметки условные
                     </span>
                   )}
                 </h1>
@@ -99,13 +106,14 @@ export default async function SellerPage({ params }: PageProps) {
             )}
 
             <div className="mt-3 flex flex-wrap gap-2">
-              <VerificationChip label="Личность" status={profile.identityStatus} />
-              {tax && <VerificationChip label={tax.label} status={tax.status} />}
+              <VerificationChip label="Личность" status={shownStatus(profile, profile.identityStatus)} />
+              {tax && <VerificationChip label={tax.label} status={shownStatus(profile, tax.status)} />}
             </div>
             <p className="mt-2 text-xs text-ink-faint">
               Отметки ставятся только по ответу официального источника (ФНС, Госуслуги) или после проверки модератором.
               Рейтинг считается по отзывам и итогам реальных заказов, отзывы без подтверждённой покупки весят меньше.
               Документы и реквизиты продавца не показываются.
+              {demo && " Этот магазин демонстрационный: его никто не проверял, отзывы и товары тоже демо."}
             </p>
           </div>
 
