@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { rub, availabilityLabel } from "@/lib/format";
+import { readCityCookie } from "@/lib/my-city";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 
 interface CatalogItem {
@@ -16,8 +17,19 @@ interface CatalogItem {
   reviewsCount: number;
   availability: string;
   seller: { id: string; name: string };
+  shipCity?: string | null;
   signals: string[];
   imageUrl?: string | null;
+}
+
+/** Адрес каталога с теми же запросом и разделом, но с другим городом (или без него). */
+function catalogHref(q: string, category: string, city: string): string {
+  const p = new URLSearchParams();
+  if (q) p.set("q", q);
+  if (category) p.set("category", category);
+  if (city) p.set("city", city);
+  const s = p.toString();
+  return s ? `/catalog?${s}` : "/catalog";
 }
 
 function CatalogInner() {
@@ -29,14 +41,22 @@ function CatalogInner() {
   const [photo, setPhoto] = useState<VisionResult | null>(null);
   // useSearchParams() can be null during server rendering.
   const [q, setQ] = useState(params?.get("q") ?? "");
+  // «Мой город» живёт в куке браузера, читаем её после загрузки страницы.
+  const [myCity, setMyCity] = useState<string | null>(null);
 
   const query = params?.get("q") ?? "";
   const category = params?.get("category") ?? "";
+  const cityParam = params?.get("city") ?? "";
+
+  useEffect(() => {
+    setMyCity(readCityCookie(document.cookie));
+  }, []);
 
   useEffect(() => {
     const url = new URL("/api/catalog/search", location.origin);
     if (query) url.searchParams.set("q", query);
     if (category) url.searchParams.set("category", category);
+    if (cityParam) url.searchParams.set("city", cityParam);
     setLoading(true);
     setFailed(false);
     void fetch(url.toString())
@@ -51,22 +71,20 @@ function CatalogInner() {
         setFailed(true);
       })
       .finally(() => setLoading(false));
-  }, [query, category, attempt]);
+  }, [query, category, cityParam, attempt]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       <h1 className="mb-4 text-2xl font-bold text-ink">
         {query ? `Поиск: ${query}` : "Каталог"}
+        {cityParam ? <span className="text-base font-medium text-ink-soft"> · из г. {cityParam}</span> : null}
       </h1>
 
       <form
-        className="mb-6 flex flex-wrap gap-2"
+        className="mb-3 flex flex-wrap gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          const u = new URL(location.pathname, location.origin);
-          if (q) u.searchParams.set("q", q);
-          if (category) u.searchParams.set("category", category);
-          location.assign(u.toString());
+          location.assign(catalogHref(q, category, cityParam));
         }}
       >
         <input
@@ -95,6 +113,24 @@ function CatalogInner() {
           })));
         }} />
       </form>
+
+      <div className="mb-6 text-sm">
+        {myCity ? (
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={cityParam === myCity}
+              onChange={(e) => location.assign(catalogHref(query, category, e.target.checked ? myCity : ""))}
+            />
+            <span>Только продавцы из г. {myCity}</span>
+            <Link href="/city" className="text-xs text-ink-soft underline">другой город</Link>
+          </label>
+        ) : cityParam ? (
+          <Link href={catalogHref(query, category, "")} className="text-ink-soft underline">Показать товары из всех городов</Link>
+        ) : (
+          <Link href="/city" className="text-ink-soft underline">Укажите свой город, чтобы искать продавцов рядом</Link>
+        )}
+      </div>
 
       {photo && (
         <div className={`card mb-6 p-4 text-sm ${photo.status === "MOCK_VERIFIED" ? "bg-amber-50" : "bg-svetlana-50"}`}>
@@ -126,7 +162,15 @@ function CatalogInner() {
               </button>
             </div>
           ) : items.length === 0 ? (
-            query || category || photo ? (
+            cityParam && !photo ? (
+              <div className="card p-8 text-center">
+                <div className="text-lg font-semibold text-ink">Из г. {cityParam} пока никто не отправляет{query ? " такие товары" : ""}</div>
+                <p className="mt-2 text-sm text-ink-soft">Продавцы из других городов доставляют по всей России.</p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <Link href={catalogHref(query, category, "")} className="btn btn-primary">Показать все города</Link>
+                </div>
+              </div>
+            ) : query || category || photo ? (
               <div className="card p-8 text-center">
                 <div className="text-lg font-semibold text-ink">Ничего не нашлось</div>
                 <p className="mt-2 text-sm text-ink-soft">
@@ -170,6 +214,7 @@ function CatalogInner() {
                       </div>
                       <div className="text-base font-bold text-svetlana-700">{rub(item.priceKopecks)}</div>
                       <div className="text-xs text-ink-soft">{item.seller.name}</div>
+                      {item.shipCity && <div className="text-xs text-ink-soft">📍 Отправка из г. {item.shipCity}</div>}
                       <div className="flex items-center gap-1 text-xs text-ink-faint">
                         {item.reviewsCount > 0 ? (
                           <>

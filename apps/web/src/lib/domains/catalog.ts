@@ -10,11 +10,15 @@
  * Postgres (prod) without a separate search daemon. The semantic part uses
  * the embedding gateway (live model when configured, deterministic sandbox
  * otherwise — always reported honestly).
+ *
+ * Фильтр «Из моего города» (shipCity): только продавцы, у которых указан этот
+ * город отгрузки (lib/ship-from.ts).
  */
 import { prisma } from "../prisma";
 import { aiGateway } from "../ai/gateway";
 import { newTraceId } from "../ai/gateway";
 import { fromKopecks, toKopecks } from "../utils";
+import { SHIP_FROM_LABEL } from "../ship-from";
 import { Prisma } from "@prisma/client";
 
 export interface SearchFilters {
@@ -25,6 +29,8 @@ export interface SearchFilters {
   maxPrice?: number;
   minRating?: number;
   availabilityOnly?: boolean;
+  /** Точное название города из справочника: только продавцы, отгружающие оттуда. */
+  shipCity?: string;
   sort?: "relevance" | "price_asc" | "price_desc" | "rating" | "popular";
   limit?: number;
   offset?: number;
@@ -70,6 +76,9 @@ export async function searchProducts(
   }
   if (filters.sellerId) {
     where.sellerId = filters.sellerId;
+  }
+  if (filters.shipCity) {
+    where.sellerProfile = { user: { addresses: { some: { label: SHIP_FROM_LABEL, city: filters.shipCity } } } };
   }
   if (typeof filters.minPrice === "number") {
     where.priceKopecks = { ...(where.priceKopecks as object), gte: toKopecks(filters.minPrice) };

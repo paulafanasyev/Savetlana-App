@@ -1,6 +1,8 @@
 import { apiRoute } from "@/lib/api-helpers";
 import { searchProducts, type SearchFilters } from "@/lib/domains/catalog";
 import { recordEvent } from "@/lib/domains/events";
+import { ensureDemoShipCities, shipCitiesBySeller } from "@/lib/domains/seller-ship-from";
+import { resolveShipCity } from "@/lib/ship-from";
 import { newTraceId } from "@/lib/ai/gateway";
 import { prisma } from "@/lib/prisma";
 
@@ -12,6 +14,10 @@ export const GET = apiRoute(async (request) => {
     const n = Number(v);
     return Number.isFinite(n) && n > 0 ? n : undefined;
   };
+  // Демо-магазинам один раз проставляем город отгрузки; ошибка не ломает поиск.
+  await ensureDemoShipCities().catch(() => {});
+  // Город только из справочника: неизвестное название не фильтрует, а не обнуляет выдачу.
+  const city = resolveShipCity(url.searchParams.get("city"))?.name;
   const filters: SearchFilters = {
     query: url.searchParams.get("q") ?? undefined,
     categorySlug: url.searchParams.get("category") ?? undefined,
@@ -19,6 +25,7 @@ export const GET = apiRoute(async (request) => {
     minPrice: toNum(url.searchParams.get("minPrice")),
     minRating: toNum(url.searchParams.get("minRating")),
     availabilityOnly: url.searchParams.get("availability") === "1",
+    shipCity: city,
     sort: (url.searchParams.get("sort") as SearchFilters["sort"]) ?? "relevance",
     limit: toNum(url.searchParams.get("limit")),
     offset: toNum(url.searchParams.get("offset")),
@@ -30,14 +37,18 @@ export const GET = apiRoute(async (request) => {
     anonymous: true,
   });
   const ids = results.map((r) => r.product.id);
-  const images = ids.length
-    ? await prisma.productImage.findMany({ where: { productId: { in: ids } }, orderBy: [{ position: "asc" }, { createdAt: "asc" }], select: { productId: true, url: true } })
-    : [];
+  const [images, shipCities] = await Promise.all([
+    ids.length
+      ? prisma.productImage.findMany({ where: { productId: { in: ids } }, orderBy: [{ position: "asc" }, { createdAt: "asc" }], select: { productId: true, url: true } })
+      : Promise.resolve([] as { productId: string; url: string }[]),
+    shipCitiesBySeller(results.map((r) => r.product.sellerProfile.id)).catch(() => new Map<string, string>()),
+  ]);
   const firstImage = new Map<string, string>();
   for (const image of images) if (!firstImage.has(image.productId)) firstImage.set(image.productId, image.url);
   return Response.json({
     total,
     mode,
+    city: city ?? null,
     items: results.map((r) => ({
       id: r.product.id,
       title: r.product.title,
@@ -47,6 +58,7 @@ export const GET = apiRoute(async (request) => {
       rating: r.product.rating,
       reviewsCount: r.product.reviewsCount,
       seller: { id: r.product.sellerProfile.id, name: r.product.sellerProfile.displayName },
+      shipCity: shipCities.get(r.product.sellerProfile.id) ?? null,
       availability: r.product.inventory?.availability ?? "UNKNOWN",
       imageUrl: firstImage.get(r.product.id) ?? null,
       signals: r.signals,
