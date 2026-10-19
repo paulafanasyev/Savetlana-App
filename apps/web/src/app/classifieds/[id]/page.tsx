@@ -16,6 +16,7 @@ import { canClose } from "@/lib/ad-status-rules";
 import { canEdit } from "@/lib/ad-edit";
 import { prisma } from "@/lib/prisma";
 import { BidForm } from "./BidForm";
+import { SimilarAds } from "./SimilarAds";
 
 export const dynamic = "force-dynamic";
 
@@ -344,6 +345,9 @@ export default async function ClassifiedDetailPage({
           </div>
         </section>
       )}
+
+      {/* Покупателю показываем альтернативы; автору чужие объявления на своей странице ни к чему. */}
+      {!isAuthor && <SimilarAds id={ad.id} />}
     </main>
   );
 }
