@@ -1,7 +1,8 @@
 /**
  * Похожие объявления: тот же раздел и тип сделки, сначала в том же городе, потом в
- * регионе. Берём из обычного поиска, поэтому истёкшие, снятые и на проверке сюда не
- * попадают.
+ * регионе, потом по всей России (пока объявлений мало, иначе блок пустой). Берём из
+ * обычного поиска, поэтому истёкшие, снятые и на проверке сюда не попадают. Город на
+ * карточке виден, так что покупатель не спутает дальнее объявление с соседним.
  */
 import { prisma } from "../prisma";
 import { searchClassifieds, type PublicClassified } from "./classifieds";
@@ -14,8 +15,11 @@ export async function similarClassifieds(id: string): Promise<PublicClassified[]
   });
   if (!ad) return [];
   const base = { vertical: ad.vertical, dealType: ad.dealType, limit: SIMILAR_LIMIT + 1 };
-  const near = (await searchClassifieds({ ...base, cityId: ad.cityId })).items;
-  const enough = near.filter((x) => x.id !== id).length >= SIMILAR_LIMIT;
-  const wide = enough ? [] : (await searchClassifieds({ ...base, regionId: ad.regionId })).items;
-  return pickSimilar(near, wide, id);
+  const tiers = [{ cityId: ad.cityId }, { regionId: ad.regionId }, {}];
+  const found: PublicClassified[] = [];
+  for (const tier of tiers) {
+    found.push(...(await searchClassifieds({ ...base, ...tier })).items);
+    if (pickSimilar(found, [], id).length >= SIMILAR_LIMIT) break;
+  }
+  return pickSimilar(found, [], id);
 }
