@@ -102,9 +102,13 @@ export const ClassifiedDealType_VALUES = [
 ] as const;
 export type ClassifiedDealType = (typeof ClassifiedDealType_VALUES)[number];
 
+// Опубликованное объявление во всей программе хранится как "PUBLISHED". Раньше здесь стояло
+// "ACTIVE", которое код не пишет: при переходе на строгий список статусов в базе это
+// сломало бы публикацию. "ACTIVE" оставлен для совместимости со старыми записями.
 export const ClassifiedStatus_VALUES = [
   "DRAFT",
   "MODERATION",
+  "PUBLISHED",
   "ACTIVE",
   "HIDDEN",
   "REJECTED",
@@ -165,7 +169,8 @@ export type GeoLevel = (typeof GeoLevel_VALUES)[number];
 export const AuthTicketPurpose_VALUES = ["VERIFY_EMAIL", "RESET_PASSWORD"] as const;
 export type AuthTicketPurpose = (typeof AuthTicketPurpose_VALUES)[number];
 
-export const DeliveryChannel_VALUES = ["email", "push"] as const;
+// Доставки в Telegram тоже пишутся в NotificationDelivery (channel = "telegram").
+export const DeliveryChannel_VALUES = ["email", "push", "telegram"] as const;
 export type DeliveryChannel = (typeof DeliveryChannel_VALUES)[number];
 
 export const DeliveryState_VALUES = ["PENDING", "SENT", "FAILED", "SUPPRESSED"] as const;

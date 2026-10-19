@@ -17,6 +17,8 @@
  * Резюме видят все, поэтому телефон, почту, мессенджеры, паспорт и СНИЛС из
  * его текста убираем ещё до проверки (lib/domains/contact-scrub.ts):
  * работодатель пишет соискателю через сообщения площадки.
+ *
+ * Поиск не показывает объявления с истёкшим сроком (lib/ad-active.ts).
  */
 import { prisma } from "../prisma";
 import { readObject, writeJson } from "../db/json";
@@ -34,6 +36,7 @@ import { audit } from "./audit";
 import type { ClassifiedVerdict } from "./classified-guard";
 import { recordSentToModeration, rejectIfBlocked, screenClassified } from "./classified-screening";
 import { scrubResumeListing } from "./contact-scrub";
+import { activeAdClause } from "../ad-active";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -407,6 +410,8 @@ export async function searchClassifieds(
 
   const where: Record<string, unknown> = {
     status: filters.status && isValidEnum("ClassifiedStatus", filters.status) ? filters.status : "PUBLISHED",
+    // Истёкшие по сроку объявления в поиске не показываем; AND, чтобы не перетереть OR поиска по тексту.
+    AND: [activeAdClause()],
   };
   if (filters.vertical && isValidEnum("ClassifiedVertical", filters.vertical)) {
     where.vertical = filters.vertical;

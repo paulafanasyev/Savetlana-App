@@ -5,10 +5,28 @@ import { useEffect, useRef, useState } from "react";
 interface Props {
   configured: boolean;
   linked: boolean;
+  /** Адрес API: кабинет продавца или профиль любого пользователя. */
+  endpoint?: string;
+  /** Кому показываем: от этого зависят подписи. */
+  audience?: "seller" | "user";
 }
 
-/** Карточка «Уведомления в Telegram» в кабинете продавца. */
-export function TelegramConnect({ configured, linked: initialLinked }: Props) {
+const TEXT = {
+  seller: {
+    linked: "Подключено. Новые заказы, сообщения покупателей, остатки и выплаты приходят в Telegram.",
+    pitch: "Узнавайте о новых заказах и сообщениях покупателей сразу, даже когда сайт закрыт.",
+    done: "Telegram подключён. Новые заказы и сообщения теперь придут и туда.",
+  },
+  user: {
+    linked: "Подключено. Ответы на ваши объявления, сообщения и напоминания о сроке приходят в Telegram.",
+    pitch: "Узнавайте об ответах на ваши объявления и новых сообщениях сразу, даже когда сайт закрыт.",
+    done: "Telegram подключён. Ответы и напоминания теперь придут и туда.",
+  },
+} as const;
+
+/** Карточка «Уведомления в Telegram»: в кабинете продавца и в профиле. */
+export function TelegramConnect({ configured, linked: initialLinked, endpoint = "/api/seller/telegram", audience = "seller" }: Props) {
+  const text = TEXT[audience];
   const [linked, setLinked] = useState(initialLinked);
   const [link, setLink] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -21,7 +39,7 @@ export function TelegramConnect({ configured, linked: initialLinked }: Props) {
   }, []);
 
   async function call(method: "POST" | "DELETE", action?: string) {
-    const res = await fetch("/api/seller/telegram", {
+    const res = await fetch(endpoint, {
       method,
       headers: { "Content-Type": "application/json" },
       body: method === "POST" ? JSON.stringify({ action }) : undefined,
@@ -39,13 +57,13 @@ export function TelegramConnect({ configured, linked: initialLinked }: Props) {
         if (poll.current) window.clearInterval(poll.current);
         return;
       }
-      const res = await fetch("/api/seller/telegram").catch(() => null);
+      const res = await fetch(endpoint).catch(() => null);
       const data = (await res?.json().catch(() => null)) as { linked?: boolean } | null;
       if (data?.linked) {
         if (poll.current) window.clearInterval(poll.current);
         setLinked(true);
         setLink(null);
-        setMessage("Telegram подключён. Новые заказы и сообщения теперь придут и туда.");
+        setMessage(text.done);
       }
     }, 3000);
   }
@@ -102,11 +120,7 @@ export function TelegramConnect({ configured, linked: initialLinked }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 id="telegram-title" className="font-semibold">Уведомления в Telegram</h2>
-          <p className="text-sm text-ink-soft">
-            {linked
-              ? "Подключено. Новые заказы, сообщения покупателей, остатки и выплаты приходят в Telegram."
-              : "Узнавайте о новых заказах и сообщениях покупателей сразу, даже когда сайт закрыт."}
-          </p>
+          <p className="text-sm text-ink-soft">{linked ? text.linked : text.pitch}</p>
         </div>
         {configured && (
           <div className="flex flex-wrap gap-2">

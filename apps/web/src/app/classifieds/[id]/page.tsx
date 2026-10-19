@@ -11,9 +11,18 @@ import { resolveParams } from "@/lib/page-params";
 import { isBidAd } from "@/lib/freelance-bids";
 import { isDemoAd, locationLine } from "@/lib/location-line";
 import { adMeta } from "@/lib/ad-meta";
+import { canRenew, expiryLabel, isAdActive, RENEW_DAYS } from "@/lib/ad-active";
+import { canClose } from "@/lib/ad-status-rules";
+import { prisma } from "@/lib/prisma";
 import { BidForm } from "./BidForm";
 
 export const dynamic = "force-dynamic";
+
+/** Срок объявления (30 дней с публикации). Истёкшего уже нет в поиске, но ссылка могла остаться. */
+async function adExpiresAt(id: string): Promise<Date | null> {
+  const row = await prisma.classified.findUnique({ where: { id }, select: { expiresAt: true } }).catch(() => null);
+  return row?.expiresAt ?? null;
+}
 
 /** Свой заголовок и описание: для поиска и превью ссылки в мессенджерах. */
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -26,6 +35,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     cityName: ad.cityName,
     description: ad.description,
     demo: isDemoAd(ad.attrs),
+    expired: !isAdActive(await adExpiresAt(ad.id)),
   });
   return {
     title: { absolute: m.title },
@@ -37,10 +47,13 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ClassifiedDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ renewed?: string; renew?: string }>;
 }) {
   const { id } = await resolveParams(params);
+  const sp = (await searchParams) ?? {};
   // Count the view before rendering so popularity reflects real visits.
   await incrementViews(id).catch(() => {});
   const ad = await getClassifiedPublic(id);
@@ -53,6 +66,14 @@ export default async function ClassifiedDetailPage({
   const bidMode = isBidAd(ad);
   // Пример от площадки: написать автору нельзя, вместо кнопки честное пояснение.
   const demo = isDemoAd(ad.attrs);
+  // Истёкшее объявление: честно говорим, что оно уже не действует, и не зовём писать.
+  const now = new Date();
+  const expiresAt = await adExpiresAt(ad.id);
+  const expired = !isAdActive(expiresAt, now);
+  // Автор видит срок, может продлить или снять объявление прямо здесь.
+  const renewable = isAuthor && !demo && ad.status === "PUBLISHED" && canRenew(expiresAt, now);
+  const closable = isAuthor && !demo && canClose(ad.status);
+  const term = isAuthor && !expired ? expiryLabel(expiresAt, now) : "";
   const place = locationLine(ad);
 
   // Характеристики с русскими подписями; VIN показываем не целиком.
@@ -66,6 +87,13 @@ export default async function ClassifiedDetailPage({
       <Link href="/classifieds" className="mb-4 inline-block text-sm text-zinc-600 hover:underline">
         ← К объявлениям
       </Link>
+
+      {isAuthor && sp.renewed === "1" && (
+        <p className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800" role="status">Объявление продлено на {RENEW_DAYS} дней и снова видно в поиске.</p>
+      )}
+      {isAuthor && sp.renew === "fail" && (
+        <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">Не получилось продлить: это можно сделать за 3 дня до конца срока или позже.</p>
+      )}
 
       <div className="grid gap-6 md:grid-cols-2">
         <div>
@@ -142,7 +170,7 @@ export default async function ClassifiedDetailPage({
                 {ad.sellerVerified ? " · верифицированный продавец ✓" : ""}
               </p>
             )}
-            <p className="mt-1 text-zinc-500">Опубликовано {timeAgo(ad.createdAt)}</p>
+            <p className="mt-1 text-zinc-500">Опубликовано {timeAgo(ad.createdAt)}{term ? ` · действует: ${term}` : ""}</p>
           </div>
 
           {demo ? (
@@ -152,18 +180,52 @@ export default async function ClassifiedDetailPage({
                 Разместить своё объявление
               </Link>
             </div>
+          ) : expired && !isAuthor ? (
+            <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm" role="note">
+              <p>Срок этого объявления истёк, оно больше не действует.</p>
+              <Link href={`/classifieds?vertical=${ad.vertical}`} className="btn btn-primary mt-3 inline-block">
+                Похожие объявления
+              </Link>
+            </div>
           ) : isAuthor ? (
-            <Link href={`/classifieds/${ad.id}/replies`} className="btn btn-primary mt-4 inline-block">
-              {ad.vertical === "JOB" ? "Отклики" : bidMode ? "Предложения и сообщения" : "Сообщения"}: {myReplies?.threads ?? 0}
-              {myReplies && myReplies.unread > 0 ? `, новых ${myReplies.unread}` : ""}
-            </Link>
+            <>
+              {(expired || renewable) && (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+                  <p>{expired ? "Срок объявления истёк, его больше не видно в поиске." : "Срок объявления скоро закончится."}</p>
+                  {renewable && (
+                    <form action={`/api/classifieds/${ad.id}/renew?back=ad`} method="POST" className="mt-2">
+                      <button type="submit" className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white">
+                        Продлить на {RENEW_DAYS} дней
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Link href={`/classifieds/${ad.id}/replies`} className="btn btn-primary inline-block">
+                  {ad.vertical === "JOB" ? "Отклики" : bidMode ? "Предложения и сообщения" : "Сообщения"}: {myReplies?.threads ?? 0}
+                  {myReplies && myReplies.unread > 0 ? `, новых ${myReplies.unread}` : ""}
+                </Link>
+                {/* После снятия страница объявления больше не открывается, поэтому возврат в «Мои объявления». */}
+                {closable && (
+                  <form action={`/api/classifieds/${ad.id}/close?do=close&reason=deal`} method="POST">
+                    <button type="submit" className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">Сделка состоялась</button>
+                  </form>
+                )}
+                {closable && (
+                  <form action={`/api/classifieds/${ad.id}/close?do=close`} method="POST">
+                    <button type="submit" className="btn btn-ghost">Снять с публикации</button>
+                  </form>
+                )}
+              </div>
+            </>
           ) : (
             <Link href={`/classifieds/${ad.id}/chat`} className={`btn mt-4 inline-block ${bidMode ? "btn-ghost" : "btn-primary"}`}>
               {replyWording(ad).button}
             </Link>
           )}
 
-          {!demo && !isAuthor && bidMode && <BidForm classifiedId={ad.id} signedIn={Boolean(viewer)} />}
+          {!demo && !expired && !isAuthor && bidMode && <BidForm classifiedId={ad.id} signedIn={Boolean(viewer)} />}
 
           {isJob ? (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">

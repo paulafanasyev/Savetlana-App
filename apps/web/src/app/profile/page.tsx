@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { timeAgo } from "@/lib/format";
 import { isVkLive } from "@/lib/domains/vk";
 import { isEsiaLive } from "@/lib/domains/esia";
+import { telegramStatus } from "@/lib/domains/telegram-link";
+import { TelegramConnect } from "@/components/TelegramConnect";
 import { VerifyEmailButton } from "./verify-email-button";
 import { LogoutAllButton } from "./logout-all-button";
 import { ChangePasswordForm } from "./change-password-form";
@@ -37,9 +39,12 @@ export default async function ProfilePage() {
     );
   }
 
-  const openDisputes = await prisma.dispute.count({
-    where: { buyerId: user.id, status: { notIn: ["CLOSED", "RESOLVED_BUYER", "RESOLVED_SELLER"] } },
-  });
+  const [openDisputes, telegram] = await Promise.all([
+    prisma.dispute.count({
+      where: { buyerId: user.id, status: { notIn: ["CLOSED", "RESOLVED_BUYER", "RESOLVED_SELLER"] } },
+    }),
+    telegramStatus(user.id).catch(() => ({ configured: false, linked: false, botUsername: null })),
+  ]);
   const stats = [
     { label: "Заказов", value: user._count.orders, href: "/orders" },
     { label: "Избранное", value: user._count.favorites, href: "/favorites" },
@@ -112,6 +117,12 @@ export default async function ProfilePage() {
           Редактирование имени и телефона доступно в разделе «Конфиденциальность».
         </p>
       </section>
+
+      {(telegram.configured || telegram.linked) && (
+        <div className="mb-6">
+          <TelegramConnect configured={telegram.configured} linked={telegram.linked} endpoint="/api/profile/telegram" audience="user" />
+        </div>
+      )}
 
       <SecuritySection />
 
