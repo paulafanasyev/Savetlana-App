@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPublicSellerProfile, listSellerProducts } from "@/lib/domains/sellers";
-import { rub, availabilityLabel } from "@/lib/format";
+import { checkStatusLabel, taxCheck } from "@/lib/domains/seller-trust-display";
+import { rub, availabilityLabel, plural, REVIEW_FORMS } from "@/lib/format";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 import { resolveParams } from "@/lib/page-params";
 
@@ -18,6 +19,8 @@ export default async function SellerPage({ params }: PageProps) {
   const products = await listSellerProducts(profile.id);
   const { stats } = profile;
   const verifiedSeller = profile.badges.some((b) => b.key === "verified_seller");
+  // Налоговый статус смотрим тот, что подходит к типу продавца (у физлица его нет).
+  const tax = taxCheck(profile);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -59,19 +62,19 @@ export default async function SellerPage({ params }: PageProps) {
             <div className="mt-4 grid grid-cols-2 gap-3 border-t border-surface-line pt-4 text-center sm:grid-cols-4">
               <div>
                 <div className="text-lg font-bold text-ink">{stats.productsPublished}</div>
-                <div className="text-xs text-ink-soft">товаров</div>
+                <div className="text-xs text-ink-soft">{plural(stats.productsPublished, ["товар", "товара", "товаров"])}</div>
               </div>
               <div>
                 <div className="text-lg font-bold text-ink">
                   {stats.reviewsCount > 0 ? `★ ${stats.rating.toFixed(1)}` : "—"}
                 </div>
                 <div className="text-xs text-ink-soft">
-                  {stats.reviewsCount > 0 ? `рейтинг, ${stats.reviewsCount} ${reviewsWord(stats.reviewsCount)}` : "пока нет отзывов"}
+                  {stats.reviewsCount > 0 ? `рейтинг, ${stats.reviewsCount} ${plural(stats.reviewsCount, REVIEW_FORMS)}` : "пока нет отзывов"}
                 </div>
               </div>
               <div>
                 <div className="text-lg font-bold text-ink">{stats.completedOrders}</div>
-                <div className="text-xs text-ink-soft">заказов доставлено</div>
+                <div className="text-xs text-ink-soft">{plural(stats.completedOrders, ["заказ доставлен", "заказа доставлено", "заказов доставлено"])}</div>
               </div>
               <div>
                 <div className="text-lg font-bold text-ink">
@@ -97,11 +100,7 @@ export default async function SellerPage({ params }: PageProps) {
 
             <div className="mt-3 flex flex-wrap gap-2">
               <VerificationChip label="Личность" status={profile.identityStatus} />
-              {profile.sellerType === "SELF_EMPLOYED" ? (
-                <VerificationChip label="Статус самозанятого (ФНС)" status={profile.npdStatus} />
-              ) : (
-                <VerificationChip label={profile.sellerType === "COMPANY" ? "Организация" : "ИП"} status={profile.businessStatus} />
-              )}
+              {tax && <VerificationChip label={tax.label} status={tax.status} />}
             </div>
             <p className="mt-2 text-xs text-ink-faint">
               Отметки ставятся только по ответу официального источника (ФНС, Госуслуги) или после проверки модератором.
@@ -167,14 +166,6 @@ function sellerTypeLabel(s: string): string {
   }
 }
 
-function reviewsWord(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "отзыв";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "отзыва";
-  return "отзывов";
-}
-
 function levelClass(level: string): string {
   if (level === "trusted" || level === "good") return "font-semibold text-green-700";
   if (level === "complaints") return "font-semibold text-bad";
@@ -184,12 +175,11 @@ function levelClass(level: string): string {
 function VerificationChip({ label, status }: { label: string; status: string }) {
   const ok = status === "VERIFIED";
   const pending = status === "PENDING";
-  const rejected = status === "REJECTED" || status === "REVOKED";
   return (
     <span
       className={`chip ${ok ? "bg-green-50 text-green-700" : pending ? "bg-amber-50 text-amber-700" : "text-ink-soft"}`}
     >
-      {label}: {ok ? "✓ проверено" : pending ? "на проверке" : rejected ? "не подтверждено" : "не проверено"}
+      {label}: {checkStatusLabel(status)}
     </span>
   );
 }
