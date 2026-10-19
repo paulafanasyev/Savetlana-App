@@ -4,6 +4,27 @@ export function rub(kopecks: number | null | undefined): string {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(kopecks / 100) + " ₽";
 }
 
+/**
+ * Форма слова после числа: plural(1, ["отзыв", "отзыва", "отзывов"]) → «отзыв»,
+ * 3 → «отзыва», 5 и 11–14 → «отзывов». Дробные числа дают форму для 2–4.
+ */
+export function plural(n: number, forms: readonly [string, string, string]): string {
+  if (!Number.isInteger(n)) return forms[1];
+  const abs = Math.abs(n);
+  const mod10 = abs % 10;
+  const mod100 = abs % 100;
+  if (mod10 === 1 && mod100 !== 11) return forms[0];
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
+  return forms[2];
+}
+
+/** Число и слово вместе: countText(21, ["отзыв", "отзыва", "отзывов"]) → «21 отзыв». */
+export function countText(n: number, forms: readonly [string, string, string]): string {
+  return `${new Intl.NumberFormat("ru-RU").format(n)} ${plural(n, forms)}`;
+}
+
+export const REVIEW_FORMS = ["отзыв", "отзыва", "отзывов"] as const;
+
 export function availabilityLabel(status: string | null | undefined): string {
   switch (status) {
     case "AVAILABLE":
