@@ -6,6 +6,7 @@ import { AddToCartButton } from "@/components/AddToCartButton";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 import { summarizeReviews, listReviews } from "@/lib/domains/reviews";
+import { shipCitiesBySeller } from "@/lib/domains/seller-ship-from";
 import { resolveParams } from "@/lib/page-params";
 import { resolveSession, serverRequest } from "@/lib/auth";
 import { loadReviewBox } from "@/lib/domains/review-state";
@@ -47,6 +48,8 @@ export default async function ProductPage({ params }: PageProps) {
   const recentReviews = await listReviews(product.id, 6);
   const { user: viewer } = await resolveSession(await serverRequest()).catch(() => ({ user: null }));
   const myReview = await loadReviewBox(viewer?.id ?? null, product.id).catch(() => null);
+  // Откуда продавец отправляет товар (и где самовывоз). Ошибка не ломает страницу.
+  const shipCity = (await shipCitiesBySeller([product.sellerProfile.id]).catch(() => new Map<string, string>())).get(product.sellerProfile.id) ?? null;
   const attrs = safeJson(product.attributes);
   const outOfStock = !product.inventory || product.inventory.quantity <= 0 || product.inventory.availability === "OUT_OF_STOCK";
   const variants = product.variants.map((v) => ({ id: v.id, name: v.name, priceKopecks: product.priceKopecks + v.priceDelta }));
@@ -127,6 +130,9 @@ export default async function ProductPage({ params }: PageProps) {
             {product.inventory?.quantity !== undefined && product.inventory.quantity > 0 && (
               <div className="mt-1 text-xs text-ink-soft">Остаток: {product.inventory.quantity} шт.</div>
             )}
+            {shipCity && (
+              <div className="mt-2 text-xs text-ink-soft">📍 Отправка из г. {shipCity}, там же самовывоз</div>
+            )}
           </div>
 
           <div className="flex flex-wrap items-start gap-3">
@@ -171,6 +177,7 @@ export default async function ProductPage({ params }: PageProps) {
               <p className="mt-1 text-xs text-ink-soft line-clamp-3">{product.sellerProfile.description}</p>
             )}
             <div className="mt-3 space-y-1 text-xs text-ink-soft">
+              {shipCity && <div>Город отгрузки: {shipCity}</div>}
               <div>Личность: {statusLabel(product.sellerProfile.identityStatus)}</div>
               <div>Бизнес: {statusLabel(product.sellerProfile.businessStatus)}</div>
               <div>НПД: {statusLabel(product.sellerProfile.npdStatus)}</div>

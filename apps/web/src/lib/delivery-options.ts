@@ -32,3 +32,19 @@ export function deliveryPrice(method: DeliveryMethod): number {
 export function deliveryLabel(method: string | null | undefined): string {
   return DELIVERY_OPTIONS.find((o) => o.method === method)?.label ?? "Самовывоз у продавца";
 }
+
+/** Подсказка способа доставки с учётом города отгрузки продавца. */
+export function deliveryHint(option: DeliveryOption, shipCity?: string | null): string {
+  if (option.method === "PICKUP" && shipCity) return `В г. ${shipCity}: продавец напишет адрес и время`;
+  return option.hint;
+}
+
+/**
+ * Самовывоз из другого города: честно предупреждаем, если известны оба города
+ * и они разные (без учёта регистра и «ё»).
+ */
+export function pickupElsewhere(method: DeliveryMethod, shipCity?: string | null, myCity?: string | null): boolean {
+  if (method !== "PICKUP" || !shipCity || !myCity) return false;
+  const norm = (s: string) => s.trim().toLowerCase().replace(/ё/g, "е");
+  return norm(shipCity) !== norm(myCity);
+}
