@@ -16,9 +16,14 @@
  * Чеки 54-ФЗ: если включён агентский чек (RECEIPT_AGENT_TYPE), продавец без
  * верного ИНН не торгует. Иначе покупатель дошёл бы до оплаты, а банк отказал
  * бы в чеке.
+ *
+ * Налоговый статус считается по типу продавца (taxCheck): самозанятому нужен НПД из
+ * ФНС, ИП и организации регистрация в ЕГРИП/ЕГРЮЛ. Раньше хватало любого,
+ * и самозанятый с непроверенным НПД торговал по отметке «бизнес подтверждён».
  */
 import { prisma } from "../prisma";
 import { receiptInnBlocker, receiptSettings } from "./receipt";
+import { taxCheck } from "./seller-trust-display";
 
 export type SellerOnboardingState =
   | "REGISTERED"
@@ -39,6 +44,16 @@ export interface OnboardingGate {
 }
 
 /**
+ * Подтверждён ли налоговый статус, нужный именно этому типу продавца.
+ * У физлица (и если тип не известен) остаётся прежнее правило: любой из двух.
+ */
+export function taxStatusOk(s: { sellerType?: string | null; businessStatus: string; npdStatus: string }): boolean {
+  const tax = taxCheck({ sellerType: s.sellerType ?? "", identityStatus: "", businessStatus: s.businessStatus, npdStatus: s.npdStatus });
+  if (tax) return tax.status === "VERIFIED";
+  return s.businessStatus === "VERIFIED" || s.npdStatus === "VERIFIED";
+}
+
+/**
  * Derives the onboarding state from the seller's live profile. This is the
  * single authoritative gate: routes and tools call it instead of eyeballing
  * individual status columns, so the rule cannot drift.
@@ -48,6 +63,7 @@ export async function getSellerOnboardingGate(sellerId: string): Promise<Onboard
     where: { id: sellerId },
     select: {
       id: true,
+      sellerType: true,
       identityStatus: true,
       businessStatus: true,
       npdStatus: true,
@@ -80,9 +96,7 @@ export async function getSellerOnboardingGate(sellerId: string): Promise<Onboard
   }
   state = "IDENTITY_VERIFIED";
 
-  const businessOk =
-    seller.businessStatus === "VERIFIED" || seller.npdStatus === "VERIFIED";
-  if (!businessOk) {
+  if (!taxStatusOk(seller)) {
     blockers.push("статус бизнеса или самозанятости не подтверждён");
     return {
       state,
