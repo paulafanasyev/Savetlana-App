@@ -7,6 +7,7 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 import { summarizeReviews, listReviews } from "@/lib/domains/reviews";
 import { shipCitiesBySeller } from "@/lib/domains/seller-ship-from";
+import { checkStatusLabel, sellerBadges, taxCheck } from "@/lib/domains/seller-trust-display";
 import { attrRows } from "@/lib/product-attrs";
 import { resolveParams } from "@/lib/page-params";
 import { resolveSession, serverRequest } from "@/lib/auth";
@@ -18,6 +19,13 @@ export const dynamic = "force-dynamic";
 interface PageProps {
   params: Promise<{ id: string }>;
 }
+
+const SELLER_TYPE: Record<string, string> = {
+  INDIVIDUAL: "Физическое лицо",
+  SELF_EMPLOYED: "Самозанятый",
+  IP: "ИП",
+  COMPANY: "Юридическое лицо",
+};
 
 export default async function ProductPage({ params }: PageProps) {
   const { id } = await resolveParams(params);
@@ -35,6 +43,7 @@ export default async function ProductPage({ params }: PageProps) {
           displayName: true,
           slug: true,
           description: true,
+          sellerType: true,
           identityStatus: true,
           businessStatus: true,
           npdStatus: true,
@@ -53,6 +62,9 @@ export default async function ProductPage({ params }: PageProps) {
   const shipCity = (await shipCitiesBySeller([product.sellerProfile.id]).catch(() => new Map<string, string>())).get(product.sellerProfile.id) ?? null;
   // Характеристики с русскими подписями (ключи в базе бывают английскими).
   const attrs = attrRows(safeJson(product.attributes));
+  // Те же правила проверки, что и на странице продавца: налоговый статус по типу.
+  const tax = taxCheck(product.sellerProfile);
+  const verifiedSeller = sellerBadges(product.sellerProfile).some((b) => b.key === "verified_seller");
   const outOfStock = !product.inventory || product.inventory.quantity <= 0 || product.inventory.availability === "OUT_OF_STOCK";
   const variants = product.variants.map((v) => ({ id: v.id, name: v.name, priceKopecks: product.priceKopecks + v.priceDelta }));
 
@@ -175,14 +187,17 @@ export default async function ProductPage({ params }: PageProps) {
             >
               {product.sellerProfile.displayName} →
             </Link>
+            {verifiedSeller && (
+              <span className="chip mt-2 bg-green-50 text-xs font-semibold text-green-700" title="Личность и налоговый статус подтверждены">✓ Проверенный продавец</span>
+            )}
             {product.sellerProfile.description && (
               <p className="mt-1 text-xs text-ink-soft line-clamp-3">{product.sellerProfile.description}</p>
             )}
             <div className="mt-3 space-y-1 text-xs text-ink-soft">
+              <div>{SELLER_TYPE[product.sellerProfile.sellerType] ?? "Продавец"}</div>
               {shipCity && <div>Город отгрузки: {shipCity}</div>}
-              <div>Личность: {statusLabel(product.sellerProfile.identityStatus)}</div>
-              <div>Бизнес: {statusLabel(product.sellerProfile.businessStatus)}</div>
-              <div>НПД: {statusLabel(product.sellerProfile.npdStatus)}</div>
+              <div>Личность: {checkStatusLabel(product.sellerProfile.identityStatus)}</div>
+              {tax && <div>{tax.label}: {checkStatusLabel(tax.status)}</div>}
               <div>На площадке с {new Date(product.sellerProfile.createdAt).getFullYear()}</div>
             </div>
             <Link
@@ -267,19 +282,6 @@ export default async function ProductPage({ params }: PageProps) {
       </section>
     </div>
   );
-}
-
-function statusLabel(s: string): string {
-  switch (s) {
-    case "VERIFIED":
-      return "✓ подтверждено";
-    case "PENDING":
-      return "на проверке";
-    case "REJECTED":
-      return "отклонено";
-    default:
-      return "не проверено";
-  }
 }
 
 function safeJson(raw: string | null | undefined): Record<string, unknown> {
