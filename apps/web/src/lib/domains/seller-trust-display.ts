@@ -9,6 +9,10 @@
  * у ИП и организации регистрация в ЕГРИП/ЕГРЮЛ. Чужой для типа статус не
  * показываем, иначе самозанятый получал «ИП подтверждён» и «Проверенного продавца»
  * с непроверенным НПД.
+ *
+ * Демо-магазины (slug demo-…, см. demo-catalog.ts) никто не проверял: их статусы
+ * условные, чтобы демо-заказы проходили. Покупателю пишем «демо, без проверки»
+ * и не даём галочек.
  */
 
 export interface SellerBadge {
@@ -18,6 +22,14 @@ export interface SellerBadge {
 }
 
 type SellerStatuses = { sellerType: string; identityStatus: string; businessStatus: string; npdStatus: string };
+
+/** Статус для показа у демо-магазина вместо условного VERIFIED. */
+export const DEMO_STATUS = "DEMO";
+
+/** Демо-магазин из демо-каталога (те же slug, что считает demoCatalogStatus). */
+export function isDemoSeller(s: { slug?: string | null }): boolean {
+  return typeof s.slug === "string" && s.slug.startsWith("demo-");
+}
 
 /** Какой налоговый статус проверяется у этого типа продавца; null у физлица. */
 export function taxCheck(s: SellerStatuses): { label: string; status: string } | null {
@@ -33,7 +45,9 @@ export function taxCheck(s: SellerStatuses): { label: string; status: string } |
   }
 }
 
-export function sellerBadges(s: SellerStatuses): SellerBadge[] {
+export function sellerBadges(s: SellerStatuses & { slug?: string | null }): SellerBadge[] {
+  // У демо-магазина ничего не проверяли: галочек нет.
+  if (isDemoSeller(s)) return [];
   const identity = s.identityStatus === "VERIFIED";
   const tax = taxCheck(s);
   const taxVerified = tax?.status === "VERIFIED";
@@ -61,9 +75,16 @@ export function checkStatusLabel(status: string): string {
     case "REJECTED":
     case "REVOKED":
       return "не подтверждено";
+    case DEMO_STATUS:
+      return "демо, без проверки";
     default:
       return "не проверено";
   }
+}
+
+/** Статус для показа: у демо-магазина всегда «демо», каким бы ни был статус в базе. */
+export function shownStatus(s: { slug?: string | null }, status: string): string {
+  return isDemoSeller(s) ? DEMO_STATUS : status;
 }
 
 export interface RatingInput {
