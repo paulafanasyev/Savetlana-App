@@ -13,6 +13,7 @@ import { isDemoAd, locationLine } from "@/lib/location-line";
 import { adMeta } from "@/lib/ad-meta";
 import { canRenew, expiryLabel, isAdActive, RENEW_DAYS } from "@/lib/ad-active";
 import { canClose } from "@/lib/ad-status-rules";
+import { canEdit } from "@/lib/ad-edit";
 import { prisma } from "@/lib/prisma";
 import { BidForm } from "./BidForm";
 
@@ -50,7 +51,7 @@ export default async function ClassifiedDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ renewed?: string; renew?: string }>;
+  searchParams?: Promise<{ renewed?: string; renew?: string; edited?: string }>;
 }) {
   const { id } = await resolveParams(params);
   const sp = (await searchParams) ?? {};
@@ -70,9 +71,10 @@ export default async function ClassifiedDetailPage({
   const now = new Date();
   const expiresAt = await adExpiresAt(ad.id);
   const expired = !isAdActive(expiresAt, now);
-  // Автор видит срок, может продлить или снять объявление прямо здесь.
+  // Автор видит срок, может продлить, исправить или снять объявление прямо здесь.
   const renewable = isAuthor && !demo && ad.status === "PUBLISHED" && canRenew(expiresAt, now);
   const closable = isAuthor && !demo && canClose(ad.status);
+  const editable = isAuthor && !demo && canEdit(ad.status);
   const term = isAuthor && !expired ? expiryLabel(expiresAt, now) : "";
   const place = locationLine(ad);
 
@@ -93,6 +95,9 @@ export default async function ClassifiedDetailPage({
       )}
       {isAuthor && sp.renew === "fail" && (
         <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">Не получилось продлить: это можно сделать за 3 дня до конца срока или позже.</p>
+      )}
+      {isAuthor && sp.edited === "1" && (
+        <p className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800" role="status">Изменения сохранены.</p>
       )}
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -206,6 +211,11 @@ export default async function ClassifiedDetailPage({
                   {ad.vertical === "JOB" ? "Отклики" : bidMode ? "Предложения и сообщения" : "Сообщения"}: {myReplies?.threads ?? 0}
                   {myReplies && myReplies.unread > 0 ? `, новых ${myReplies.unread}` : ""}
                 </Link>
+                {editable && (
+                  <Link href={`/classifieds/${ad.id}/edit`} className="btn btn-ghost inline-block">
+                    Редактировать
+                  </Link>
+                )}
                 {/* После снятия страница объявления больше не открывается, поэтому возврат в «Мои объявления». */}
                 {closable && (
                   <form action={`/api/classifieds/${ad.id}/close?do=close&reason=deal`} method="POST">

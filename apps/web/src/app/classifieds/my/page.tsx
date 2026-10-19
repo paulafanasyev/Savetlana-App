@@ -9,6 +9,7 @@ import { readObject } from "@/lib/db/json";
 import { dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
 import { canRenew, expiryLabel, isAdActive, RENEW_DAYS } from "@/lib/ad-active";
 import { canClose, canReopen } from "@/lib/ad-status-rules";
+import { canEdit } from "@/lib/ad-edit";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ const EXPIRED = { label: "Срок истёк, не видно в поиске",
 
 type Notice = { tone: "ok" | "warn" | "bad"; text: string };
 
-/** Итог последнего действия из адреса: продление, снятие, возврат. */
+/** Итог последнего действия из адреса: продление, снятие, возврат, правка. */
 function noticeOf(sp: Record<string, string | undefined>): Notice | null {
   if (sp.renewed === "1") return { tone: "ok", text: `Объявление продлено на ${RENEW_DAYS} дней и снова видно в поиске.` };
   if (sp.renew === "fail") return { tone: "bad", text: "Не получилось продлить: это можно сделать только с опубликованным объявлением за 3 дня до конца срока или позже." };
@@ -35,6 +36,7 @@ function noticeOf(sp: Record<string, string | undefined>): Notice | null {
   if (sp.closed === "1") return { tone: "ok", text: "Объявление снято с публикации. Его больше не видно в поиске, вернуть можно в любой момент." };
   if (sp.reopened === "1") return { tone: "ok", text: `Объявление снова в поиске на ${RENEW_DAYS} дней.` };
   if (sp.reopened === "review") return { tone: "warn", text: "Объявление отправлено на проверку модератору и появится в поиске после неё." };
+  if (sp.edited === "review") return { tone: "warn", text: "Изменения сохранены, но объявление сначала посмотрит модератор. Пока идёт проверка, его не видно в поиске." };
   if (sp.status === "fail") return { tone: "bad", text: "Не получилось изменить объявление. Обновите страницу и попробуйте ещё раз." };
   return null;
 }
@@ -97,6 +99,7 @@ export default async function MyClassifiedsPage({ searchParams }: { searchParams
             const renewable = published && canRenew(ad.expiresAt, now);
             const closable = canClose(ad.status);
             const reopenable = canReopen(ad.status);
+            const editable = canEdit(ad.status);
             return (
               <li key={ad.id} className="flex gap-4 rounded-xl border border-zinc-200 bg-white p-4">
                 {cover ? (
@@ -123,7 +126,7 @@ export default async function MyClassifiedsPage({ searchParams }: { searchParams
                   {ad.status === "MODERATION" && (
                     <p className="mt-1 text-xs text-amber-900">Пока модератор не проверит объявление, его не видно в поиске. Обычно это занимает до суток.</p>
                   )}
-                  {(renewable || closable || reopenable) && (
+                  {(renewable || closable || reopenable || editable) && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {renewable && (
                         <form action={`/api/classifieds/${ad.id}/renew`} method="POST">
@@ -138,6 +141,11 @@ export default async function MyClassifiedsPage({ searchParams }: { searchParams
                             Вернуть в поиск
                           </button>
                         </form>
+                      )}
+                      {editable && (
+                        <Link href={`/classifieds/${ad.id}/edit`} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium">
+                          Редактировать
+                        </Link>
                       )}
                       {closable && published && (
                         <form action={`/api/classifieds/${ad.id}/close?do=close&reason=deal`} method="POST">
