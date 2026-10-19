@@ -6,6 +6,9 @@ import { prisma } from "../prisma";
 import { DEMO_SHIP_CITIES, SHIP_FROM_LABEL, resolveShipCity } from "../ship-from";
 import { audit } from "./audit";
 
+/** Почта демо-аккаунтов (demo-catalog.ts): по ней отличаем демо от настоящих продавцов. */
+const DEMO_EMAIL_SUFFIX = "@demo.svetlana.local";
+
 export async function getShipCity(userId: string): Promise<string | null> {
   const row = await prisma.address.findFirst({ where: { userId, label: SHIP_FROM_LABEL }, select: { city: true } });
   return row?.city ?? null;
@@ -51,7 +54,12 @@ export async function shipCitiesBySeller(sellerIds: string[]): Promise<Map<strin
 
 let demoReady = false;
 
-/** Демо-магазинам без города один раз проставляем город (повторный вызов ничего не меняет). */
+/**
+ * Демо-магазинам один раз проставляем город (повторный вызов ничего не меняет).
+ * Демо-самозанятому ставим условный НПД так же, как демо-ИП и организациям стоит
+ * условная регистрация: иначе по новому правилу он не сможет принимать демо-заказы.
+ * Настоящих продавцев не трогаем: только аккаунты с демо-почтой.
+ */
 export async function ensureDemoShipCities(): Promise<void> {
   if (demoReady) return;
   const sellers = await prisma.sellerProfile.findMany({
@@ -64,5 +72,11 @@ export async function ensureDemoShipCities(): Promise<void> {
     if (!city) continue;
     await prisma.address.create({ data: { userId: s.userId, label: SHIP_FROM_LABEL, line1: city.name, city: city.name, region: city.regionName, isDefault: false } });
   }
+  await prisma.sellerProfile
+    .updateMany({
+      where: { sellerType: "SELF_EMPLOYED", npdStatus: { not: "VERIFIED" }, user: { email: { endsWith: DEMO_EMAIL_SUFFIX } } },
+      data: { npdStatus: "VERIFIED" },
+    })
+    .catch(() => undefined);
   demoReady = true;
 }
