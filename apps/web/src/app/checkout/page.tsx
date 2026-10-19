@@ -5,7 +5,8 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { useEffect, useState, type ChangeEvent, type FormEvent, type InputHTMLAttributes } from "react";
 import { rub } from "@/lib/format";
-import { DELIVERY_OPTIONS, deliveryPrice, type DeliveryMethod } from "@/lib/delivery-options";
+import { readCityCookie } from "@/lib/my-city";
+import { DELIVERY_OPTIONS, deliveryHint, deliveryPrice, pickupElsewhere, type DeliveryMethod } from "@/lib/delivery-options";
 
 interface CheckoutResult {
   orders: Array<{ id: string; number: string; totalKopecks: number; deliveryKopecks?: number; itemsCount: number }>;
@@ -14,7 +15,7 @@ interface CheckoutResult {
   riskExplanation: string | null;
 }
 
-interface SellerRow { sellerId: string; sellerName: string; subtotalKopecks: number; itemsCount: number }
+interface SellerRow { sellerId: string; sellerName: string; subtotalKopecks: number; itemsCount: number; shipCity?: string | null }
 
 type FormState = { city: string; street: string; house: string; apartment: string; zip: string; recipientName: string; phone: string };
 
@@ -47,8 +48,11 @@ export default function CheckoutPage() {
   const [sellers, setSellers] = useState<SellerRow[] | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "auth" | "error">("loading");
   const [choice, setChoice] = useState<Record<string, DeliveryMethod>>({});
+  // «Мой город» из куки: чтобы предупредить про самовывоз в другом городе.
+  const [myCity, setMyCity] = useState<string | null>(null);
 
   useEffect(() => {
+    setMyCity(readCityCookie(document.cookie));
     void fetch("/api/checkout/options")
       .then(async (r) => {
         if (r.status === 401) return setLoadState("auth");
@@ -190,7 +194,9 @@ export default function CheckoutPage() {
           {loadState === "error" && <p className="text-sm text-bad">Не удалось загрузить корзину. Обновите страницу.</p>}
           {(sellers ?? []).map((s) => (
             <fieldset key={s.sellerId} className="mb-3 rounded-xl border border-surface-line p-3">
-              <legend className="px-1 text-sm font-medium">{s.sellerName} · товаров: {s.itemsCount} · {rub(s.subtotalKopecks)}</legend>
+              <legend className="px-1 text-sm font-medium">
+                {s.sellerName}{s.shipCity ? ` · из г. ${s.shipCity}` : ""} · товаров: {s.itemsCount} · {rub(s.subtotalKopecks)}
+              </legend>
               {DELIVERY_OPTIONS.map((o) => (
                 <label key={o.method} className="flex cursor-pointer items-start gap-2 py-1 text-sm">
                   <input
@@ -202,10 +208,15 @@ export default function CheckoutPage() {
                   />
                   <span>
                     <b>{o.label}</b> · {o.priceKopecks ? rub(o.priceKopecks) : "бесплатно"}
-                    <span className="block text-xs text-ink-soft">{o.hint}</span>
+                    <span className="block text-xs text-ink-soft">{deliveryHint(o, s.shipCity)}</span>
                   </span>
                 </label>
               ))}
+              {pickupElsewhere(methodFor(s.sellerId), s.shipCity, myCity) && (
+                <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">
+                  Продавец в г. {s.shipCity}, а ваш город {myCity}. Забрать заказ нужно будет там, или выберите доставку.
+                </p>
+              )}
             </fieldset>
           ))}
         </section>
