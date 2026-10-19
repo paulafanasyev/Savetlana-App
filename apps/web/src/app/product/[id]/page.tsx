@@ -7,6 +7,7 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 import { summarizeReviews, listReviews } from "@/lib/domains/reviews";
 import { shipCitiesBySeller } from "@/lib/domains/seller-ship-from";
+import { attrRows } from "@/lib/product-attrs";
 import { resolveParams } from "@/lib/page-params";
 import { resolveSession, serverRequest } from "@/lib/auth";
 import { loadReviewBox } from "@/lib/domains/review-state";
@@ -50,7 +51,8 @@ export default async function ProductPage({ params }: PageProps) {
   const myReview = await loadReviewBox(viewer?.id ?? null, product.id).catch(() => null);
   // Откуда продавец отправляет товар (и где самовывоз). Ошибка не ломает страницу.
   const shipCity = (await shipCitiesBySeller([product.sellerProfile.id]).catch(() => new Map<string, string>())).get(product.sellerProfile.id) ?? null;
-  const attrs = safeJson(product.attributes);
+  // Характеристики с русскими подписями (ключи в базе бывают английскими).
+  const attrs = attrRows(safeJson(product.attributes));
   const outOfStock = !product.inventory || product.inventory.quantity <= 0 || product.inventory.availability === "OUT_OF_STOCK";
   const variants = product.variants.map((v) => ({ id: v.id, name: v.name, priceKopecks: product.priceKopecks + v.priceDelta }));
 
@@ -147,14 +149,14 @@ export default async function ProductPage({ params }: PageProps) {
             </div>
           )}
 
-          {Object.keys(attrs).length > 0 && (
+          {attrs.length > 0 && (
             <div>
               <h2 className="mb-2 text-lg font-bold text-ink">Характеристики</h2>
               <dl className="card divide-y divide-surface-line text-sm">
-                {Object.entries(attrs).map(([k, v]) => (
-                  <div key={k} className="flex justify-between px-4 py-2.5">
-                    <dt className="text-ink-soft">{k}</dt>
-                    <dd className="font-medium text-ink">{String(v)}</dd>
+                {attrs.map((row) => (
+                  <div key={row.key} className="flex justify-between gap-4 px-4 py-2.5">
+                    <dt className="text-ink-soft">{row.label}</dt>
+                    <dd className="text-right font-medium text-ink">{row.value}</dd>
                   </div>
                 ))}
               </dl>
@@ -282,7 +284,8 @@ function statusLabel(s: string): string {
 
 function safeJson(raw: string | null | undefined): Record<string, unknown> {
   try {
-    return typeof raw === "string" ? JSON.parse(raw) : {};
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
   } catch {
     return {};
   }
