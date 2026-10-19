@@ -3,7 +3,7 @@ import { requireUserServer } from "@/lib/auth";
 import { listMyClassifieds } from "@/lib/domains/classifieds";
 import { replyCountsByAd } from "@/lib/domains/classified-replies";
 import { telegramStatus } from "@/lib/domains/telegram-link";
-import { rub, timeAgo } from "@/lib/format";
+import { countText, rub, timeAgo } from "@/lib/format";
 import { priceText } from "@/lib/classified-fields";
 import { readObject } from "@/lib/db/json";
 import { dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
@@ -25,6 +25,8 @@ const STATUS: Record<string, { label: string; tone: string }> = {
 };
 
 const EXPIRED = { label: "Срок истёк, не видно в поиске", tone: "bg-amber-50 text-amber-900" };
+
+const VIEW_FORMS = ["просмотр", "просмотра", "просмотров"] as const;
 
 type Notice = { tone: "ok" | "warn" | "bad"; text: string };
 
@@ -121,7 +123,7 @@ export default async function MyClassifiedsPage({ searchParams }: { searchParams
                   )}
                   <p className="text-sm text-zinc-600">
                     {ad.priceKopecks > 0 ? priceText(ad.dealType, readObject(ad.attrs), rub(ad.priceKopecks)) : isJob ? "Зарплата по договорённости" : "Цена не указана"}
-                    {" · "}{ad.city.name} · {ad.views} просмотров · {timeAgo(ad.createdAt)}
+                    {" · "}{ad.city.name} · {countText(ad.views, VIEW_FORMS)} · {timeAgo(ad.createdAt)}
                   </p>
                   {ad.status === "MODERATION" && (
                     <p className="mt-1 text-xs text-amber-900">Пока модератор не проверит объявление, его не видно в поиске. Обычно это занимает до суток.</p>
