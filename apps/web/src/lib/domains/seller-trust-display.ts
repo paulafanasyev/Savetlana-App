@@ -4,6 +4,11 @@
  * Чистые функции, только по фактам из базы. Отметка ставится, когда проверку
  * провёл официальный источник (ФНС, Госуслуги) или модератор; рейтинг считается
  * только по реальным заказам и отзывам.
+ *
+ * Налоговый статус зависит от типа продавца (taxCheck): у самозанятого это НПД,
+ * у ИП и организации регистрация в ЕГРИП/ЕГРЮЛ. Чужой для типа статус не
+ * показываем, иначе самозанятый получал «ИП подтверждён» и «Проверенного продавца»
+ * с непроверенным НПД.
  */
 
 export interface SellerBadge {
@@ -12,20 +17,53 @@ export interface SellerBadge {
   hint: string;
 }
 
-export function sellerBadges(s: { sellerType: string; identityStatus: string; businessStatus: string; npdStatus: string }): SellerBadge[] {
+type SellerStatuses = { sellerType: string; identityStatus: string; businessStatus: string; npdStatus: string };
+
+/** Какой налоговый статус проверяется у этого типа продавца; null у физлица. */
+export function taxCheck(s: SellerStatuses): { label: string; status: string } | null {
+  switch (s.sellerType) {
+    case "SELF_EMPLOYED":
+      return { label: "Статус самозанятого (ФНС)", status: s.npdStatus };
+    case "IP":
+      return { label: "ИП (ЕГРИП)", status: s.businessStatus };
+    case "COMPANY":
+      return { label: "Организация (ЕГРЮЛ)", status: s.businessStatus };
+    default:
+      return null;
+  }
+}
+
+export function sellerBadges(s: SellerStatuses): SellerBadge[] {
   const identity = s.identityStatus === "VERIFIED";
-  const npd = s.npdStatus === "VERIFIED";
-  const business = s.businessStatus === "VERIFIED";
+  const tax = taxCheck(s);
+  const taxVerified = tax?.status === "VERIFIED";
   const badges: SellerBadge[] = [];
-  if (identity && (npd || business)) {
+  if (identity && taxVerified) {
     badges.push({ key: "verified_seller", label: "Проверенный продавец", hint: "Личность и налоговый статус подтверждены" });
   }
-  if (npd) badges.push({ key: "npd_fns", label: "Самозанятый, подтверждено ФНС", hint: "Статус плательщика НПД проверен в сервисе ФНС" });
-  if (business) {
+  if (s.sellerType === "SELF_EMPLOYED" && taxVerified) {
+    badges.push({ key: "npd_fns", label: "Самозанятый, подтверждено ФНС", hint: "Статус плательщика НПД проверен в сервисе ФНС" });
+  }
+  if ((s.sellerType === "IP" || s.sellerType === "COMPANY") && taxVerified) {
     badges.push({ key: "business", label: s.sellerType === "COMPANY" ? "Организация подтверждена" : "ИП подтверждён", hint: "Регистрация проверена по данным ЕГРЮЛ/ЕГРИП" });
   }
   if (identity) badges.push({ key: "identity", label: "Личность подтверждена", hint: "Через Госуслуги или проверку документов" });
   return badges;
+}
+
+/** Подпись статуса проверки для покупателя. */
+export function checkStatusLabel(status: string): string {
+  switch (status) {
+    case "VERIFIED":
+      return "✓ проверено";
+    case "PENDING":
+      return "на проверке";
+    case "REJECTED":
+    case "REVOKED":
+      return "не подтверждено";
+    default:
+      return "не проверено";
+  }
 }
 
 export interface RatingInput {

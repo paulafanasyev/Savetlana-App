@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPublicSellerProfile, listSellerProducts } from "@/lib/domains/sellers";
+import { checkStatusLabel, taxCheck } from "@/lib/domains/seller-trust-display";
 import { rub, availabilityLabel, plural, REVIEW_FORMS } from "@/lib/format";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 import { resolveParams } from "@/lib/page-params";
@@ -18,6 +19,8 @@ export default async function SellerPage({ params }: PageProps) {
   const products = await listSellerProducts(profile.id);
   const { stats } = profile;
   const verifiedSeller = profile.badges.some((b) => b.key === "verified_seller");
+  // Налоговый статус смотрим тот, что подходит к типу продавца (у физлица его нет).
+  const tax = taxCheck(profile);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -97,11 +100,7 @@ export default async function SellerPage({ params }: PageProps) {
 
             <div className="mt-3 flex flex-wrap gap-2">
               <VerificationChip label="Личность" status={profile.identityStatus} />
-              {profile.sellerType === "SELF_EMPLOYED" ? (
-                <VerificationChip label="Статус самозанятого (ФНС)" status={profile.npdStatus} />
-              ) : (
-                <VerificationChip label={profile.sellerType === "COMPANY" ? "Организация" : "ИП"} status={profile.businessStatus} />
-              )}
+              {tax && <VerificationChip label={tax.label} status={tax.status} />}
             </div>
             <p className="mt-2 text-xs text-ink-faint">
               Отметки ставятся только по ответу официального источника (ФНС, Госуслуги) или после проверки модератором.
@@ -176,12 +175,11 @@ function levelClass(level: string): string {
 function VerificationChip({ label, status }: { label: string; status: string }) {
   const ok = status === "VERIFIED";
   const pending = status === "PENDING";
-  const rejected = status === "REJECTED" || status === "REVOKED";
   return (
     <span
       className={`chip ${ok ? "bg-green-50 text-green-700" : pending ? "bg-amber-50 text-amber-700" : "text-ink-soft"}`}
     >
-      {label}: {ok ? "✓ проверено" : pending ? "на проверке" : rejected ? "не подтверждено" : "не проверено"}
+      {label}: {checkStatusLabel(status)}
     </span>
   );
 }
