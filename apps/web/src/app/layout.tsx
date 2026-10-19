@@ -1,4 +1,5 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { SvetlanaDock } from "@/components/SvetlanaDock";
@@ -8,6 +9,7 @@ import { WeatherWidget } from "@/components/WeatherWidget";
 import { PromoLayout } from "@/components/PromoRail";
 import { env } from "@/lib/env";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/seo";
+import { viewportFor } from "@/lib/viewport";
 
 // The whole app is auth-gated and interactive, so pages render per request.
 // Setting this at the root propagates to every route and synthesized page.
@@ -31,6 +33,12 @@ export const metadata: Metadata = {
     type: "website",
   },
 };
+
+/** «Полная версия» в браузере телефона должна показывать широкую страницу (lib/viewport.ts). */
+export async function generateViewport(): Promise<Viewport> {
+  const ua = (await headers()).get("user-agent");
+  return viewportFor(ua);
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
