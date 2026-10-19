@@ -67,6 +67,8 @@ const RULES: RouteRule[] = [
   { side: "seller", agent: "notification", pattern: /напомни|правил[о|а] автоматиза|если .* сообщи/i },
 
   // Buyer-side intents
+  // B2B: торг за партию и запрос КП (negotiate_quote). Раньше общего поиска с «оптом».
+  { side: "buyer", agent: "buyer", pattern: /поторгу|торг(?![а-яё])|торговаться|договорись о цене|оптов\S* цен|цен\S* (?:за|на) парти|скидк\S* (?:за|на) (?:объём|объем|парти)|коммерческ\S* предложен|(?:^|\s)КП(?:\s|$)/i },
   // Работа, сотрудники, исполнители и фриланс: поиск по объявлениям (search_classifieds).
   { side: "buyer", agent: "search", pattern: /ваканси|работу(?![а-яё])|работы(?![а-яё])|подработ|трудоустро|сотрудник|соискател|фриланс|исполнител|мастер(?:а|ов)?\s+(?:на|по|для)\s|услуг[иуа]?(?![а-яё])/i },
   { side: "buyer", agent: "support", pattern: /сообщени|переписк|ответил.* продав|написал.* продав/i },
@@ -116,9 +118,9 @@ export function routeAgent(text: string, side: "buyer" | "seller"): RouteResult 
  * role-level permissions via the registry; this just shapes the prompt.
  */
 export const AGENT_TOOLS: Record<AgentKey, string[]> = {
-  buyer: ["search_products", "search_classifieds", "compare_products", "get_product", "search_sellers", "get_reviews", "check_inventory", "cart_add", "create_order", "get_order", "cancel_order", "get_tracking", "get_payment_status", "request_return", "create_dispute", "confirm_receipt", "wishlist_add", "recall_memory", "remember_preference", "seller_messages", "seller_today"],
+  buyer: ["search_products", "search_classifieds", "compare_products", "get_product", "search_sellers", "get_reviews", "check_inventory", "negotiate_quote", "cart_add", "create_order", "get_order", "cancel_order", "get_tracking", "get_payment_status", "request_return", "create_dispute", "confirm_receipt", "wishlist_add", "recall_memory", "remember_preference", "seller_messages", "seller_today"],
   seller: ["analyze_seller_sales", "seller_customers", "seller_today", "seller_messages", "start_promotion", "end_promotion", "extend_promotion", "product_health", "advise_price", "change_price", "confirm_inventory", "extend_listing", "create_product_draft", "publish_product", "find_competitors", "scan_global_competitors", "global_search", "delivery_quotes", "document_requirements", "create_workflow_rule"],
-  search: ["search_products", "search_cheaper", "compare_products", "get_product", "search_sellers", "global_search", "search_classifieds", "check_vin"],
+  search: ["search_products", "search_cheaper", "compare_products", "get_product", "search_sellers", "negotiate_quote", "global_search", "search_classifieds", "check_vin"],
   vision: ["vision_search", "search_products", "search_cheaper", "compare_products"],
   recommendation: ["search_products", "recall_memory"],
   gift: ["plan_gift", "upcoming_events", "gift_context"],

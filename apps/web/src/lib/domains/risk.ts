@@ -10,6 +10,7 @@
  */
 import { prisma } from "../prisma";
 import { audit } from "./audit";
+import { verifiedQuoteForOrder } from "./b2b-quotes";
 
 export type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "REVIEW" | "BLOCKED";
 
@@ -145,9 +146,23 @@ export async function evaluateOrderRisk(orderGroupId: string): Promise<RiskVerdi
     };
   }
 
-  // R5 — price integrity: item price must match the product's current price
+  // R5 — price integrity: item price must match the product's current price.
+  // Единственное исключение: заказ по подлинному КП (B2B-торг), которое
+  // подтвердили продавец и покупатель. Цена и количество должны совпасть с КП,
+  // а подделанное в базе КП подлинным не считается (b2b-quotes.ts).
   for (const o of group.orders) {
+    const quote = await verifiedQuoteForOrder(o.deliveryAddress, buyerId);
     for (const item of o.items) {
+      if (
+        quote &&
+        item.priceKopecks !== item.product.priceKopecks &&
+        quote.productId === item.product.id &&
+        quote.unitPriceKopecks === item.priceKopecks &&
+        quote.quantity === item.quantity
+      ) {
+        signals.b2bQuote = quote.id;
+        continue;
+      }
       if (item.priceKopecks !== item.product.priceKopecks) {
         fired.push("R5");
         signals.priceMismatch = {
