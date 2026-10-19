@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { rub, availabilityLabel } from "@/lib/format";
+import { rub, availabilityLabel, countText, plural, REVIEW_FORMS } from "@/lib/format";
 import { AddToCartButton } from "@/components/AddToCartButton";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
@@ -102,7 +102,7 @@ export default async function ProductPage({ params }: PageProps) {
             <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-ink-soft">
               <span>★ {product.rating.toFixed(1)}</span>
               <span>·</span>
-              <span>{product.reviewsCount} отзывов</span>
+              <span>{countText(product.reviewsCount, REVIEW_FORMS)}</span>
               <span>·</span>
               <span>Артикул {product.sku}</span>
             </div>
@@ -201,7 +201,7 @@ export default async function ProductPage({ params }: PageProps) {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="card p-4">
             <div className="text-3xl font-bold text-ink">{reviewSummary.averageRating.toFixed(1)}</div>
-            <div className="text-xs text-ink-soft">из {reviewSummary.count} отзывов</div>
+            <div className="text-xs text-ink-soft">средняя оценка, {countText(reviewSummary.count, REVIEW_FORMS)}</div>
           </div>
           {Object.entries(reviewSummary.distribution).map(([rating, count]) => (
             <div key={rating} className="card p-4 text-sm">
@@ -216,7 +216,7 @@ export default async function ProductPage({ params }: PageProps) {
             <div className="flex flex-wrap gap-2">
               {reviewSummary.recurringTerms.slice(0, 10).map((t) => (
                 <span key={t.term} className="chip">
-                  {t.term} · {t.count} раз
+                  {t.term} · {t.count} {plural(t.count, ["раз", "раза", "раз"])}
                 </span>
               ))}
             </div>
