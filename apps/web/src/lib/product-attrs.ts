@@ -76,6 +76,9 @@ const LABELS: Record<string, string> = {
   duration: "Длительность",
 };
 
+/** Служебные поля площадки, покупателю не нужны. */
+const HIDDEN = new Set(["demo", "demoVersion"]);
+
 function normKey(key: string): string {
   return key.trim().replace(/[\s_-]+(\w)/g, (_, c: string) => c.toUpperCase());
 }
@@ -93,8 +96,9 @@ export function attrLabel(key: string): string {
 export function attrValue(value: unknown): string {
   if (value === true) return "да";
   if (value === false) return "нет";
-  if (Array.isArray(value)) return value.map(attrValue).join(", ");
-  const s = String(value ?? "").trim();
+  if (Array.isArray(value)) return value.map(attrValue).filter(Boolean).join(", ");
+  if (value === null || value === undefined || typeof value === "object") return "";
+  const s = String(value).trim();
   const lower = s.toLowerCase();
   if (lower === "yes" || lower === "true") return "да";
   if (lower === "no" || lower === "false") return "нет";
@@ -103,8 +107,11 @@ export function attrValue(value: unknown): string {
 
 /** Ряды таблицы «Характеристики»: пустые значения и служебные поля не показываем. */
 export function attrRows(attrs: Record<string, unknown>): { key: string; label: string; value: string }[] {
-  return Object.entries(attrs)
-    .filter(([k, v]) => !k.startsWith("_") && k !== "demo" && v !== null && v !== undefined && typeof v !== "object" || Array.isArray(v))
-    .map(([k, v]) => ({ key: k, label: attrLabel(k), value: attrValue(v) }))
-    .filter((r) => r.value !== "");
+  const rows: { key: string; label: string; value: string }[] = [];
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith("_") || HIDDEN.has(k)) continue;
+    const value = attrValue(v);
+    if (value) rows.push({ key: k, label: attrLabel(k), value });
+  }
+  return rows;
 }
