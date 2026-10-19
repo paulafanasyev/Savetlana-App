@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { rub, availabilityLabel } from "@/lib/format";
+import { rub, availabilityLabel, countText, plural, REVIEW_FORMS } from "@/lib/format";
 import { AddToCartButton } from "@/components/AddToCartButton";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 import { summarizeReviews, listReviews } from "@/lib/domains/reviews";
+import { shipCitiesBySeller } from "@/lib/domains/seller-ship-from";
+import { checkStatusLabel, sellerBadges, taxCheck } from "@/lib/domains/seller-trust-display";
+import { attrRows } from "@/lib/product-attrs";
 import { resolveParams } from "@/lib/page-params";
 import { resolveSession, serverRequest } from "@/lib/auth";
 import { loadReviewBox } from "@/lib/domains/review-state";
@@ -16,6 +19,13 @@ export const dynamic = "force-dynamic";
 interface PageProps {
   params: Promise<{ id: string }>;
 }
+
+const SELLER_TYPE: Record<string, string> = {
+  INDIVIDUAL: "Физическое лицо",
+  SELF_EMPLOYED: "Самозанятый",
+  IP: "ИП",
+  COMPANY: "Юридическое лицо",
+};
 
 export default async function ProductPage({ params }: PageProps) {
   const { id } = await resolveParams(params);
@@ -33,6 +43,7 @@ export default async function ProductPage({ params }: PageProps) {
           displayName: true,
           slug: true,
           description: true,
+          sellerType: true,
           identityStatus: true,
           businessStatus: true,
           npdStatus: true,
@@ -47,7 +58,13 @@ export default async function ProductPage({ params }: PageProps) {
   const recentReviews = await listReviews(product.id, 6);
   const { user: viewer } = await resolveSession(await serverRequest()).catch(() => ({ user: null }));
   const myReview = await loadReviewBox(viewer?.id ?? null, product.id).catch(() => null);
-  const attrs = safeJson(product.attributes);
+  // Откуда продавец отправляет товар (и где самовывоз). Ошибка не ломает страницу.
+  const shipCity = (await shipCitiesBySeller([product.sellerProfile.id]).catch(() => new Map<string, string>())).get(product.sellerProfile.id) ?? null;
+  // Характеристики с русскими подписями (ключи в базе бывают английскими).
+  const attrs = attrRows(safeJson(product.attributes));
+  // Те же правила проверки, что и на странице продавца: налоговый статус по типу.
+  const tax = taxCheck(product.sellerProfile);
+  const verifiedSeller = sellerBadges(product.sellerProfile).some((b) => b.key === "verified_seller");
   const outOfStock = !product.inventory || product.inventory.quantity <= 0 || product.inventory.availability === "OUT_OF_STOCK";
   const variants = product.variants.map((v) => ({ id: v.id, name: v.name, priceKopecks: product.priceKopecks + v.priceDelta }));
 
@@ -97,7 +114,7 @@ export default async function ProductPage({ params }: PageProps) {
             <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-ink-soft">
               <span>★ {product.rating.toFixed(1)}</span>
               <span>·</span>
-              <span>{product.reviewsCount} отзывов</span>
+              <span>{countText(product.reviewsCount, REVIEW_FORMS)}</span>
               <span>·</span>
               <span>Артикул {product.sku}</span>
             </div>
@@ -127,6 +144,9 @@ export default async function ProductPage({ params }: PageProps) {
             {product.inventory?.quantity !== undefined && product.inventory.quantity > 0 && (
               <div className="mt-1 text-xs text-ink-soft">Остаток: {product.inventory.quantity} шт.</div>
             )}
+            {shipCity && (
+              <div className="mt-2 text-xs text-ink-soft">📍 Отправка из г. {shipCity}, там же самовывоз</div>
+            )}
           </div>
 
           <div className="flex flex-wrap items-start gap-3">
@@ -141,14 +161,14 @@ export default async function ProductPage({ params }: PageProps) {
             </div>
           )}
 
-          {Object.keys(attrs).length > 0 && (
+          {attrs.length > 0 && (
             <div>
               <h2 className="mb-2 text-lg font-bold text-ink">Характеристики</h2>
               <dl className="card divide-y divide-surface-line text-sm">
-                {Object.entries(attrs).map(([k, v]) => (
-                  <div key={k} className="flex justify-between px-4 py-2.5">
-                    <dt className="text-ink-soft">{k}</dt>
-                    <dd className="font-medium text-ink">{String(v)}</dd>
+                {attrs.map((row) => (
+                  <div key={row.key} className="flex justify-between gap-4 px-4 py-2.5">
+                    <dt className="text-ink-soft">{row.label}</dt>
+                    <dd className="text-right font-medium text-ink">{row.value}</dd>
                   </div>
                 ))}
               </dl>
@@ -167,13 +187,17 @@ export default async function ProductPage({ params }: PageProps) {
             >
               {product.sellerProfile.displayName} →
             </Link>
+            {verifiedSeller && (
+              <span className="chip mt-2 bg-green-50 text-xs font-semibold text-green-700" title="Личность и налоговый статус подтверждены">✓ Проверенный продавец</span>
+            )}
             {product.sellerProfile.description && (
               <p className="mt-1 text-xs text-ink-soft line-clamp-3">{product.sellerProfile.description}</p>
             )}
             <div className="mt-3 space-y-1 text-xs text-ink-soft">
-              <div>Личность: {statusLabel(product.sellerProfile.identityStatus)}</div>
-              <div>Бизнес: {statusLabel(product.sellerProfile.businessStatus)}</div>
-              <div>НПД: {statusLabel(product.sellerProfile.npdStatus)}</div>
+              <div>{SELLER_TYPE[product.sellerProfile.sellerType] ?? "Продавец"}</div>
+              {shipCity && <div>Город отгрузки: {shipCity}</div>}
+              <div>Личность: {checkStatusLabel(product.sellerProfile.identityStatus)}</div>
+              {tax && <div>{tax.label}: {checkStatusLabel(tax.status)}</div>}
               <div>На площадке с {new Date(product.sellerProfile.createdAt).getFullYear()}</div>
             </div>
             <Link
@@ -192,7 +216,7 @@ export default async function ProductPage({ params }: PageProps) {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="card p-4">
             <div className="text-3xl font-bold text-ink">{reviewSummary.averageRating.toFixed(1)}</div>
-            <div className="text-xs text-ink-soft">из {reviewSummary.count} отзывов</div>
+            <div className="text-xs text-ink-soft">средняя оценка, {countText(reviewSummary.count, REVIEW_FORMS)}</div>
           </div>
           {Object.entries(reviewSummary.distribution).map(([rating, count]) => (
             <div key={rating} className="card p-4 text-sm">
@@ -207,7 +231,7 @@ export default async function ProductPage({ params }: PageProps) {
             <div className="flex flex-wrap gap-2">
               {reviewSummary.recurringTerms.slice(0, 10).map((t) => (
                 <span key={t.term} className="chip">
-                  {t.term} · {t.count} раз
+                  {t.term} · {t.count} {plural(t.count, ["раз", "раза", "раз"])}
                 </span>
               ))}
             </div>
@@ -260,22 +284,10 @@ export default async function ProductPage({ params }: PageProps) {
   );
 }
 
-function statusLabel(s: string): string {
-  switch (s) {
-    case "VERIFIED":
-      return "✓ подтверждено";
-    case "PENDING":
-      return "на проверке";
-    case "REJECTED":
-      return "отклонено";
-    default:
-      return "не проверено";
-  }
-}
-
 function safeJson(raw: string | null | undefined): Record<string, unknown> {
   try {
-    return typeof raw === "string" ? JSON.parse(raw) : {};
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
   } catch {
     return {};
   }
