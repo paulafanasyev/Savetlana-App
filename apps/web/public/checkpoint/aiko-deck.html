@@ -101,6 +101,12 @@ h2{font-size:38px;margin-bottom:20px}
 .feat b{display:block;font-size:16px;margin-bottom:3px}
 .feat span{display:block;font-size:13.8px;color:var(--soft);line-height:1.38}
 .mini td,.mini th{font-size:13.5px;padding:6px 9px}
+.src{position:absolute;left:64px;bottom:16px;right:64px;font-size:10.5px;color:var(--faint);line-height:1.3}
+.big3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.big3 div{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+.big3 b{display:block;font-size:36px;font-weight:800;color:var(--s700);line-height:1.05}
+.big3 span{display:block;font-size:14.5px;color:var(--soft);margin-top:6px;line-height:1.3}
+.cmp td{text-align:center}.cmp td:first-child{text-align:left;font-weight:600}.cmp tr.me td{background:var(--s50);color:var(--s800);font-weight:700}
 </style>
 </head>
 <body>
@@ -133,6 +139,33 @@ h2{font-size:38px;margin-bottom:20px}
 <div class="card"><h3>Покупатель</h3><ul><li>Перебирает фильтры и десятки карточек</li><li>Рассылает запросы КП и ждёт ответов</li><li>Сам сравнивает цены, сроки и условия оплаты</li><li>Сам проверяет продавца по ЕГРЮЛ и реестрам</li><li>Рискует предоплатой и мошенниками в чатах</li></ul></div>
 <div class="card"><h3>Продавец</h3><ul><li>Вручную заводит карточки и переносит каталог</li><li>Отвечает на однотипные вопросы и торгуется сам</li><li>Не понимает, почему упали продажи</li><li>Следит за ценами конкурентов и акциями вручную</li><li>Готовит КП, договор, счёт и УПД под каждую сделку</li></ul></div></div>
 <div class="bubble"><img src="/images/avatar/svetlana-master.jpg" alt=""><div>Я беру рутину на себя: поиск, переписку, торг, документы. Людям остаются решения.</div></div>
+</section>
+
+<section class="slide tint">
+<div class="kicker">Рынок</div>
+<h2>B2B-закупки уходят в онлайн, а торг и сбор КП всё ещё ручные</h2>
+<div class="big3">
+<div><b>65,8 трлн ₽</b><span>онлайн-закупки и продажи B2B/B2G в России, 2024; прогноз 154,7 трлн ₽ к 2030</span></div>
+<div><b>1,8 трлн ₽</b><span>B2B-маркетплейсы и интернет-магазины, 2024; прогноз 2,84 трлн ₽ к 2030</span></div>
+<div><b>~2 трлн ₽</b><span>закупки малого объёма в год: ~0,97 трлн по 44-ФЗ и ~1 трлн по 223-ФЗ (2024)</span></div>
+<div><b>6,4 млн</b><span>субъектов МСП в реестре ФНС: основная аудитория мелкого опта</span></div>
+<div><b>1,4 млн</b><span>B2B-покупателей уже покупают на маркетплейсах</span></div>
+<div><b>9,2 трлн ₽</b><span>договоров с МСП по 223-ФЗ за 2024 год</span></div></div>
+<div class="card accent" style="margin-top:16px"><p style="color:var(--ink)"><b>Наш сегмент:</b> мелкий и средний опт и закупки малого объёма, где сделка слишком мала для тендера, но слишком велика, чтобы покупать по прайсу без торга.</p></div>
+<div class="src">Источники: Data Insight «B2B/B2G e-commerce» 2025 (datainsight.ru); ФНС, реестр МСП на 10.07.2025; ФАС, итоги 223-ФЗ за 2024.</div>
+</section>
+
+<section class="slide ">
+<div class="kicker">Конкуренты</div>
+<h2>Каталоги и тендеры есть у всех. Торга агент с агентом нет ни у кого</h2>
+<table class="mini cmp"><tr><th>Площадка</th><th>Каталог / заказ</th><th>Запрос КП у нескольких</th><th>Торг ИИ-агентов</th><th>Проверка продавца в сделке</th><th>Договор, счёт, УПД</th></tr>
+<tr><td>Ozon / Яндекс Маркет / WB для бизнеса</td><td>да</td><td>нет</td><td>нет</td><td>частично</td><td>УПД, ЭДО</td></tr>
+<tr><td>B2B-Center</td><td>нет</td><td>да, ручные ставки</td><td>нет</td><td>да</td><td>частично</td></tr>
+<tr><td>Supl.biz</td><td>нет</td><td>да</td><td>нет, звонки менеджера</td><td>частично</td><td>нет</td></tr>
+<tr><td>Портал поставщиков Москвы</td><td>оферты</td><td>котировочные сессии</td><td>бот ставок одного поставщика</td><td>да</td><td>контракт</td></tr>
+<tr class="me"><td>АИКО</td><td>да</td><td>до 5 продавцов одной фразой</td><td>да, в пределах правил людей</td><td>да, в каждом КП</td><td>да, из КП</td></tr></table>
+<div class="grid g2" style="margin-top:16px"><div class="card violet"><h3>Наше отличие</h3><p>агент покупателя сам договаривается с агентами продавцов о цене, сроке и оплате, а люди только подтверждают</p></div><div class="card"><h3>Честно</h3><p>сравнение по открытым материалам площадок на 2024–2026 годы; закрытые пилоты конкурентов могут существовать</p></div></div>
+<div class="src">Источники: сайты и справка Ozon, Яндекс Маркета, Wildberries, b2b-center.ru, supl.biz, tender.mos.ru (2025–2026).</div>
 </section>
 
 <section class="slide tint">
@@ -285,7 +318,7 @@ h2{font-size:38px;margin-bottom:20px}
 <section class="slide tint">
 <div class="kicker">Экран: запрос цены у нескольких продавцов</div>
 <h2>Реверсивный аукцион одной фразой</h2>
-<div class="cols wide"><div><div class="shot"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/svetlana</span></div><img class="real" src="/checkpoint/shots/rfq.png" alt="" onerror="this.remove()"><div class="mock"><div class="msg u"><div>Собери КП на перчатки рабочие, 500 штук</div></div><div class="msg"><img src="/images/avatar/svetlana-master.jpg" alt=""><div>Запросила цену у 3 продавцов на 500 шт. Лучшее: <b>Демо-опт СнабЦентр, 44 ₽ за штуку</b>, итого 22 000 ₽.<br>1) СнабЦентр: 44 ₽ (прайс 48 ₽), договорились за 4 раунда ← лучшее<br>2) ЗащитаПро: 46 ₽ (прайс 52 ₽), договорились<br>3) УпакСервис: 55 ₽ по прайсу, продавец не торгуется<br>КП отправлено продавцу на подтверждение: <u>Мои КП</u></div></div></div></div><div class="cap">Макет экрана, цифры примерные. Живой экран: /svetlana</div></div>
+<div class="cols wide"><div><div class="shot"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/svetlana</span></div><img class="real" src="/checkpoint/shots/rfq.png" alt="" onerror="this.remove()"><div class="mock"><div class="msg u"><div>Собери КП на перчатки рабочие, 500 штук</div></div><div class="msg"><img src="/images/avatar/svetlana-master.jpg" alt=""><div>Запросила цену у 3 продавцов на 500 шт. Лучшее: <b>Демо-опт СнабЦентр, 45 ₽ за штуку</b>, итого 22 500 ₽.<br>1) СнабЦентр: 45 ₽ (прайс 48 ₽), договорились за 6 раундов ← лучшее<br>2) ЗащитаПро: 46 ₽ (прайс 52 ₽), договорились за 5 раундов<br>3) УпакСервис: 55 ₽ по прайсу, продавец не торгуется<br>КП отправлено продавцу на подтверждение: <u>Мои КП</u></div></div></div></div><div class="cap">Цифры посчитаны движком торга прототипа на демо-оптовиках. Живой экран: /svetlana</div></div>
 <div><div class="card violet" style="margin-bottom:14px"><h3>Условия, а не только цена</h3><ul><li>срочная поставка с наценкой продавца</li><li>скидка за 100% предоплату</li><li>отсрочка с наценкой за каждые 30 дней</li><li>просьбу сверх правил агент не принимает молча, а предлагает ближайшее</li></ul></div>
 <div class="card"><h3>Демо-данные</h3><p>Три демо-оптовика с разными правилами торга загружаются одной кнопкой в админке. Реквизиты условные, это честно помечено.</p></div></div></div>
 
@@ -294,7 +327,7 @@ h2{font-size:38px;margin-bottom:20px}
 <section class="slide ">
 <div class="kicker">Экран: КП и проверка продавца</div>
 <h2>Покупатель видит условия и то, кому платит</h2>
-<div class="cols wide"><div><div class="shot"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/quotes</span></div><img class="real" src="/checkpoint/shots/quotes.png" alt="" onerror="this.remove()"><div class="mock"><h4>КП-7F3A21 · «Перчатки рабочие ХБ с ПВХ, 10 класс»</h4><p class="mut">продавец подтвердил, можно оформить заказ</p><p style="margin:6px 0">500 шт. по <b>44 ₽</b> вместо 48 ₽ (скидка 8,3%), итого <b>22 000 ₽</b>.</p><div style="border:1px solid #1f7a45;background:#eef8f2;border-radius:9px;padding:8px 10px;margin:8px 0"><b>Проверка продавца «Демо-опт СнабЦентр»</b><div class="row"><span>✓ ИНН и ОГРН</span><span class="mut">контрольные суммы</span></div><div class="row"><span>✓ Проверка площадкой</span><span class="mut">модерация АИКО</span></div><div class="row"><span>? ЕГРЮЛ / ЕГРИП</span><span class="mut">DaData или вручную</span></div><div class="row"><span>? Реестр недобросовестных</span><span class="mut">ссылка на ЕИС</span></div><div class="row"><span>! История на площадке</span><span class="mut">сделок пока нет</span></div></div><p><span class="btn">Оформить заказ по цене КП</span></p><p class="mut">Документы: Договор поставки · Счёт · УПД</p></div></div><div class="cap">Макет экрана по прототипу. Живой экран: /quotes</div></div>
+<div class="cols wide"><div><div class="shot"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/quotes</span></div><img class="real" src="/checkpoint/shots/quotes.png" alt="" onerror="this.remove()"><div class="mock"><h4>КП-7F3A21 · «Перчатки рабочие ХБ с ПВХ, 10 класс»</h4><p class="mut">продавец подтвердил, можно оформить заказ</p><p style="margin:6px 0">500 шт. по <b>45 ₽</b> вместо 48 ₽ (скидка 6,3%), итого <b>22 500 ₽</b>.</p><div style="border:1px solid #1f7a45;background:#eef8f2;border-radius:9px;padding:8px 10px;margin:8px 0"><b>Проверка продавца «Демо-опт СнабЦентр»</b><div class="row"><span>✓ ИНН и ОГРН</span><span class="mut">контрольные суммы</span></div><div class="row"><span>✓ Проверка площадкой</span><span class="mut">модерация АИКО</span></div><div class="row"><span>? ЕГРЮЛ / ЕГРИП</span><span class="mut">DaData или вручную</span></div><div class="row"><span>? Реестр недобросовестных</span><span class="mut">ссылка на ЕИС</span></div><div class="row"><span>! История на площадке</span><span class="mut">сделок пока нет</span></div></div><p><span class="btn">Оформить заказ по цене КП</span></p><p class="mut">Документы: Договор поставки · Счёт · УПД</p></div></div><div class="cap">Макет экрана по прототипу. Живой экран: /quotes</div></div>
 <div><div class="card violet" style="margin-bottom:14px"><h3>Каждая проверка с источником</h3><p>Не один «магический балл», а список: что проверено, чем, и что нужно проверить вручную. Итог: можно работать / осторожно / не рекомендуем.</p></div>
 <div class="card"><h3>Защита от подмены</h3><p>Условия КП хранятся с отпечатком sha256. Если изменить цену в базе, оплата блокируется, а документы не формируются.</p></div></div></div>
 
@@ -307,7 +340,7 @@ h2{font-size:38px;margin-bottom:20px}
 <div class="card violet"><h3>КП</h3><p>условия с отпечатком, срок 7 дней, уведомление продавцу, решение человека</p></div>
 <div class="card violet"><h3>Заказ</h3><p>атомарно: статус КП, резерв остатка, заказ на оплату; цена в каталоге не меняется; повторный заказ по КП невозможен</p></div>
 <div class="card violet"><h3>Документы</h3><p>договор поставки сразу, счёт и УПД после заказа; сумма прописью; печать в PDF; видят только стороны сделки</p></div></div></div>
-<div><div class="shot"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/quotes/…/documents/invoice</span></div><img class="real" src="/checkpoint/shots/invoice.png" alt="" onerror="this.remove()"><div class="mock"><h4>Счёт на оплату № СЧ-7F3A21</h4><div style="border:1px solid #000;padding:6px 8px;margin-bottom:8px"><b>Получатель платежа: оператор площадки (агент поставщика)</b><br><span class="mut">Оплата на странице заказа. Переводить деньги напрямую продавцу не нужно.</span></div><div class="row"><span>Перчатки рабочие ХБ с ПВХ · 500 шт × 44,00 ₽</span><b>22 000,00 ₽</b></div><p style="margin-top:6px">Всего к оплате: <b>22 000,00 ₽</b> (Двадцать две тысячи рублей 00 копеек)</p><p class="mut">Ставка НДС продавцом не указана: уточните перед подписанием.</p><p class="mut" style="margin-top:6px">Отпечаток условий КП: 3fa1c09e…</p></div></div><div class="cap">Макет документа. Живой документ: /quotes/…/documents/invoice</div></div></div>
+<div><div class="shot"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/quotes/…/documents/invoice</span></div><img class="real" src="/checkpoint/shots/invoice.png" alt="" onerror="this.remove()"><div class="mock"><h4>Счёт на оплату № СЧ-7F3A21</h4><div style="border:1px solid #000;padding:6px 8px;margin-bottom:8px"><b>Получатель платежа: оператор площадки (агент поставщика)</b><br><span class="mut">Оплата на странице заказа. Переводить деньги напрямую продавцу не нужно.</span></div><div class="row"><span>Перчатки рабочие ХБ с ПВХ · 500 шт × 45,00 ₽</span><b>22 500,00 ₽</b></div><p style="margin-top:6px">Всего к оплате: <b>22 500,00 ₽</b> (Двадцать две тысячи пятьсот рублей 00 копеек)</p><p class="mut">Ставка НДС продавцом не указана: уточните перед подписанием.</p><p class="mut" style="margin-top:6px">Отпечаток условий КП: 3fa1c09e…</p></div></div><div class="cap">Макет документа. Живой документ: /quotes/…/documents/invoice</div></div></div>
 
 </section>
 
@@ -349,8 +382,8 @@ h2{font-size:38px;margin-bottom:20px}
 
 <section class="slide tint">
 <div class="kicker">Оценка эффективности агентов</div>
-<h2>Дашборд «Эффективность агента» в админке</h2>
-<div class="cols wide"><div><div class="shot"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/admin/agents</span></div><img class="real" src="/checkpoint/shots/agents.png" alt="" onerror="this.remove()"><div class="mock"><h4>Эффективность агента B2B <span class="mut">· 7 · 30 · 90 дн.</span></h4><p class="mut">Торг агентов</p><div class="kpi"><div><small>Торгов</small><b>24</b></div><div><small>Договорились</small><b>79%</b></div><div><small>Раундов</small><b>4,2</b></div><div><small>Продавцов</small><b>41</b></div></div><p class="mut">КП и заказы</p><div class="kpi"><div><small>КП</small><b>19</b></div><div><small>Приняли</small><b>84%</b></div><div><small>КП → заказ</small><b>62%</b></div><div><small>Ответ</small><b>18 мин</b></div></div><p class="mut">Безопасность</p><div class="kpi"><div><small>R5 блоки</small><b>2</b></div><div><small>Подделки КП</small><b>1</b></div><div><small>Инъекции</small><b>3</b></div><div><small>AI успех</small><b>99%</b></div></div></div></div><div class="cap">Макет экрана, цифры примерные. Живой экран: /admin/agents</div></div>
+<h2>Эффективность агентов: меряем, а не обещаем</h2>
+<div class="cols wide"><div><div class="shot"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/admin/agents</span></div><img class="real" src="/checkpoint/shots/agents.png" alt="" onerror="this.remove()"><div class="mock"><h4>Эффективность агента B2B <span class="mut">· прогон движка торга</span></h4><p class="mut">1 000 случайных торгов, бюджет покупателя = прайс</p><div class="kpi"><div><small>Договорились</small><b>100%</b></div><div><small>Раундов</small><b>5,3</b></div><div><small>Скидка</small><b>4,2%</b></div><div><small>Нарушений</small><b>0</b></div></div><p class="mut">1 000 торгов с жёстким бюджетом покупателя</p><div class="kpi"><div><small>Договорились</small><b>54%</b></div><div><small>Честный отказ</small><b>46%</b></div><div><small>Уступок сверх правил</small><b>0</b></div><div><small>Выход за бюджет</small><b>0</b></div></div><p class="mut">Демо-аукцион «перчатки, 500 шт.»</p><div class="kpi"><div><small>Продавцов</small><b>3</b></div><div><small>Договорились</small><b>2</b></div><div><small>Лучшая цена</small><b>45 ₽</b></div><div><small>Экономия</small><b>1 500 ₽</b></div></div></div></div><div class="cap">Реальный прогон движка прототипа на случайных правилах продавцов. Живой дашборд считает то же по журналу сделок: /admin/agents</div></div>
 <div><div class="card violet" style="margin-bottom:12px"><h3>Что измеряем</h3><ul><li>торг: доля сделок, раунды, охват продавцов</li><li>КП: принятие продавцами, конверсия в заказ, скорость ответа</li><li>деньги: оборот по КП, экономия покупателей, средняя скидка</li><li>безопасность: подмены цены, подделки КП, инъекции</li><li>модель «Светлана»: успешность, задержка, качество ответов</li></ul></div>
 <div class="card"><h3>Только реальные данные</h3><p>журнал аудита, КП, события риска, вызовы модели</p></div></div></div>
 
@@ -371,11 +404,49 @@ h2{font-size:38px;margin-bottom:20px}
 </section>
 
 <section class="slide tint">
+<div class="kicker">АИКО и Росэлторг</div>
+<h2>Как агенты встраиваются в контур Росэлторга</h2>
+<div class="grid g2">
+<div><div class="card violet" style="margin-bottom:12px"><h3>1 · Росэлторг.Бизнес и коммерческие закупки</h3><p>агент превращает потребность в запрос КП, собирает предложения до 5 поставщиков и проводит переторжку в пределах их правил</p></div>
+<div class="card violet" style="margin-bottom:12px"><h3>2 · Закупки малого объёма</h3><p>сравнение цены, срока и доставки, проект заказа и УПД; электронная закупка товара по ч. 12 ст. 93 44-ФЗ до 5 млн ₽</p></div>
+<div class="card violet" style="margin-bottom:12px"><h3>3 · Обоснование НМЦК</h3><p>автоматический сбор коммерческих предложений и готовый отчёт для закупочной документации</p></div>
+<div class="card violet"><h3>4 · Агент поставщика</h3><p>поставщики площадки подключают агента, который отвечает на подходящие запросы и готовит КП 24/7</p></div></div>
+<div><div class="big3" style="grid-template-columns:1fr 1fr"><div><b>~30%</b><span>доля Росэлторга в 44-ФЗ по НМЦК (1 пол. 2024)</span></div><div><b>8–9 тыс.</b><span>новых процедур в день</span></div><div><b>15 тыс.</b><span>новых поставщиков в год</span></div><div><b>680 тыс.</b><span>пользователей площадки</span></div></div>
+<div class="card accent" style="margin-top:14px"><h3>Сквозной контур</h3><p style="color:var(--ink)">проверка контрагента (ЕГРЮЛ, РНП в ЕИС), КП, договор, ЭДО, а дальше финансовые сервисы площадки: гарантии и факторинг</p></div></div></div>
+<div class="src">Источники: roseltorg.ru (2024–2026), аналитика Росэлторга по 44-ФЗ/223-ФЗ за 1 пол. 2024; КонсультантПлюс, ст. 93 44-ФЗ в ред. 2024.</div>
+</section>
+
+<section class="slide ">
+<div class="kicker">Модель заработка</div>
+<h2>Платит тот, кто получает выгоду от сделки</h2>
+<div class="grid g4">
+<div class="card"><h3>Покупатель</h3><p>базовый запрос КП и торг бесплатно; подписка за лимиты, интеграцию с 1С и аналитику закупок</p></div>
+<div class="card"><h3>Продавец</h3><p>бесплатный старт; подписка за агента-переговорщика 24/7, автоответы и CRM</p></div>
+<div class="card"><h3>Сделка</h3><p>комиссия 0,3–1% от подтверждённой сделки через безопасную сделку</p></div>
+<div class="card"><h3>Финсервисы и B2B2B</h3><p>проверка контрагента, отсрочка через партнёра; модуль для Росэлторг.Бизнес по API (white-label)</p></div></div>
+<table class="mini" style="margin-top:16px"><tr><th>Ориентиры рынка</th><th>Тариф</th></tr>
+<tr><td>Росэлторг.Бизнес, плата за победу</td><td>1% для сделок 1–100 тыс. ₽, далее фикс от 4 900 до 36 900 ₽</td></tr>
+<tr><td>B2B-Center, «Профессиональный поставщик»</td><td>300 тыс. ₽ в год</td></tr>
+<tr><td>Supl.biz, тарифы поставщика</td><td>от 36 750 до 67 150 ₽ в месяц</td></tr></table>
+<div class="src">Источники: rb.roseltorg.ru/pricing (с 02.08.2025); b2b-center.ru/news (2025); supl.biz/prices (2026). Тарифы АИКО ориентировочные, уточняются на пилоте.</div>
+</section>
+
+<section class="slide tint">
 <div class="kicker">Статус и план</div>
 <h2>Прототип работает, следующий шаг — пилот с оптовиками</h2>
 <div class="grid g2"><div class="card"><h3>Работает сейчас</h3><ul><li>сайт и три кабинета, 23 агента, 50 инструментов</li><li>поиск задачей, сравнение, фото, отзывы, подарки</li><li>карточки из текста, импорт, Яндекс Маркет, акции, CRM, аналитика</li><li>торг, аукцион, условия, КП → заказ, договор / счёт / УПД</li><li>проверка контрагента, антифрод, аудит, дашборд эффективности</li><li>оплата, доставка, чеки в тестовом режиме</li></ul></div>
 <div class="card"><h3>До финала</h3><ul><li>дообучение модели «Светлана» на торгах, КП и диалогах площадки</li><li>ключи DaData и платёжного партнёра</li><li>автоответ агента продавца в Telegram</li><li>НДС и реквизиты покупателя-организации, выгрузка в ЭДО</li><li>отсрочка платежа через партнёра (BNPL для бизнеса)</li><li>пилот с 2–3 реальными оптовиками и замер метрик дашборда</li></ul></div></div>
 
+</section>
+
+<section class="slide tint">
+<div class="kicker">Команда</div>
+<h2>Кто делает АИКО</h2>
+<div class="grid g3">
+<div class="card violet"><h3>Павел Афанасьев</h3><p>основатель: продукт, архитектура, разработка и обучение модели «Светлана»</p></div>
+<div class="card violet" style="display:flex;gap:14px;align-items:flex-start"><img src="/images/avatar/svetlana-master.jpg" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover;flex:none"><div><h3>Светлана</h3><p>собственная обученная модель: ведёт покупателей и продавцов, работает 24/7</p></div></div>
+<div class="card"><h3>Усиливаем к пилоту</h3><p>B2B-продажи и работа с поставщиками; ML-инженер для дообучения модели на данных площадки</p></div></div>
+<div class="card accent" style="margin-top:18px"><p style="color:var(--ink)">За время программы прототип вырос до 3 кабинетов, 23 агентов и 50 инструментов при 144 файлах автотестов и 8 проверках CI на каждый релиз.</p></div>
 </section>
 
 <section class="slide dark"><div class="hero"><div style="flex:1"><div class="kicker">Попробовать</div><h2 style="color:#fff">Прототип открыт</h2>
