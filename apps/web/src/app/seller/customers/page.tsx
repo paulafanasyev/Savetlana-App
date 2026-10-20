@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireSellerServer } from "@/lib/auth";
 import { sellerCustomerReport, SEGMENT_LABELS, type CustomerSegment } from "@/lib/domains/seller-crm";
-import { rub, timeAgo } from "@/lib/format";
+import { countText, rub, timeAgo } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +12,8 @@ const SEGMENT_STYLE: Record<CustomerSegment, string> = {
   SLEEPING: "bg-rose-100 text-rose-900",
   ONE_TIME: "bg-surface-muted text-ink-soft",
 };
+
+const ORDER_FORMS = ["заказ", "заказа", "заказов"] as const;
 
 export default async function SellerCustomersPage({ searchParams }: { searchParams: Promise<{ segment?: string }> }) {
   const { sellerId } = await requireSellerServer();
@@ -41,7 +43,7 @@ export default async function SellerCustomersPage({ searchParams }: { searchPara
           {report.months.map((m) => (
             <div key={m.key} className="flex flex-1 flex-col items-center gap-1">
               <div className="text-[11px] text-ink-faint">{m.revenueKopecks > 0 ? rub(m.revenueKopecks) : ""}</div>
-              <div className="w-full rounded-t bg-svetlana-500" style={{ height: `${Math.max(2, Math.round((m.revenueKopecks / maxMonth) * 110))}px` }} title={`${m.orders} заказов`} />
+              <div className="w-full rounded-t bg-svetlana-500" style={{ height: `${Math.max(2, Math.round((m.revenueKopecks / maxMonth) * 110))}px` }} title={countText(m.orders, ORDER_FORMS)} />
               <div className="text-xs text-ink-soft">{m.label}</div>
             </div>
           ))}

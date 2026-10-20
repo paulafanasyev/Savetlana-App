@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { countText, plural } from "@/lib/format";
 
 interface DraftCheck {
   productId: string;
@@ -17,13 +18,7 @@ interface Props {
   gateReason: string | null;
 }
 
-function goodsWord(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "товар";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "товара";
-  return "товаров";
-}
+const GOODS_FORMS = ["товар", "товара", "товаров"] as const;
 
 /** Публикует разом все черновики, у которых есть цена, фото и остаток. */
 export function PublishAllDrafts({ drafts, ready, blocked, more, gateReason }: Props) {
@@ -36,7 +31,7 @@ export function PublishAllDrafts({ drafts, ready, blocked, more, gateReason }: P
 
   async function publish() {
     const n = ready.length;
-    if (!window.confirm(`Опубликовать ${n} ${goodsWord(n)}? Покупатели сразу увидят их в каталоге.`)) return;
+    if (!window.confirm(`Опубликовать ${countText(n, GOODS_FORMS)}? Покупатели сразу увидят их в каталоге.`)) return;
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -53,7 +48,7 @@ export function PublishAllDrafts({ drafts, ready, blocked, more, gateReason }: P
       }
       const skipped = data.skipped?.length ?? 0;
       setMessage(
-        `Опубликовано: ${data.published} ${goodsWord(data.published)}.` +
+        `Опубликовано: ${countText(data.published, GOODS_FORMS)}.` +
           (skipped ? ` Пропущено: ${skipped} (что-то изменилось с момента проверки).` : "")
       );
       window.setTimeout(() => window.location.reload(), 1500);
@@ -71,7 +66,7 @@ export function PublishAllDrafts({ drafts, ready, blocked, more, gateReason }: P
           <h2 id="publish-all-title" className="text-base font-semibold">Черновики: {drafts}</h2>
           <p className="text-sm text-ink-soft">
             Готовы к публикации: {ready.length}
-            {blocked.length > 0 && <>, ещё {blocked.length} ждут доработки</>}
+            {blocked.length > 0 && <>, ещё {blocked.length} {plural(blocked.length, ["ждёт", "ждут", "ждут"])} доработки</>}
             {more && <>. Показаны последние {ready.length + blocked.length}, остальные после следующего захода</>}.
           </p>
         </div>
