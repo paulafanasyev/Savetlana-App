@@ -38,7 +38,7 @@ const AI_TRAINING_AND_MIRROR_BOTS = [
  * поисковикам. Робот с отдельной группой правил не читает общую группу «*», поэтому
  * запреты кабинетов повторены для них явно.
  */
-export const AI_SEARCH_BOTS = [
+const AI_SEARCH_BOTS = [
   "OAI-SearchBot",
   "ChatGPT-User",
   "PerplexityBot",
