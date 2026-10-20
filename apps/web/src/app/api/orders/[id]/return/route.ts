@@ -18,6 +18,7 @@ const NO_LONGER_NEEDED_DAYS = 7;
  *
  * «Не подошёл» принимается 7 дней после доставки. Претензия к качеству (брак, не тот
  * товар, не соответствует описанию) по закону можно заявить и позже, её не ограничиваем.
+ * Права покупателя на сам заказ проверяет transitionOrder.
  */
 export const POST = apiRoute(async (request, { params }) => {
   const { user } = await requireBuyer(request);
@@ -28,7 +29,7 @@ export const POST = apiRoute(async (request, { params }) => {
 
   if (body.reason === "NO_LONGER_NEEDED") {
     const delivered = await prisma.orderHistory.findFirst({
-      where: { orderId: params.id, toStatus: "DELIVERED", order: { buyerId: user.id } },
+      where: { orderId: params.id, toStatus: "DELIVERED" },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true },
     });
