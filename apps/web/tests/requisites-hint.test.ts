@@ -16,7 +16,7 @@ describe("подсказки к ИНН и ОГРН", () => {
   it("опечатку видно по контрольной сумме", () => {
     expect(innHint("770000000083", "SELF_EMPLOYED")).toContain("опечатка");
     expect(innHint("77000a000082", "SELF_EMPLOYED")).toBe("В ИНН только цифры");
-    expect(innHint("", "IP")).toBe("Указите ИНН");
+    expect(innHint("", "IP")).toBe("Укажите ИНН");
   });
 
   it("ОГРН и ОГРНИП", () => {
