@@ -66,6 +66,11 @@ export const PASSWORD_RESET_HOLD_HOURS = 24;
 export interface PayoutHold {
   until: Date;
   reason: string;
+  /**
+   * Пауза без срока: снимается решением администратора (самозанятый, одобренный
+   * автоматически по ФНС, ждёт ручной проверки личности).
+   */
+  indefinite?: boolean;
 }
 
 export function payoutHold(input: { bankChangedAt?: Date | null; passwordResetAt?: Date | null; now?: Date }): PayoutHold | null {
@@ -88,7 +93,15 @@ export function payoutHold(input: { bankChangedAt?: Date | null; passwordResetAt
   return active.reduce((a, b) => (b.until.getTime() > a.until.getTime() ? b : a));
 }
 
+/** Пауза до ручной проверки личности (самозанятый, одобренный по ФНС). */
+export function identityPayoutHold(now = new Date()): PayoutHold {
+  return { until: new Date(now.getTime() + 365 * 24 * 3600_000), reason: "Личность продавца ещё не проверена", indefinite: true };
+}
+
 export function holdMessage(hold: PayoutHold): string {
+  if (hold.indefinite) {
+    return "Магазин одобрен автоматически по данным ФНС, поэтому первая выплата станет доступна после ручной проверки личности. Администратор уже получил заявку. Заказы можно принимать и отправлять, деньги за них числятся за вами.";
+  }
   const when = hold.until.toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
   return `${hold.reason}, поэтому выплата будет доступна с ${when} (МСК). Так мы защищаем деньги, если в аккаунт вошёл не владелец. Если это были не вы, срочно смените пароль и напишите в поддержку.`;
 }

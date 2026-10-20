@@ -19,6 +19,7 @@
  * работодатель пишет соискателю через сообщения площадки.
  *
  * Поиск не показывает объявления с истёкшим сроком (lib/ad-active.ts).
+ * Текст ищем без учёта регистра (lib/text-match.ts): «kia» находит «Kia Rio».
  */
 import { prisma } from "../prisma";
 import { readObject, writeJson } from "../db/json";
@@ -37,6 +38,7 @@ import type { ClassifiedVerdict } from "./classified-guard";
 import { recordSentToModeration, rejectIfBlocked, screenClassified } from "./classified-screening";
 import { scrubResumeListing } from "./contact-scrub";
 import { activeAdClause } from "../ad-active";
+import { textMatchOr } from "../text-match";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -228,7 +230,8 @@ export async function searchCities(query: string, limit = 10) {
   const q = query.trim();
   if (q.length < 2) return [];
   return prisma.city.findMany({
-    where: { name: { contains: q } },
+    // «москва» находит «Москва» и в PostgreSQL.
+    where: { OR: textMatchOr(q, ["name"] as const) },
     include: { region: true },
     take: limit,
     orderBy: { population: "desc" },
@@ -430,10 +433,8 @@ export async function searchClassifieds(
     };
   }
   if (filters.query && filters.query.trim().length >= 2) {
-    where.OR = [
-      { title: { contains: filters.query.trim() } },
-      { description: { contains: filters.query.trim() } },
-    ];
+    // Без учёта регистра: «kia» находит «Kia Rio».
+    where.OR = textMatchOr(filters.query, ["title", "description"] as const);
   }
   if (filters.cursor) {
     where.id = { gt: filters.cursor };

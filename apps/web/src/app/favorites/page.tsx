@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { requireUserServer } from "@/lib/auth";
 import { listFavorites, getOrCreateWishlist, listWishlistItems } from "@/lib/domains/collections";
+import { listAdFavorites } from "@/lib/domains/ad-favorites";
+import { priceText } from "@/lib/classified-fields";
+import { verticalEmoji } from "@/lib/verticals";
 import { rub, availabilityLabel } from "@/lib/format";
 import { AddToCartButton } from "@/components/AddToCartButton";
 import { FavoriteButton } from "@/components/FavoriteButton";
@@ -10,9 +13,11 @@ export const dynamic = "force-dynamic";
 
 export default async function FavoritesPage() {
   const { user } = await requireUserServer();
-  const [favorites, wishlist] = await Promise.all([
+  const [favorites, wishlist, ads] = await Promise.all([
     listFavorites(user.id),
     getOrCreateWishlist(user.id),
+    // Избранные объявления; ошибка хранилища не ломает страницу с товарами.
+    listAdFavorites(user.id).catch(() => []),
   ]);
   const wishlistItems = await listWishlistItems(wishlist.id, user.id);
 
@@ -39,6 +44,50 @@ export default async function FavoritesPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             {favorites.map((p) => (
               <ProductCard key={p.id} id={p.id} title={p.title} priceKopecks={p.priceKopecks} availability={p.availability} quantity={p.quantity ?? null} hasVariants={p.hasVariants === true} sellerName={p.sellerName} imageUrl={p.imageUrl} favorite />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section id="ads" className="mt-10 scroll-mt-24">
+        <h2 className="mb-3 text-lg font-bold text-ink">
+          Объявления <span className="text-ink-faint">({ads.length})</span>
+        </h2>
+        {ads.length === 0 ? (
+          <div className="card p-6 text-sm text-ink-soft">
+            Здесь будут объявления, которые вы отметите «♡ В избранное».{" "}
+            <Link href="/classifieds" className="text-svetlana-700 hover:underline">
+              К объявлениям
+            </Link>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2" data-testid="ad-favorites">
+            {ads.map((ad) => (
+              <div key={ad.id} className={`card flex gap-3 p-3 ${ad.active ? "" : "opacity-70"}`}>
+                <Link href={`/classifieds/${ad.id}`} className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
+                  {ad.cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={ad.cover} alt={ad.title} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-2xl">{verticalEmoji(ad.vertical)}</div>
+                  )}
+                </Link>
+                <div className="min-w-0 flex-1">
+                  <Link href={`/classifieds/${ad.id}`} className="block truncate text-sm font-medium text-ink hover:text-svetlana-700">{ad.title}</Link>
+                  <div className="mt-0.5 text-xs text-ink-soft">
+                    {ad.cityName}
+                    {ad.active ? "" : " · больше не действует"}
+                  </div>
+                  <div className="mt-1 text-sm font-bold text-svetlana-700">
+                    {ad.priceKopecks > 0 ? priceText(ad.dealType, ad.attrs, rub(ad.priceKopecks)) : "Цена не указана"}
+                  </div>
+                  <form action={`/api/classifieds/${ad.id}/favorite?back=favorites`} method="POST" className="mt-2">
+                    <button type="submit" className="rounded-lg border border-zinc-300 px-3 py-1 text-xs text-ink-soft hover:text-ink">
+                      Убрать из избранного
+                    </button>
+                  </form>
+                </div>
+              </div>
             ))}
           </div>
         )}

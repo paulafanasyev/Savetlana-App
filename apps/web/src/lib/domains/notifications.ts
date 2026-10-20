@@ -28,6 +28,8 @@ export type NotificationKind =
   // Отклики на объявления и ответы авторов (см. classified-replies.ts)
   | "classified_reply"
   | "classified_answer"
+  // Новые объявления по сохранённому поиску (см. saved-searches.ts). Человек сам их попросил.
+  | "saved_search"
   // Продавцу: товар заканчивается или закончился (см. stock-alerts.ts)
   | "stock_low"
   // Безопасность аккаунта: сброс пароля, подтверждение почты, смена реквизитов.

@@ -1,6 +1,7 @@
 import { getAdminOverview } from "@/lib/domains/admin";
 import { rub } from "@/lib/format";
 import { orderStatusLabel } from "@/lib/format";
+import { riskLevelLabel } from "@/lib/admin-labels";
 import { DemoCatalogPanel } from "@/components/DemoCatalogPanel";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export default async function AdminOverviewPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Пользователи" value={overview.users.total} hint={`покупателей: ${overview.users.buyers} · продавцов: ${overview.users.sellers}`} />
         <Stat label="Заблокировано" value={overview.users.blocked} />
-        <Stat label="Товары" value={overview.products.total} hint={`активных: ${overview.products.active} · AI-черновиков: ${overview.products.aiDraft}`} />
+        <Stat label="Товары" value={overview.products.total} hint={`активных: ${overview.products.active} · черновиков от ИИ: ${overview.products.aiDraft}`} />
         <Stat label="Заказов" value={overview.orders.total} />
       </div>
 
@@ -43,7 +44,7 @@ export default async function AdminOverviewPage() {
         <Stat label="Оборот (оплачено)" value={rub(overview.payments.grossKopecks)} />
         <Stat label="Комиссия платформы" value={rub(overview.payments.platformFeeKopecks)} hint="из расчётов по заказам" />
         <Stat label="Отзывы" value={overview.reviews.total} hint={`скрытых: ${overview.reviews.hidden}`} />
-        <Stat label="Открытые риски" value={overview.risk.openEvents} hint={riskLevels.map(([l, n]) => `${l}: ${n}`).join(" · ") || "нет"} />
+        <Stat label="Открытые риски" value={overview.risk.openEvents} hint={riskLevels.map(([l, n]) => `${riskLevelLabel(l)}: ${n}`).join(" · ") || "нет"} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

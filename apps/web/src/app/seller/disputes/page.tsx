@@ -47,7 +47,7 @@ export default async function SellerDisputesPage() {
       <h1 className="text-2xl font-bold text-ink">Споры</h1>
 
       {disputes.length === 0 ? (
-        <div className="card p-10 text-center text-ink-soft">Открытых споров нет.</div>
+        <div className="card p-10 text-center text-ink-soft">Споров пока нет.</div>
       ) : (
         <div className="space-y-4">
           {disputes.map((dispute) => {
@@ -55,6 +55,7 @@ export default async function SellerDisputesPage() {
               dispute.status === "RESOLVED_BUYER" ||
               dispute.status === "RESOLVED_SELLER" ||
               dispute.status === "CLOSED";
+            const evidence = evidenceUrls(dispute);
             return (
               <article key={dispute.id} className="card p-5">
                 <div className="mb-3 flex flex-wrap items-center gap-3">
@@ -62,12 +63,11 @@ export default async function SellerDisputesPage() {
                     {STATUS_LABEL[dispute.status] ?? dispute.status}
                   </span>
                   <span className="chip">{REASON_LABEL[dispute.reason] ?? dispute.reason}</span>
-                  <a
-                    href={`/orders/${dispute.orderId}`}
-                    className="text-xs font-mono text-svetlana-700 hover:underline"
-                  >
-                    заказ {dispute.orderId.slice(0, 8)}
+                  {/* Покупатель и продавец видят один и тот же номер заказа, а не кусок служебного id. */}
+                  <a href="/seller/orders" className="text-xs text-svetlana-700 hover:underline">
+                    заказ {dispute.order?.number ?? dispute.orderId.slice(0, 8)}
                   </a>
+                  {dispute.buyer?.name && <span className="text-xs text-ink-soft">покупатель: {dispute.buyer.name}</span>}
                   <span className="ml-auto text-xs text-ink-faint">
                     {new Date(dispute.createdAt).toLocaleDateString("ru-RU")}
                   </span>
@@ -75,9 +75,9 @@ export default async function SellerDisputesPage() {
 
                 <p className="mb-3 text-sm text-ink">{dispute.description}</p>
 
-                {evidenceUrls(dispute).length > 0 && (
+                {evidence.length > 0 && (
                   <div className="mb-3 flex flex-wrap gap-2">
-                    {evidenceUrls(dispute).map((url) => (
+                    {evidence.map((url, i) => (
                       <a
                         key={url}
                         href={url}
@@ -85,7 +85,7 @@ export default async function SellerDisputesPage() {
                         rel="noreferrer"
                         className="chip bg-surface-muted text-ink-soft hover:text-svetlana-700"
                       >
-                        доказательство
+                        доказательство {i + 1}
                       </a>
                     ))}
                   </div>

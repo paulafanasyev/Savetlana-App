@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>АИКО · Светлана — книга проекта (RLT.Startup)</title>
+<meta name="robots" content="noindex">
+<meta name="author" content="Афанасьев Павел Петрович">
+<style>
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{margin:0;background:#e9e5f2;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#1e1b2e}
+.bk{width:1123px;margin:24px auto 90px;background:#fff;padding:38px;box-sizing:border-box;box-shadow:0 20px 60px -24px rgba(56,36,78,.45);border-radius:6px}
+.bk-page{box-sizing:border-box;height:718px;break-after:page;page-break-after:always;margin-bottom:38px}
+.bk-cover{border-radius:22px;overflow:hidden;background:radial-gradient(circle at 85% 30%,rgba(188,169,224,.40),transparent 42%),radial-gradient(circle at 5% 95%,rgba(173,85,18,.25),transparent 40%),linear-gradient(135deg,#38244e,#523577 55%,#654493);color:#fff;padding:52px 56px;display:grid;grid-template-columns:1fr 330px;column-gap:48px;align-items:center}
+.bk-cover .txt{display:flex;flex-direction:column;height:100%}
+.bk-cover .k{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#bca9e0;font-weight:700}
+.bk-cover h1{font-size:104px;line-height:1;margin:20px 0 12px;letter-spacing:-.03em}
+.bk-cover .sub{font-size:24px;line-height:1.3;color:#f1ecfb;margin:0}
+.bk-cover .tags{margin-top:22px}
+.bk-cover .tags span{display:inline-block;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:7px 15px;font-size:14px;margin:0 6px 8px 0}
+.bk-cover .bottom{margin-top:auto;display:flex;align-items:flex-end;gap:24px}
+.bk-cover .who{font-size:14.5px;color:#d9d0ee;line-height:1.55}
+.bk-cover .who b{color:#fff;font-size:21px}
+.bk-cover .who .role{color:#fff;font-weight:600}
+.bk-cover .who a{color:#fff}
+.bk-cover .qr{background:#fff;border-radius:14px;padding:10px;line-height:0}
+.bk-cover .av{width:330px;height:330px;border-radius:50%;object-fit:cover;border:10px solid rgba(255,255,255,.16);box-shadow:0 0 0 18px rgba(188,169,224,.12)}
+.bk-toc{padding:6px 4px;display:grid;grid-template-columns:1.1fr 1fr;gap:34px;align-content:start}
+.bk-toc .head{grid-column:1/-1}
+.bk-toc h2{font-size:34px;margin:0 0 6px}
+.bk-toc .lead{color:#5b5670;margin:0;font-size:16px;line-height:1.5}
+.bk-toc .it{display:grid;grid-template-columns:60px 1fr;gap:16px;align-items:start;border:1px solid #e6e3ef;border-radius:18px;padding:16px 18px;margin-bottom:12px}
+.bk-toc .it .n{width:54px;height:54px;border-radius:16px;background:#654493;color:#fff;font-size:25px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.bk-toc .it h3{margin:2px 0 6px;font-size:19px}
+.bk-toc .it p{margin:0;color:#5b5670;font-size:14px;line-height:1.45}
+.bk-toc h4{font-size:19px;margin:0 0 10px}
+.bk-toc table{border-collapse:collapse;width:100%}
+.bk-toc td{border-bottom:1px solid #e6e3ef;padding:11px 8px;font-size:14.5px;vertical-align:top;line-height:1.4}
+.bk-toc td:first-child{font-weight:700;width:48%}
+.bk-toc .note{margin-top:18px;background:#f6f4fb;border:1px solid #d9d0ee;border-radius:14px;padding:14px 16px;font-size:14px;color:#432c61;line-height:1.5}
+.bk-part{border-radius:22px;background:radial-gradient(circle at 85% 25%,rgba(188,169,224,.35),transparent 45%),linear-gradient(135deg,#38244e,#654493);color:#fff;padding:60px 64px;display:flex;flex-direction:column;justify-content:center}
+.bk-part .k{font-size:15px;letter-spacing:.18em;text-transform:uppercase;color:#bca9e0;font-weight:700}
+.bk-part h2{font-size:54px;margin:14px 0 14px;line-height:1.08;max-width:900px}
+.bk-part p{margin:0;color:#e6def6;font-size:21px;line-height:1.45;max-width:820px}
+.bk-part .big{font-size:180px;font-weight:800;line-height:.9;color:rgba(255,255,255,.12);margin-bottom:-30px}
+.bk-flow{break-before:page;page-break-before:always}
+.bk-back{border-radius:22px;background:linear-gradient(135deg,#38244e,#654493);color:#fff;padding:50px 56px;display:grid;grid-template-columns:1fr 220px;gap:40px;align-items:center;margin-top:38px;break-before:page;page-break-before:always}
+.bk-back h2{font-size:44px;margin:0 0 14px}
+.bk-back p{color:#e6def6;font-size:17px;margin:7px 0;line-height:1.5}
+.bk-back a{color:#fff;font-weight:700}
+.bk-back .q{display:flex;gap:14px;align-items:center;margin-top:20px}
+.bk-back .q img{width:70px;height:70px;border-radius:50%;object-fit:cover;border:4px solid rgba(255,255,255,.2)}
+.bk-back .q span{font-size:19px;color:#fff}
+.bk-back .copy{font-size:12.5px;color:#bca9e0;margin-top:22px;line-height:1.5}
+.bk-back .qr{background:#fff;border-radius:18px;padding:14px;line-height:0}
+.bk-live{border:1px solid #e6e3ef;border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 8px 28px -8px rgba(30,27,46,.25);position:relative;break-inside:avoid}
+.bk-live .bk-bar{height:28px;background:#efedf5;display:flex;align-items:center;gap:6px;padding:0 12px;font-size:11.5px;color:#6e6985}
+.bk-live .bk-bar i{width:9px;height:9px;border-radius:50%;background:#d6d2e2;display:inline-block}
+.bk-live .bk-bar span{margin-left:8px;background:#fff;border-radius:6px;padding:2px 10px;flex:1}
+.bk-live .bk-badge{position:absolute;right:10px;top:36px;background:#1f7a45;color:#fff;font-size:10.5px;font-weight:800;border-radius:999px;padding:3px 9px;z-index:2}
+.bk-frame{position:relative;overflow:hidden;height:300px;background:#fff}
+.bk-frame iframe{position:absolute;left:0;top:0;width:1280px;border:0;transform-origin:0 0;pointer-events:none;background:#fff}
+#bk-loading{text-align:center;color:#654493;font-weight:700;padding:30px}
+.bk-print{position:fixed;right:20px;bottom:20px;background:#654493;color:#fff;border:0;border-radius:999px;padding:13px 20px;font-weight:800;font-size:15px;cursor:pointer;box-shadow:0 10px 24px -8px rgba(56,36,78,.6);z-index:10}
+.partC{font-size:14px;line-height:1.55;color:#1e1b2e}
+.partC h2.mdt{font-size:28px;margin:0 0 6px;line-height:1.2}
+.partC h3{font-size:22px;margin:30px 0 10px;padding-left:12px;border-left:5px solid #654493;break-after:avoid;page-break-after:avoid}
+.partC h4{font-size:16.5px;margin:18px 0 8px;color:#523577;break-after:avoid;page-break-after:avoid}
+.partC p{margin:0 0 9px}
+.partC ul,.partC ol{margin:0 0 10px;padding-left:22px}
+.partC li{margin:3px 0}
+.partC table{border-collapse:collapse;width:100%;margin:6px 0 14px;font-size:13px}
+.partC th{background:#ece7f6;color:#432c61;text-align:left;padding:8px 9px;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+.partC td{border-bottom:1px solid #e6e3ef;padding:7px 9px;vertical-align:top}
+.partC tr{break-inside:avoid;page-break-inside:avoid}
+.partC code{background:#f6f4fb;border:1px solid #e6e3ef;border-radius:5px;padding:0 4px;font-size:.92em}
+.partC a{color:#654493;word-break:break-all}
+@page{size:A4 landscape;margin:10mm}
+@media print{
+ body{background:#fff}
+ .bk{width:auto;margin:0;padding:0;box-shadow:none;border-radius:0}
+ .bk-print,#bk-loading{display:none}
+ .bk-page{height:189mm;margin-bottom:0}
+ .bk-back{height:189mm;margin-top:0}
+}
+@media screen and (max-width:1160px){.bk{zoom:.7}}
+</style>
+<style id="bk-ov">
+/* Часть 1: слайды 1280×720 в оригинальном виде, по одному на альбомный лист A4 */
+.bk .partA{background:transparent;color:#1e1b2e}
+.bk .partA .deck{display:block;padding:0;gap:0;zoom:1}
+.bk .partA .slide{zoom:.818;margin:0 0 46px;box-shadow:0 0 0 1px #e6e3ef;break-before:page;page-break-before:always;break-inside:avoid;page-break-after:auto;break-after:auto}
+.bk .partA .cap{font-size:12px}
+/* Часть 2: страница функционала */
+.bk .partB{background:transparent}
+.bk .partB .wrap{max-width:none;padding:0}
+.bk .partB h2{break-after:avoid;page-break-after:avoid}
+</style>
+</head>
+<body>
+<div class="bk">
+
+<section class="bk-page bk-cover">
+<div class="txt">
+<div class="k">RLT.Startup · Росэлторг.Университет · чек-поинт</div>
+<h1>АИКО</h1>
+<p class="sub">ИИ-маркетплейс, где агенты покупателя и продавца сами договариваются о цене, сроке и оплате, а люди только подтверждают решения</p>
+<div class="tags"><span>собственная модель «Светлана»</span><span>23 ИИ-агента</span><span>торг агент ↔ агент</span><span>безопасная сделка</span><span>КП, договор, счёт, УПД</span></div>
+<div class="bottom">
+<div class="qr"><img src="/checkpoint/aiko-qr.svg" alt="QR: savetlana-app-web.vercel.app" width="118" height="118" style="width:118px;height:118px"></div>
+<div class="who">Автор и разработчик<br><b>Афанасьев Павел Петрович</b><br><span class="role">Технический директор (CTO), руководитель направления<br>ИИ-разработок и внедрения АНО ЦПС «Мир Самозанятых»</span><br>xongphavietnam@gmail.com · <a href="https://savetlana-app-web.vercel.app">savetlana-app-web.vercel.app</a><br>Октябрь 2026</div>
+</div>
+</div>
+<img class="av" src="/images/avatar/svetlana-master.jpg" alt="Светлана">
+</section>
+
+<section class="bk-page bk-toc">
+<div class="head"><h2>Содержание</h2>
+<p class="lead">Все материалы проекта в одном документе: презентация, функционал Светланы и подробное описание для чек-поинта.</p></div>
+<div>
+<div class="it"><div class="n">1</div><div><h3>Презентация проекта</h3><p>27 слайдов: проблема, рынок, конкуренты, прототип в цифрах, кабинеты, 23 агента, ИИ-ядро, торг агентов, безопасность, доверие, контроль, оценка эффективности, Росэлторг, модель заработка, план и команда</p></div></div>
+<div class="it"><div class="n">2</div><div><h3>Что умеет Светлана, безопасность и почему мы лучшие</h3><p>полный функционал, торг на живом сайте, графики, 7 слоёв защиты, проверка продавца, сравнение с конкурентами, рынок</p></div></div>
+<div class="it"><div class="n">3</div><div><h3>Подробное описание для чек-поинта</h3><p>архитектура агентов, сквозной B2B-сценарий по шагам, безопасность, доверие, контроль, метрики эффективности, статус и план</p></div></div>
+</div>
+<div>
+<h4>Где ответы на вопросы чек-поинта</h4>
+<table>
+<tr><td>Как прототип автоматизирует взаимодействие продавца и покупателя</td><td>часть 1, слайды 14–18 · часть 2, раздел 3 · часть 3, раздел 2</td></tr>
+<tr><td>Механизмы безопасности, доверия и контроля</td><td>часть 1, слайды 19–21 · часть 2, разделы 6–7 · часть 3, разделы 3–5</td></tr>
+<tr><td>Как оценивается эффективность агентов</td><td>часть 1, слайд 22 · часть 2, прогон 2 000 сделок · часть 3, раздел 6</td></tr>
+</table>
+<div class="note">Экраны с зелёной меткой «живой экран» — настоящие страницы сайта. Торг агентов можно запустить самому без входа: savetlana-app-web.vercel.app/b2b/negotiation</div>
+</div>
+</section>
+
+<div id="bk-loading">Собираю книгу…</div>
+
+<section class="bk-page bk-part"><div class="big">01</div><div class="k">Часть 1</div><h2>Презентация проекта</h2><p>АИКО и Светлана: от проблемы до пилота, 27 слайдов</p></section>
+<div id="partA" class="partA"></div>
+
+<section class="bk-page bk-part bk-flow"><div class="big">02</div><div class="k">Часть 2</div><h2>Что умеет Светлана, безопасность и почему мы лучшие</h2><p>функционал, живые экраны сайта, графики и цифры прогона движка торга</p></section>
+<div id="partB" class="partB"></div>
+
+<section class="bk-page bk-part bk-flow"><div class="big">03</div><div class="k">Часть 3</div><h2>Подробное описание для чек-поинта</h2><p>автоматизация сделки, безопасность, доверие, контроль, оценка эффективности агентов</p></section>
+<div id="partC" class="partC"></div>
+
+<section class="bk-back">
+<div>
+<h2>Попробуйте сами</h2>
+<p>Сайт: <a href="https://savetlana-app-web.vercel.app">savetlana-app-web.vercel.app</a></p>
+<p>Торг агентов без входа: <a href="https://savetlana-app-web.vercel.app/b2b/negotiation">savetlana-app-web.vercel.app/b2b/negotiation</a></p>
+<p>Код: github.com/paulafanasyev/Savetlana-App</p>
+<p style="margin-top:16px">Автор и разработчик: <b>Афанасьев Павел Петрович</b>, технический директор (CTO), руководитель направления ИИ-разработок и внедрения АНО ЦПС «Мир Самозанятых» · xongphavietnam@gmail.com</p>
+<div class="q"><img src="/images/avatar/svetlana-master.jpg" alt=""><span>«Напишите мне задачу, остальное я возьму на себя» — Светлана</span></div>
+<div class="copy">© 2026 Афанасьев Павел Петрович. Все права защищены. Копирование, распространение и использование материалов без письменного разрешения автора запрещены.</div>
+</div>
+<div class="qr"><img src="/checkpoint/aiko-qr.svg" alt="QR: savetlana-app-web.vercel.app" width="192" height="192" style="width:192px;height:192px"></div>
+</section>
+
+</div>
+<button class="bk-print" onclick="window.print()">Скачать PDF</button>
+<script src="/copy-guard.js"></script>
+<script>
+(function(){
+  var FULL = "Афанасьев Павел Петрович";
+
+  function get(u){
+    return fetch(u, {cache: "no-cache"}).then(function(r){
+      if (!r.ok) throw new Error(u + " " + r.status);
+      return r.text();
+    });
+  }
+
+  function rules(text){
+    try {
+      var s = new CSSStyleSheet();
+      s.replaceSync(text);
+      return s.cssRules;
+    } catch (e) {
+      var d = document.implementation.createHTMLDocument("");
+      var st = d.createElement("style");
+      st.textContent = text;
+      d.head.appendChild(st);
+      return st.sheet ? st.sheet.cssRules : [];
+    }
+  }
+
+  function scopeSel(list, scope){
+    return list.split(",").map(function(x){
+      x = x.trim();
+      if (x === ":root" || x === "html" || x === "body") return scope;
+      if (x === "*") return scope + " *";
+      if (/^(html|body)[^\w-]/.test(x)) return scope + " " + x.replace(/^(html|body)\s*/, "");
+      return scope + " " + x;
+    }).join(", ");
+  }
+
+  function scopeCss(text, scope){
+    function walk(list){
+      var out = "";
+      for (var i = 0; i < list.length; i++){
+        var r = list[i];
+        if (r.type === 1){
+          out += scopeSel(r.selectorText, scope) + "{" + r.style.cssText + "}\n";
+        } else if (r.type === 4){
+          var c = r.conditionText || (r.media && r.media.mediaText) || "";
+          if (/max-width:\s*1320px/.test(c)) continue;
+          out += "@media " + c + "{" + walk(r.cssRules) + "}\n";
+        }
+      }
+      return out;
+    }
+    return walk(rules(text));
+  }
+
+  function addCss(css){
+    var st = document.createElement("style");
+    st.textContent = css;
+    document.head.insertBefore(st, document.getElementById("bk-ov"));
+  }
+
+  function live(path, label, h){
+    return '<div class="bk-live"><div class="bk-bar"><i></i><i></i><i></i><span>' + label + '</span></div>' +
+      '<div class="bk-badge">● живой экран</div><div class="bk-frame"><iframe src="' + path +
+      '" width="1280" height="' + h + '" data-h="' + h + '" scrolling="no" tabindex="-1" title="' + label + '"></iframe></div></div>';
+  }
+
+  function fit(){
+    var frames = document.querySelectorAll(".bk-frame, .partB .live .frame");
+    for (var k = 0; k < frames.length; k++){
+      var f = frames[k], i = f.querySelector("iframe");
+      if (!i) continue;
+      var s = f.clientWidth / 1280;
+      if (!s) continue;
+      var h = +(i.getAttribute("data-h") || 800);
+      i.style.height = h + "px";
+      i.style.transform = "scale(" + s + ")";
+      f.style.height = Math.round(h * s) + "px";
+    }
+  }
+
+  function esc(s){ return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function inl(s){
+    var t = esc(s), codes = [];
+    t = t.replace(/`([^`]+)`/g, function(m, c){ codes.push(c); return "@@C" + (codes.length - 1) + "@@"; });
+    t = t.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+    t = t.replace(/(^|[\s(«])\*([^*\s][^*]*?)\*(?=[\s).,:;»]|$)/g, "$1<i>$2</i>");
+    t = t.replace(/(https?:\/\/[^\s<)»,]+)/g, '<a href="$1">$1</a>');
+    t = t.replace(/@@C(\d+)@@/g, function(m, n){ return "<code>" + codes[+n] + "</code>"; });
+    return t;
+  }
+
+  function md2html(src){
+    src = src.replace(/\r/g, "");
+    var cut = src.indexOf("\n## Приложение");
+    if (cut > 0) src = src.slice(0, cut);
+    var L = src.split("\n"), h = "", i = 0;
+    var special = /^(#{1,6} |\||- |\d+\. )/;
+    function cells(r){ return r.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(function(c){ return c.trim(); }); }
+    while (i < L.length){
+      var l = L[i];
+      if (!l.trim()){ i++; continue; }
+      var m = l.match(/^(#{1,6}) (.*)$/);
+      if (m){
+        var lv = m[1].length;
+        h += lv === 1 ? '<h2 class="mdt">' + inl(m[2]) + "</h2>" : "<h" + (lv + 1) + ">" + inl(m[2]) + "</h" + (lv + 1) + ">";
+        i++; continue;
+      }
+      if (l.charAt(0) === "|"){
+        var rows = [];
+        while (i < L.length && L[i].charAt(0) === "|"){ rows.push(L[i]); i++; }
+        var t = "<table><thead><tr>" + cells(rows[0]).map(function(c){ return "<th>" + inl(c) + "</th>"; }).join("") + "</tr></thead><tbody>";
+        rows.slice(2).forEach(function(r){ t += "<tr>" + cells(r).map(function(c){ return "<td>" + inl(c) + "</td>"; }).join("") + "</tr>"; });
+        h += t + "</tbody></table>";
+        continue;
+      }
+      if (/^- /.test(l)){
+        h += "<ul>";
+        while (i < L.length && /^- /.test(L[i])){ h += "<li>" + inl(L[i].slice(2)) + "</li>"; i++; }
+        h += "</ul>"; continue;
+      }
+      if (/^\d+\. /.test(l)){
+        h += "<ol>";
+        while (i < L.length && /^\d+\. /.test(L[i])){ h += "<li>" + inl(L[i].replace(/^\d+\. /, "")) + "</li>"; i++; }
+        h += "</ol>"; continue;
+      }
+      var p = [];
+      while (i < L.length && L[i].trim() && !special.test(L[i])){ p.push(L[i]); i++; }
+      if (!p.length){ h += "<p>" + inl(l) + "</p>"; i++; continue; }
+      h += "<p>" + p.map(function(x){
+        var br = /\\$/.test(x);
+        return inl(x.replace(/\\$/, "")) + (br ? "<br>" : " ");
+      }).join("") + "</p>";
+    }
+    return h;
+  }
+
+  function renameAll(root){
+    var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), n;
+    while ((n = w.nextNode())){
+      if (n.nodeValue.indexOf("Павел Афанасьев") >= 0) n.nodeValue = n.nodeValue.replace(/Павел Афанасьев/g, FULL);
+    }
+  }
+
+  function buildDeck(text){
+    var d = new DOMParser().parseFromString(text, "text/html");
+    var st = d.querySelector("style");
+    if (st) addCss(scopeCss(st.textContent, ".partA"));
+    var slides = [].slice.call(d.querySelectorAll("section.slide")).slice(1, -1);
+    var deck = document.createElement("div");
+    deck.className = "deck";
+    slides.forEach(function(s, i){
+      var k = s.querySelector(".kicker");
+      if (k) k.textContent = (i + 1) + " · " + k.textContent;
+      deck.appendChild(document.importNode(s, true));
+    });
+    [].slice.call(deck.querySelectorAll("img.real")).forEach(function(img){
+      var src = img.getAttribute("src") || "", shot = img.closest(".shot");
+      if (/home\.png$/.test(src) && shot){
+        var cap = shot.nextElementSibling;
+        var box = document.createElement("div");
+        box.innerHTML = live("/", "savetlana-app-web.vercel.app", 700);
+        shot.parentNode.replaceChild(box.firstChild, shot);
+        if (cap && cap.classList.contains("cap")) cap.textContent = "Живой экран сайта: главная страница";
+      } else {
+        img.parentNode.removeChild(img);
+      }
+    });
+    document.getElementById("partA").appendChild(deck);
+  }
+
+  function buildFeatures(text){
+    var d = new DOMParser().parseFromString(text, "text/html");
+    var st = d.querySelector("style");
+    if (st) addCss(scopeCss(st.textContent, ".partB"));
+    var wrap = d.querySelector(".wrap");
+    if (!wrap) return;
+    var drop = [wrap.querySelector(".foot")];
+    var home = wrap.querySelector('iframe[src="/"]');
+    if (home) drop.push(home.closest(".live"));
+    [].slice.call(wrap.querySelectorAll("img.real")).forEach(function(x){ drop.push(x); });
+    drop.forEach(function(x){ if (x && x.parentNode) x.parentNode.removeChild(x); });
+    document.getElementById("partB").appendChild(document.importNode(wrap, true));
+  }
+
+  function fail(id, url){
+    document.getElementById(id).innerHTML = '<p style="padding:16px;border:1px dashed #bca9e0;border-radius:12px;color:#5b5670">' +
+      'Раздел не загрузился. Откройте его по ссылке: <a href="' + url + '">' + url + "</a></p>";
+  }
+
+  Promise.all([
+    get("/checkpoint/aiko-deck.html").then(buildDeck).catch(function(){ fail("partA", "https://savetlana-app-web.vercel.app/checkpoint/aiko-deck.html"); }),
+    get("/checkpoint/aiko-features.html").then(buildFeatures).catch(function(){ fail("partB", "https://savetlana-app-web.vercel.app/checkpoint/aiko-features.html"); }),
+    get("/checkpoint/aiko-checkpoint.md").then(function(t){ document.getElementById("partC").innerHTML = md2html(t); })
+      .catch(function(){ fail("partC", "https://github.com/paulafanasyev/Savetlana-App/blob/svetlana/initial-implementation/docs/checkpoint-rlt/AIKO_checkpoint.md"); })
+  ]).then(function(){
+    renameAll(document.querySelector(".bk"));
+    var ld = document.getElementById("bk-loading");
+    if (ld) ld.parentNode.removeChild(ld);
+    fit();
+    setTimeout(fit, 400);
+  });
+
+  window.addEventListener("load", fit);
+  window.addEventListener("resize", fit);
+  window.addEventListener("beforeprint", fit);
+  if (window.matchMedia){
+    var mq = window.matchMedia("print");
+    if (mq.addEventListener) mq.addEventListener("change", fit);
+  }
+})();
+</script>
+</body>
+</html>

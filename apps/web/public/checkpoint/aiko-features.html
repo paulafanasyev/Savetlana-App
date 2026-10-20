@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>АИКО · Светлана — функционал, безопасность, преимущества</title>
+<meta name="robots" content="noindex">
+<meta name="author" content="Афанасьев Павел Петрович">
+<style>
+:root{--s50:#f6f4fb;--s100:#ece7f6;--s200:#d9d0ee;--s300:#bca9e0;--s400:#9c7fce;--s500:#7d5cb0;--s600:#654493;--s700:#523577;--s800:#432c61;--s900:#38244e;--ink:#1e1b2e;--soft:#5b5670;--faint:#6e6985;--line:#e6e3ef;--acc:#ad5512;--accSoft:#fbeee3;--ok:#1f7a45;--okSoft:#e3f3ea;--bad:#c81e1e}
+*{box-sizing:border-box}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{margin:0;background:var(--s50);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);line-height:1.5}
+a{color:var(--s600)}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 24px 90px}
+.hero{position:relative;overflow:hidden;border-radius:28px;background:radial-gradient(circle at 85% 20%,rgba(188,169,224,.35),transparent 45%),linear-gradient(135deg,var(--s900),var(--s600));color:#fff;padding:40px 44px;display:grid;grid-template-columns:220px 1fr;gap:36px;align-items:center}
+.hero img.av{width:220px;height:220px;border-radius:50%;object-fit:cover;border:8px solid rgba(255,255,255,.18);box-shadow:0 0 0 14px rgba(188,169,224,.14)}
+.hero .k{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--s300);font-weight:700}
+.hero h1{font-size:46px;line-height:1.05;margin:8px 0 10px;letter-spacing:-.02em}
+.hero p.lead{font-size:20px;margin:0 0 18px;color:#f1ecfb}
+.cta{display:inline-block;background:#fff;color:var(--s800);font-weight:800;border-radius:999px;padding:12px 22px;text-decoration:none;margin:0 10px 10px 0}
+.cta.o{background:transparent;color:#fff;border:2px solid rgba(255,255,255,.5)}
+.dev{margin-top:14px;font-size:15px;color:var(--s200)}
+.dev b{color:#fff}
+.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:-28px 24px 0;position:relative}
+.stats div{background:#fff;border-radius:18px;padding:16px 14px;box-shadow:0 12px 30px -14px rgba(56,36,78,.45);text-align:center}
+.stats b{display:block;font-size:30px;font-weight:800;color:var(--s700);line-height:1.05}
+.stats span{font-size:12.5px;color:var(--soft);line-height:1.25;display:block;margin-top:4px}
+h2{font-size:30px;letter-spacing:-.01em;margin:46px 0 6px}
+h2 .n{display:inline-flex;width:40px;height:40px;border-radius:12px;background:var(--s600);color:#fff;align-items:center;justify-content:center;font-size:20px;margin-right:10px;vertical-align:3px}
+.sub{color:var(--soft);margin:0 0 18px;font-size:16.5px}
+.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:20px 22px;break-inside:avoid}
+.card h3{margin:0 0 8px;font-size:18px}
+.card p,.card li{font-size:15px;color:var(--soft);margin:0}
+.card ul{padding-left:18px;margin:6px 0 0}.card li{margin:3px 0}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;background:var(--s100);margin-bottom:10px}
+.ic.o{background:var(--accSoft)}.ic.g{background:var(--okSoft)}
+.violet{background:var(--s50);border-color:var(--s200)}
+.dark{background:linear-gradient(135deg,var(--s900),var(--s700));color:#fff;border:0}
+.dark p,.dark li{color:var(--s200)}
+.shot,.live{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 14px 34px -16px rgba(30,27,46,.35);position:relative;break-inside:avoid}
+.shot .bar,.live .bar{height:30px;background:#efedf5;display:flex;align-items:center;gap:6px;padding:0 12px;font-size:12px;color:var(--faint)}
+.shot .bar i,.live .bar i{width:10px;height:10px;border-radius:50%;background:#d6d2e2;display:inline-block}
+.shot .bar span,.live .bar span{margin-left:10px;background:#fff;border-radius:6px;padding:2px 10px;flex:1}
+.live .bar a{font-weight:700;text-decoration:none;margin-left:8px;white-space:nowrap}
+.live .frame{position:relative;overflow:hidden;background:#fff;height:420px}
+.live .frame iframe{position:absolute;left:0;top:0;width:1280px;border:0;transform-origin:0 0;pointer-events:none;background:#fff}
+.live .badge{position:absolute;right:12px;top:40px;background:var(--ok);color:#fff;font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;z-index:2;box-shadow:0 4px 10px -4px rgba(0,0,0,.4)}
+.shot img.real{display:block;width:100%}.shot img.real+.mock{display:none}
+.mock{padding:14px 16px;font-size:13px}
+.msg{display:flex;gap:8px;margin-bottom:10px;align-items:flex-start}
+.msg img{width:30px;height:30px;border-radius:50%;object-fit:cover;flex:none}
+.msg div{background:var(--s50);border:1px solid var(--s200);border-radius:12px 12px 12px 3px;padding:8px 11px;font-size:13px}
+.msg.u{justify-content:flex-end}.msg.u div{background:var(--s600);color:#fff;border:0;border-radius:12px 12px 3px 12px}
+.btn{display:inline-block;background:var(--s600);color:#fff;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;margin-right:6px}
+.btn.g{background:#fff;color:var(--s700);border:1px solid var(--s300)}
+.cap{font-size:12px;color:var(--faint);margin-top:8px}
+.flow{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
+.flow div{flex:1;min-width:110px;background:#fff;border:1px solid var(--s200);border-radius:14px;padding:12px;text-align:center;position:relative}
+.flow div b{display:block;font-size:24px}
+.flow div span{font-size:13px;color:var(--ink);display:block;margin-top:4px;line-height:1.3}
+.flow div.h{background:var(--accSoft);border-color:#f1d2b8}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--soft);margin-top:6px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.layers div{display:flex;gap:14px;align-items:center;border-radius:14px;padding:11px 16px;margin-bottom:8px;color:#fff;font-size:15px}
+.layers b{min-width:210px}
+.layers span{color:rgba(255,255,255,.85);font-size:14px}
+.why{counter-reset:w}
+.why .card{position:relative;padding-left:70px}
+.why .card:before{counter-increment:w;content:counter(w);position:absolute;left:20px;top:20px;width:36px;height:36px;border-radius:50%;background:var(--s600);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center}
+table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--line);padding:9px 10px;text-align:left;font-size:14px;vertical-align:top}th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+.cmp td{text-align:center}.cmp td:first-child{text-align:left;font-weight:600}.cmp tr.me td{background:var(--s100);font-weight:800;color:var(--s800)}
+.y{color:var(--ok);font-weight:800}.n{color:#b0aac2}
+.foot{margin-top:46px;border-radius:24px;background:linear-gradient(135deg,var(--s900),var(--s700));color:#fff;padding:30px 34px;display:grid;grid-template-columns:1fr 170px;gap:24px;align-items:center}
+.foot p{margin:4px 0;color:var(--s200)}.foot h3{margin:0 0 6px;font-size:24px}
+.foot .qr{background:#fff;border-radius:16px;padding:12px;line-height:0}
+.print{position:fixed;right:20px;bottom:20px;background:var(--s600);color:#fff;border:0;border-radius:999px;padding:13px 20px;font-weight:800;cursor:pointer;box-shadow:0 10px 24px -8px rgba(56,36,78,.6)}
+@page{size:A4;margin:12mm}
+@media print{body{background:#fff}.print{display:none}.wrap{padding:0;max-width:none}h2{break-after:avoid}.hero,.foot,.card,.shot,.live,svg{break-inside:avoid}}
+@media (max-width:820px){.hero{grid-template-columns:1fr;text-align:center}.hero img.av{margin:0 auto;width:160px;height:160px}.stats{grid-template-columns:repeat(3,1fr);margin:-20px 8px 0}.g2,.g3,.g4{grid-template-columns:1fr}.foot{grid-template-columns:1fr}.layers b{min-width:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="hero">
+<img class="av" src="/images/avatar/svetlana-master.jpg" alt="Светлана">
+<div>
+<div class="k">RLT.Startup · Росэлторг.Университет</div>
+<h1>АИКО и Светлана</h1>
+<p class="lead">ИИ-маркетплейс, где агенты покупателя и продавца сами договариваются о цене, сроке и оплате, а люди только подтверждают решения</p>
+<a class="cta" href="https://savetlana-app-web.vercel.app">Открыть сайт →</a><a class="cta o" href="https://savetlana-app-web.vercel.app/b2b/negotiation">Торг агентов без входа</a>
+<div class="dev">Автор и разработчик: <b>Афанасьев Павел Петрович</b>, технический директор (CTO), руководитель направления ИИ-разработок и внедрения АНО ЦПС «Мир Самозанятых»<br>xongphavietnam@gmail.com · Сайт: <a href="https://savetlana-app-web.vercel.app" style="color:#fff">savetlana-app-web.vercel.app</a></div>
+</div></div>
+
+<div class="stats">
+<div><b>23</b><span>ИИ-агента</span></div>
+<div><b>50</b><span>инструментов с уровнем риска</span></div>
+<div><b>3</b><span>кабинета: 35 + 20 + 16 разделов</span></div>
+<div><b>144</b><span>файла автотестов</span></div>
+<div><b>8</b><span>проверок CI на релиз</span></div>
+<div><b>0</b><span>нарушений правил в 3 000 торгов</span></div>
+</div>
+
+<h2><span class="n">1</span>Кто такая Светлана</h2>
+<p class="sub">Наша собственная обученная модель (сервер Svetlana Core) и мастер-агент над 22 профильными агентами.</p>
+<div class="g2">
+<div class="live"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/svetlana</span><a href="https://savetlana-app-web.vercel.app/svetlana">открыть ↗</a></div><div class="badge">● живой экран</div><div class="frame"><iframe src="/svetlana" width="1280" height="1000" data-h="1000" scrolling="no" tabindex="-1" title="Страница Светланы"></iframe></div></div>
+<div style="display:grid;gap:14px">
+<div class="card violet"><div class="ic">🧠</div><h3>Своя модель</h3><p>обучена нами, данные остаются у нас; дальше — дообучение на обезличенных торгах и КП площадки</p></div>
+<div class="card"><div class="ic o">🧮</div><h3>Модель понимает, код считает</h3><p>цены, торг, скидки и наличие считает серверный код — «придумать» цену нельзя</p></div>
+<div class="card"><div class="ic g">🛡️</div><h3>Резерв без простоя</h3><p>при сбое модели работает резервный движок; чат, голос и Telegram</p></div>
+</div></div>
+
+<h2><span class="n">2</span>Что умеет для покупателя</h2>
+<p class="sub">«Не ищите товар, объясните задачу»: для кого, зачем, бюджет, срок.</p>
+<div class="live" style="margin-bottom:16px"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app</span><a href="https://savetlana-app-web.vercel.app">открыть ↗</a></div><div class="badge">● живой экран</div><div class="frame"><iframe src="/" width="1280" height="760" data-h="760" scrolling="no" tabindex="-1" title="Главная АИКО"></iframe></div></div>
+<div class="g4">
+<div class="card"><div class="ic">🔎</div><h3>Поиск задачей</h3><p>по тексту, смыслу, цене, рейтингу и наличию, с объяснением выбора</p></div>
+<div class="card"><div class="ic">⚖️</div><h3>Сравнение и «дешевле»</h3><p>характеристики, продавцы, доставка, аналоги и цены внешних площадок</p></div>
+<div class="card"><div class="ic">📷</div><h3>Поиск по фото</h3><p>распознаёт предмет и подбирает похожие товары</p></div>
+<div class="card"><div class="ic">💬</div><h3>Сводка отзывов</h3><p>тональность, частые плюсы и жалобы вместо сотни отзывов</p></div>
+<div class="card"><div class="ic o">🤝</div><h3>Торг и КП</h3><p>«Собери КП»: до 5 продавцов, торг о цене, сроке и оплате</p></div>
+<div class="card"><div class="ic g">✅</div><h3>Проверка продавца</h3><p>ИНН, ЕГРЮЛ, РНП, история; честное наличие</p></div>
+<div class="card"><div class="ic">🛒</div><h3>Заказ под контролем</h3><p>корзина, оплата (карта, СБП, SberPay, T-Pay), трекинг, безопасная сделка</p></div>
+<div class="card"><div class="ic">↩️</div><h3>Возврат и спор</h3><p>собирает доказательства; решение принимает человек</p></div>
+<div class="card"><div class="ic">🎁</div><h3>Подарки</h3><p>идея по интересам и бюджету, напоминания о событиях</p></div>
+<div class="card"><div class="ic">📝</div><h3>Память</h3><p>покупатель видит, что знает Светлана, и может удалить</p></div>
+<div class="card"><div class="ic">📋</div><h3>Объявления</h3><p>работа, резюме, услуги, фриланс, недвижимость, авто</p></div>
+<div class="card"><div class="ic o">🚫</div><h3>Анти-«Мамонт»</h3><p>блокирует оплату вне площадки и просьбы кодов из СМС</p></div>
+</div>
+
+<h2><span class="n">3</span>Торг агент ↔ агент: как это выглядит</h2>
+<p class="sub">Прайс 1 000 ₽, партия 100 шт., желаемая цена 800 ₽, бюджет 900 ₽. Агенты сходятся за 5 раундов и ни разу не выходят за пределы своих людей.</p>
+<div class="g2">
+<div class="card">
+<svg viewBox="0 0 560 250" width="100%" role="img" aria-label="Ход торга">
+<line x1="40" y1="44" x2="540" y2="44" stroke="#c81e1e" stroke-dasharray="6 5" opacity=".6"/><text x="540" y="38" text-anchor="end" font-size="12" fill="#c81e1e">бюджет покупателя 900 ₽</text>
+<line x1="40" y1="113" x2="540" y2="113" stroke="#ad5512" stroke-dasharray="6 5" opacity=".6"/><text x="540" y="130" text-anchor="end" font-size="12" fill="#ad5512">минимум продавца 850 ₽</text>
+<line x1="40" y1="215" x2="540" y2="215" stroke="#e6e3ef"/>
+<g font-size="12" fill="#6e6985" text-anchor="middle"><text x="60" y="235">раунд 1</text><text x="170" y="235">2</text><text x="280" y="235">3</text><text x="390" y="235">4</text><text x="500" y="235">5</text></g>
+<polyline points="60,44 170,47 280,55 390,69" fill="none" stroke="#ad5512" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="60,182 170,121 280,95 390,76 500,69" fill="none" stroke="#654493" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<g fill="#ad5512"><circle cx="60" cy="44" r="6"/><circle cx="170" cy="47" r="6"/><circle cx="280" cy="55" r="6"/><circle cx="390" cy="69" r="6"/></g>
+<g fill="#654493"><circle cx="60" cy="182" r="6"/><circle cx="170" cy="121" r="6"/><circle cx="280" cy="95" r="6"/><circle cx="390" cy="76" r="6"/></g>
+<circle cx="500" cy="69" r="11" fill="#1f7a45"/><text x="500" y="74" text-anchor="middle" font-size="13" fill="#fff" font-weight="700">✓</text>
+<g font-size="12" font-weight="700"><text x="60" y="200" text-anchor="middle" fill="#654493">800</text><text x="170" y="141" text-anchor="middle" fill="#654493">844</text><text x="280" y="115" text-anchor="middle" fill="#654493">863</text><text x="390" y="96" text-anchor="middle" fill="#654493">877</text>
+<text x="60" y="30" text-anchor="middle" fill="#ad5512">900</text><text x="170" y="33" text-anchor="middle" fill="#ad5512">898</text><text x="280" y="41" text-anchor="middle" fill="#ad5512">892</text><text x="390" y="58" text-anchor="middle" fill="#ad5512">882</text><text x="500" y="96" text-anchor="middle" fill="#1f7a45">сделка 882 ₽</text></g>
+</svg>
+<div class="legend"><span><i style="background:#654493"></i>агент покупателя</span><span><i style="background:#ad5512"></i>агент продавца</span><span><i style="background:#1f7a45"></i>договорились</span></div>
+</div>
+<div style="display:grid;gap:14px">
+<div class="g2" style="gap:12px"><div class="card violet" style="text-align:center"><b style="font-size:34px;color:#523577">−11,8%</b><p>скидка покупателю</p></div><div class="card violet" style="text-align:center"><b style="font-size:34px;color:#523577">11 800 ₽</b><p>экономия на партии</p></div></div>
+<div class="card"><h3>Правила задают люди</h3><ul><li><b>продавец</b> в кабинете: скидки за объём, максимум уступки, мин. партия, сроки, предоплата, отсрочка или выключатель торга</li><li><b>покупатель</b> в чате: объём, желаемая цена, потолок бюджета, срок, оплата</li><li>договорённость — только проект КП: его подтверждают оба человека</li></ul></div>
+</div></div>
+
+<h3 style="margin:26px 0 10px;font-size:20px">Тот же торг на живом сайте (открывается без входа)</h3>
+<div class="live"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/b2b/negotiation</span><a href="https://savetlana-app-web.vercel.app/b2b/negotiation">открыть ↗</a></div><div class="badge">● живой экран</div><div class="frame"><iframe src="/b2b/negotiation" width="1280" height="1250" data-h="1250" scrolling="no" tabindex="-1" title="B2B-переговоры агентов"></iframe></div></div>
+
+<h3 style="margin:26px 0 10px;font-size:20px">Реверсивный аукцион одной фразой: «Собери КП на перчатки, 500 штук»</h3>
+<div class="g2">
+<div class="card">
+<svg viewBox="0 0 520 250" width="100%" role="img" aria-label="Цены до и после торга">
+<line x1="40" y1="200" x2="500" y2="200" stroke="#e6e3ef"/>
+<g font-size="13" fill="#1e1b2e" text-anchor="middle" font-weight="600"><text x="120" y="222">СнабЦентр</text><text x="270" y="222">ЗащитаПро</text><text x="420" y="222">УпакСервис</text></g>
+<g font-size="11" fill="#6e6985" text-anchor="middle"><text x="120" y="240">лучшее · 6 раундов</text><text x="270" y="240">5 раундов</text><text x="420" y="240">торг выключен</text></g>
+<rect x="85" y="40" width="32" height="160" rx="6" fill="#d9d0ee"/><rect x="123" y="50" width="32" height="150" rx="6" fill="#1f7a45"/>
+<rect x="235" y="27" width="32" height="173" rx="6" fill="#d9d0ee"/><rect x="273" y="47" width="32" height="153" rx="6" fill="#654493"/>
+<rect x="385" y="17" width="32" height="183" rx="6" fill="#d9d0ee"/><rect x="423" y="17" width="32" height="183" rx="6" fill="#b0aac2"/>
+<g font-size="12" font-weight="700" text-anchor="middle"><text x="101" y="34" fill="#6e6985">48</text><text x="139" y="44" fill="#1f7a45">45 ₽</text><text x="251" y="21" fill="#6e6985">52</text><text x="289" y="41" fill="#654493">46 ₽</text><text x="401" y="12" fill="#6e6985">55</text><text x="439" y="12" fill="#6e6985">55 ₽</text></g>
+</svg>
+<div class="legend"><span><i style="background:#d9d0ee"></i>цена по прайсу</span><span><i style="background:#654493"></i>цена после торга агентов</span></div>
+<p class="cap">Расчёт движком торга прототипа на демо-оптовиках. Итог: 500 × 45 ₽ = 22 500 ₽, экономия 1 500 ₽ к лучшему прайсу.</p>
+</div>
+<div class="shot"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/svetlana</span></div><img class="real" src="/checkpoint/shots/rfq.png" alt="" onerror="this.remove()"><div class="mock">
+<div class="msg u"><div>Собери КП на перчатки рабочие, 500 штук</div></div>
+<div class="msg"><img src="/images/avatar/svetlana-master.jpg" alt=""><div>Запросила цену у 3 продавцов. Лучшее: <b>СнабЦентр, 45 ₽</b>, итого 22 500 ₽.<br>1) СнабЦентр: 45 ₽ (прайс 48) ← лучшее<br>2) ЗащитаПро: 46 ₽ (прайс 52)<br>3) УпакСервис: 55 ₽, не торгуется<br>КП отправлено продавцу на подтверждение.</div></div>
+<div style="border:1px solid #1f7a45;background:#eef8f2;border-radius:10px;padding:8px 10px;margin-top:4px"><b>✓ Проверка продавца</b><br><span style="color:#5b5670">ИНН/ОГРН ✓ · модерация ✓ · ЕГРЮЛ ? · РНП ? · история !</span></div>
+<p style="margin:8px 0 0"><span class="btn">Оформить заказ по КП</span><span class="btn g">Договор · Счёт · УПД</span></p></div></div>
+</div>
+<p class="cap">Диалог аукциона и кабинет продавца ниже показаны примером: на сайте они доступны после входа в аккаунт.</p>
+
+<h3 style="margin:26px 0 10px;font-size:20px">Весь путь сделки</h3>
+<div class="flow">
+<div><b>⚙️</b><span>продавец задаёт правила</span></div>
+<div><b>🗣️</b><span>покупатель: одна фраза</span></div>
+<div><b>🤖</b><span>аукцион до 5 продавцов</span></div>
+<div><b>📄</b><span>КП с отпечатком sha256</span></div>
+<div class="h"><b>👍</b><span>продавец подтверждает</span></div>
+<div class="h"><b>🛒</b><span>покупатель оформляет</span></div>
+<div><b>🗂️</b><span>договор, счёт, УПД</span></div>
+<div><b>🔒</b><span>безопасная сделка и чек</span></div>
+</div>
+<p class="cap">Выделено: шаги людей. Всё остальное делают агенты.</p>
+
+<h2><span class="n">4</span>Что умеет для продавца</h2>
+<p class="sub">Агент предлагает, продавец решает: цена, акция, публикация и наличие меняются только после «Подтвердить».</p>
+<div class="g2">
+<div class="shot"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/seller</span></div><img class="real" src="/checkpoint/shots/seller.png" alt="" onerror="this.remove()"><div class="mock">
+<h3 style="margin:0 0 8px;font-size:16px">Что сделать сегодня</h3>
+<table><tr><td>📦 Заказы к отправке</td><td><b>3</b></td></tr><tr><td>✉️ Непрочитанные сообщения</td><td><b>5</b></td></tr><tr><td>⏳ Акции истекают за сутки</td><td><b>2</b></td></tr><tr><td>🤝 Новые КП от агентов</td><td><b>1</b></td></tr></table>
+<div class="msg" style="margin-top:10px"><img src="/images/avatar/svetlana-master.jpg" alt=""><div>Продажи худи упали: у конкурента цена ниже на 8%. Предлагаю акцию −10% на 7 дней. Запустить?</div></div>
+<p style="margin:0"><span class="btn">Запустить</span><span class="btn g">Позже</span></p></div></div>
+<div class="g2" style="gap:12px">
+<div class="card"><div class="ic">✍️</div><h3>Карточка из фразы</h3><p>«худи серое, L, 2 990» → черновик; до 50 за раз, по фото</p></div>
+<div class="card"><div class="ic">📥</div><h3>Импорт</h3><p>CSV / XLSX / YML (Ozon, WB, 1С) до 2 000 товаров; Яндекс Маркет</p></div>
+<div class="card"><div class="ic">📉</div><h3>«Почему упали продажи»</h3><p>трафик, конверсия, цена, конкуренты, отзывы</p></div>
+<div class="card"><div class="ic">🏷️</div><h3>Цены и акции</h3><p>совет по цене, конкуренты на Ozon / WB; акции 5–70%</p></div>
+<div class="card"><div class="ic">👥</div><h3>CRM</h3><p>новые, повторные, VIP, средний чек</p></div>
+<div class="card"><div class="ic o">🤝</div><h3>Торг B2B 24/7</h3><p>агент торгуется по правилам и готовит КП и документы</p></div>
+</div></div>
+
+<h2><span class="n">5</span>23 агента и зачем они</h2>
+<p class="sub">Каждый агент видит только свои инструменты; маршрутизатор выбирает агента детерминированно.</p>
+<div class="card" style="display:grid;grid-template-columns:240px 1fr;gap:26px;align-items:center">
+<svg viewBox="0 0 200 200" width="100%" role="img" aria-label="Агенты по направлениям">
+<g transform="rotate(-90 100 100)" fill="none" stroke-width="26">
+<circle cx="100" cy="100" r="60" stroke="#654493" stroke-dasharray="171.36 376.99"/>
+<circle cx="100" cy="100" r="60" stroke="#ad5512" stroke-dasharray="119.95 376.99" stroke-dashoffset="-171.36"/>
+<circle cx="100" cy="100" r="60" stroke="#1f7a45" stroke-dasharray="85.68 376.99" stroke-dashoffset="-291.31"/>
+</g>
+<image href="/images/avatar/svetlana-master.jpg" x="64" y="64" width="72" height="72" clip-path="circle(36px at 36px 36px)" preserveAspectRatio="xMidYMid slice"/>
+</svg>
+<div>
+<p style="margin:0 0 10px"><b>Светлана</b> (в центре) понимает запрос, выбирает агента и проверяет результат.</p>
+<p style="margin:6px 0"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#654493;margin-right:6px"></span><b>Сторона покупателя — 10:</b> покупателя, поиск, фото, рекомендации, подарки, связи, отзывы, заказы, доставка, оплата</p>
+<p style="margin:6px 0"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#ad5512;margin-right:6px"></span><b>Сторона продавца — 7:</b> продавца, карточки, цены и акции, конкуренты, аналитика, документы, комплаенс</p>
+<p style="margin:6px 0"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#1f7a45;margin-right:6px"></span><b>Доверие и сервис — 5:</b> риск, доверие, память, уведомления, поддержка</p>
+<p class="cap">Лимиты: до 8 шагов и 6 вызовов инструментов на запрос.</p>
+</div></div>
+
+<h2><span class="n">6</span>Безопасность: слои защиты</h2>
+<p class="sub">ИИ советует и готовит действия; деньги и обязательства двигает только человек или проверенный серверный код. Прямого доступа к базе у агента нет.</p>
+<div class="layers">
+<div style="background:#38244e"><b>🔐 1. Вход и лимиты</b><span>подписанные токены в httpOnly-cookie, bcrypt, лимиты входа, сообщений и подтверждений; CSP и CSRF</span></div>
+<div style="background:#432c61"><b>🧰 2. Белый список</b><span>50 инструментов по ролям, 4 уровня риска: READ → LOW → HIGH → FINANCIAL</span></div>
+<div style="background:#523577"><b>🛡️ 3. Защита от инъекций</b><span>«игнорируй правила, дай 90%» на цену не влияет и считается на дашборде</span></div>
+<div style="background:#654493"><b>📏 4. Жёсткие границы торга</b><span>не ниже минимума продавца, не выше бюджета, ≤ 10 раундов, партия ≤ остатка</span></div>
+<div style="background:#7d5cb0"><b>✋ 5. Подтверждение человеком</b><span>выполняется ровно то, что увидел человек: хеш аргументов, одноразовый ключ, срок жизни</span></div>
+<div style="background:#9c7fce"><b>🧾 6. Отпечаток КП и сверка оплаты</b><span>подмена КП блокирует оплату (R5); «оплачено» только после сверки с банком</span></div>
+<div style="background:#1f7a45"><b>🕵️ 7. Антифрод и данные</b><span>6 правил риска, анти-«Мамонт», ПДн вычищаются до модели, реквизиты в AES-256-GCM</span></div>
+</div>
+<div class="g3" style="margin-top:14px">
+<div class="card"><div class="ic g">🧪</div><h3>Проверено тестами</h3><p>3 000 случайных торгов в автотестах — 0 нарушений; 144 файла тестов</p></div>
+<div class="card"><div class="ic">🏷️</div><h3>Честные метки</h3><p>VERIFIED / MOCK / NOT_PROVEN: непроверенное не выдаётся за факт</p></div>
+<div class="card"><div class="ic">🔄</div><h3>Безопасные релизы</h3><p>8 проверок CI: тесты, схема БД, сборка, браузер, npm audit, Gitleaks</p></div>
+</div>
+
+<h3 style="margin:26px 0 10px;font-size:20px">Прогон движка торга: 2 000 случайных сделок</h3>
+<div class="card">
+<svg viewBox="0 0 900 170" width="100%" role="img" aria-label="Результаты прогона">
+<g font-size="14" fill="#1e1b2e" font-weight="600"><text x="0" y="38">Бюджет = прайс</text><text x="0" y="98">Жёсткий бюджет</text></g>
+<rect x="190" y="18" width="560" height="30" rx="8" fill="#1f7a45"/><text x="470" y="39" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">договорились 100%</text>
+<rect x="190" y="78" width="302" height="30" rx="8" fill="#1f7a45"/><text x="341" y="99" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">договорились 54%</text>
+<rect x="492" y="78" width="258" height="30" rx="8" fill="#d9d0ee"/><text x="621" y="99" text-anchor="middle" fill="#432c61" font-size="14" font-weight="700">честный отказ 46%</text>
+<g font-size="13" fill="#5b5670"><text x="765" y="38">5,3 раунда · −4,2%</text><text x="765" y="99">без уступок</text></g>
+<rect x="190" y="128" width="560" height="30" rx="8" fill="#fff" stroke="#1f7a45" stroke-width="2"/><text x="470" y="149" text-anchor="middle" fill="#1f7a45" font-size="14" font-weight="800">нарушений правил и бюджета: 0 из 2 000</text>
+<text x="0" y="149" font-size="14" font-weight="600" fill="#1e1b2e">Безопасность</text>
+</svg>
+<p class="cap">Реальный код движка прототипа на случайных правилах продавцов. «Честный отказ»: бюджет ниже минимума продавца, и агенты не уступают за свои пределы.</p>
+</div>
+
+<h2><span class="n">7</span>Доверие: проверка продавца в каждом КП</h2>
+<p class="sub">Не один «магический балл», а список проверок с источником. Чего не проверили — честно «не проверено».</p>
+<div class="g3">
+<div class="card"><div class="ic g">🆔</div><h3>ИНН и ОГРН</h3><p>контрольные суммы и модерация АИКО</p></div>
+<div class="card"><div class="ic g">🏛️</div><h3>ЕГРЮЛ / ЕГРИП</h3><p>действует, ликвидация, банкротство — через DaData</p></div>
+<div class="card"><div class="ic g">📋</div><h3>Реестр недобросовестных</h3><p>ссылка на ЕИС по ИНН; самозанятый — ФНС</p></div>
+<div class="card"><div class="ic g">💰</div><h3>Безопасная сделка</h3><p>деньги продавцу только после приёмки; чеки 54-ФЗ</p></div>
+<div class="card"><div class="ic g">⭐</div><h3>Честные отзывы</h3><p>только с подтверждённой покупкой, байесовский рейтинг</p></div>
+<div class="card"><div class="ic g">⚖️</div><h3>Спор решает человек</h3><p>агент риска только рекомендует; журнал аудита «до и после»</p></div>
+</div>
+
+<h2><span class="n">8</span>Почему мы лучшие</h2>
+<p class="sub">Каталоги и тендеры есть у всех. Торга агент с агентом — только у нас.</p>
+<div class="card" style="margin-bottom:16px">
+<table class="cmp"><tr><th>Площадка</th><th>Каталог</th><th>КП у нескольких</th><th>Торг ИИ-агентов</th><th>Проверка в сделке</th><th>Документы из КП</th></tr>
+<tr><td>Ozon / Яндекс / WB для бизнеса</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td>частично</td><td>УПД</td></tr>
+<tr><td>B2B-Center</td><td class="n">—</td><td class="y">✓ вручную</td><td class="n">—</td><td class="y">✓</td><td>частично</td></tr>
+<tr><td>Supl.biz</td><td class="n">—</td><td class="y">✓</td><td class="n">— менеджер</td><td>частично</td><td class="n">—</td></tr>
+<tr><td>Портал поставщиков</td><td>оферты</td><td class="y">✓</td><td>бот ставок</td><td class="y">✓</td><td>контракт</td></tr>
+<tr class="me"><td>АИКО</td><td>✓</td><td>✓ одной фразой</td><td>✓</td><td>✓</td><td>✓</td></tr></table>
+<p class="cap">По открытым материалам площадок за 2024–2026 годы.</p>
+</div>
+<div class="g2 why">
+<div class="card"><h3>Агенты торгуются друг с другом</h3><p>агент покупателя сам договаривается с агентами продавцов о цене, сроке и оплате</p></div>
+<div class="card"><h3>Одна фраза вместо дня переписки</h3><p>5 продавцов, торг, лучшее КП и документы; у людей два клика</p></div>
+<div class="card"><h3>Всё в одном месте</h3><p>поиск → торг → проверка → КП → заказ → документы → оплата → чек</p></div>
+<div class="card"><h3>Своя модель</h3><p>нет зависимости от чужого ИИ, данные у нас, дообучение на данных площадки</p></div>
+<div class="card"><h3>ИИ, которому можно доверить деньги</h3><p>сам не платит и не меняет цены; 0 нарушений на 5 000 случайных торгах</p></div>
+<div class="card"><h3>Честность по умолчанию</h3><p>«не проверено» вместо выдуманных галочек, у каждой проверки источник</p></div>
+<div class="card"><h3>Эффект измеряется</h3><p>дашборд из реального журнала: сделки, КП → заказ, экономия, отбитые атаки</p></div>
+<div class="card"><h3>Работающий продукт</h3><p>3 кабинета, 4 банка, СДЭК, ФНС, ЕГРЮЛ, Яндекс Маркет, Telegram</p></div>
+</div>
+
+<h3 style="margin:26px 0 10px;font-size:20px">Рынок растёт</h3>
+<div class="g2">
+<div class="card">
+<svg viewBox="0 0 420 210" width="100%" role="img" aria-label="Рынок B2B-маркетплейсов">
+<text x="0" y="18" font-size="14" font-weight="700" fill="#1e1b2e">B2B-маркетплейсы, трлн ₽</text>
+<line x1="30" y1="180" x2="400" y2="180" stroke="#e6e3ef"/>
+<rect x="90" y="79" width="80" height="101" rx="8" fill="#bca9e0"/><rect x="250" y="20" width="80" height="160" rx="8" fill="#654493"/>
+<text x="130" y="72" text-anchor="middle" font-size="16" font-weight="800" fill="#523577">1,8</text>
+<text x="290" y="45" text-anchor="middle" font-size="16" font-weight="800" fill="#fff">2,84</text>
+<g font-size="13" fill="#5b5670" text-anchor="middle"><text x="130" y="199">2024</text><text x="290" y="199">2030 (прогноз)</text></g>
+</svg></div>
+<div class="card">
+<svg viewBox="0 0 420 210" width="100%" role="img" aria-label="Онлайн-закупки B2B B2G">
+<text x="0" y="18" font-size="14" font-weight="700" fill="#1e1b2e">Онлайн-закупки B2B/B2G, трлн ₽</text>
+<line x1="30" y1="180" x2="400" y2="180" stroke="#e6e3ef"/>
+<rect x="90" y="112" width="80" height="68" rx="8" fill="#f1d2b8"/><rect x="250" y="20" width="80" height="160" rx="8" fill="#ad5512"/>
+<text x="130" y="105" text-anchor="middle" font-size="16" font-weight="800" fill="#ad5512">65,8</text>
+<text x="290" y="45" text-anchor="middle" font-size="16" font-weight="800" fill="#fff">154,7</text>
+<g font-size="13" fill="#5b5670" text-anchor="middle"><text x="130" y="199">2024</text><text x="290" y="199">2030 (прогноз)</text></g>
+</svg></div>
+</div>
+<p class="cap">Источник: Data Insight, «B2B/B2G e-commerce», 2025. Закупки малого объёма — около 2 трлн ₽ в год (44-ФЗ + 223-ФЗ), МСП в реестре ФНС — 6,4 млн.</p>
+
+<div class="g2" style="margin-top:16px">
+<div class="card dark"><h3>🏢 Готовы встроиться в Росэлторг</h3><ul><li>Росэлторг.Бизнес и коммерческие закупки</li><li>закупки малого объёма (до 5 млн ₽ по ч. 12 ст. 93 44-ФЗ)</li><li>сбор КП для обоснования НМЦК</li><li>агент поставщика 24/7</li></ul></div>
+<div class="card violet"><h3>🚀 Дальше</h3><ul><li>дообучение модели «Светлана»</li><li>автоответ агента продавца в Telegram</li><li>боевые ключи: оплата, СДЭК, DaData, ЭДО</li><li>пилот с 2–3 реальными оптовиками</li></ul></div>
+</div>
+
+<div class="foot">
+<div><h3>Попробуйте сами</h3>
+<p>Сайт: <a href="https://savetlana-app-web.vercel.app" style="color:#fff;font-weight:700">savetlana-app-web.vercel.app</a></p>
+<p>Торг агентов без входа: <a href="https://savetlana-app-web.vercel.app/b2b/negotiation" style="color:#fff">/b2b/negotiation</a> · Презентация: <a href="https://savetlana-app-web.vercel.app/checkpoint/aiko-deck.html" style="color:#fff">aiko-deck</a></p>
+<p style="margin-top:12px">Автор и разработчик: <b style="color:#fff">Афанасьев Павел Петрович</b>, технический директор (CTO), руководитель направления ИИ-разработок и внедрения АНО ЦПС «Мир Самозанятых» · xongphavietnam@gmail.com</p>
+<p style="margin-top:10px;font-size:12.5px">© 2026 Афанасьев Павел Петрович. Все права защищены. Копирование материалов без письменного разрешения автора запрещено.</p></div>
+<div class="qr"><img src="/checkpoint/aiko-qr.svg" alt="QR: savetlana-app-web.vercel.app" width="146" height="146" style="width:146px;height:146px"></div>
+</div>
+
+</div>
+<button class="print" onclick="window.print()">Скачать PDF</button>
+<script src="/copy-guard.js"></script>
+<script>
+(function(){
+  function fit(){
+    var frames=document.querySelectorAll('.live .frame');
+    for(var k=0;k<frames.length;k++){
+      var f=frames[k],i=f.querySelector('iframe');
+      var s=f.clientWidth/1280; if(!s) continue;
+      var h=+(i.getAttribute('data-h')||800);
+      i.style.height=h+'px';
+      i.style.transform='scale('+s+')';
+      f.style.height=Math.round(h*s)+'px';
+    }
+  }
+  fit();
+  window.addEventListener('load',fit);
+  window.addEventListener('resize',fit);
+  window.addEventListener('beforeprint',fit);
+})();
+</script>
+</body>
+</html>

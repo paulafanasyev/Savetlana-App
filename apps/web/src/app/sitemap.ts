@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 const STATIC_PAGES: { path: string; priority: number; changeFrequency: "daily" | "weekly" | "monthly" }[] = [
   { path: "/", priority: 1, changeFrequency: "daily" },
   { path: "/catalog", priority: 0.9, changeFrequency: "daily" },
+  { path: "/sell", priority: 0.8, changeFrequency: "monthly" },
   { path: "/classifieds", priority: 0.7, changeFrequency: "daily" },
   { path: "/freelance", priority: 0.6, changeFrequency: "daily" },
   { path: "/city", priority: 0.3, changeFrequency: "monthly" },
@@ -20,9 +21,13 @@ const STATIC_PAGES: { path: string; priority: number; changeFrequency: "daily" |
   { path: "/privacy", priority: 0.2, changeFrequency: "monthly" },
 ];
 
+/** Демо-магазины площадки (slug demo-…, как в isDemoSeller). */
+const NOT_DEMO_SELLER = { NOT: { slug: { startsWith: "demo-" } } };
+
 /**
  * Карта сайта для Яндекс.Вебмастера и Google: страницы, опубликованные товары, их продавцы
- * и действующие объявления. Примеры от площадки и истёкшие объявления сюда не попадают.
+ * и действующие объявления. Примеры от площадки (демо-магазины и демо-объявления) и истёкшие
+ * объявления сюда не попадают: покупатель из поиска должен попадать на настоящий товар.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
@@ -35,13 +40,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const [products, sellers, ads] = await Promise.all([
       prisma.product.findMany({
-        where: { status: "ACTIVE" },
+        where: { status: "ACTIVE", sellerProfile: NOT_DEMO_SELLER },
         select: { id: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
         take: 5000,
       }),
       prisma.sellerProfile.findMany({
-        where: { products: { some: { status: "ACTIVE" } } },
+        where: { ...NOT_DEMO_SELLER, products: { some: { status: "ACTIVE" } } },
         select: { id: true, updatedAt: true },
         take: 1000,
       }),

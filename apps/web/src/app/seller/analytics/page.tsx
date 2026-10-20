@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { requireSellerServer } from "@/lib/auth";
 import { sellerReport } from "@/lib/domains/seller-analytics";
-import { rub } from "@/lib/format";
+import { countText, rub } from "@/lib/format";
 import { ruText } from "@/lib/ai/ru-text";
 
 export const dynamic = "force-dynamic";
+
+const DAY_FORMS = ["день", "дня", "дней"] as const;
 
 const PRIORITY_STYLES: Record<string, string> = {
   high: "bg-red-50 text-red-700",
@@ -159,7 +161,7 @@ export default async function SellerAnalyticsPage() {
               {report.stale.map((item) => (
                 <li key={item.productId} className="flex justify-between text-ink">
                   <span>{item.title}</span>
-                  <span className="font-mono text-xs text-ink-soft">{item.days > 0 ? `${item.days} дн. без продления` : "нужно подтвердить наличие"}</span>
+                  <span className="font-mono text-xs text-ink-soft">{item.days > 0 ? `${countText(item.days, DAY_FORMS)} без продления` : "нужно подтвердить наличие"}</span>
                 </li>
               ))}
             </ul>

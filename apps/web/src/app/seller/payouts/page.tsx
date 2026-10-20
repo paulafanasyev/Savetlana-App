@@ -1,4 +1,5 @@
 import { requireSellerServer } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { getPayoutProvider, sellerSettlementStatement } from "@/lib/domains/payments";
 import { availablePayoutKopecks } from "@/lib/domains/seller-payouts";
 import { bankRegistryMode } from "@/lib/domains/payout-registry";
@@ -7,7 +8,7 @@ import { getPayoutHold } from "@/lib/domains/account-security";
 import { holdMessage } from "@/lib/domains/account-guard";
 import { ACCEPT_DAYS } from "@/lib/safe-deal";
 import { BankDetailsForm } from "./BankDetailsForm";
-import { rub, timeAgo } from "@/lib/format";
+import { countText, rub, timeAgo } from "@/lib/format";
 import { settlementStatusLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,17 @@ const RESULT_TEXT: Record<string, string> = {
   security_hold: "Выплата временно приостановлена для защиты аккаунта.",
 };
 
+const DAY_FORMS = ["день", "дня", "дней"] as const;
+
+/** Номера заказов для истории расчётов: только заказы этого продавца. Ошибка не ломает страницу. */
+async function orderNumbers(sellerId: string, ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await prisma.order
+    .findMany({ where: { id: { in: ids }, sellerId }, select: { id: true, number: true } })
+    .catch(() => [] as { id: string; number: string }[]);
+  return new Map(rows.map((r) => [r.id, r.number]));
+}
+
 export default async function SellerPayoutsPage({ searchParams }: { searchParams?: Promise<{ payout?: string; test?: string }> }) {
   const { sellerId } = await requireSellerServer();
   const [statement, available, hold] = await Promise.all([
@@ -30,6 +42,7 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
     availablePayoutKopecks(sellerId),
     getPayoutHold(sellerId).catch(() => null),
   ]);
+  const numbers = await orderNumbers(sellerId, [...new Set(statement.settlements.map((s) => s.orderId))]);
   const params = (await searchParams) ?? {};
   const result = params.payout;
   const registry = bankRegistryMode();
@@ -54,7 +67,7 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
         </p>
       )}
       <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">
-        🛡 Безопасная сделка: деньги покупателя лежат на счёте площадки, пока он не получит и не примет заказ. Если покупатель не нажмёт «Товар получен» и не откроет спор, заказ примется сам через {ACCEPT_DAYS} дней после доставки.
+        🛡 Безопасная сделка: деньги покупателя лежат на счёте площадки, пока он не получит и не примет заказ. Если покупатель не нажмёт «Товар получен» и не откроет спор, заказ примется сам через {countText(ACCEPT_DAYS, DAY_FORMS)} после доставки.
       </p>
       <div className="grid gap-3 sm:grid-cols-4">
         <Stat label="Оборот" value={rub(statement.totals.grossKopecks)} />
@@ -74,7 +87,7 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
           <tbody>
             {statement.settlements.map((settlement) => (
               <tr className="border-b" key={settlement.id}>
-                <td className="p-3">{settlement.orderId.slice(-8)}</td>
+                <td className="p-3">{numbers.get(settlement.orderId) ?? settlement.orderId.slice(-8)}</td>
                 <td className="p-3">{rub(settlement.grossKopecks)}</td>
                 <td className="p-3">{rub(settlement.payoutKopecks)}</td>
                 <td className="p-3">{settlementStatusLabel(settlement.status)}</td>

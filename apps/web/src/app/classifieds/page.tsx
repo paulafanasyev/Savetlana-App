@@ -4,8 +4,9 @@ import { headers } from "next/headers";
 import { searchClassifieds, getGeoTree } from "@/lib/domains/classifieds";
 import { ensureDemoClassifieds } from "@/lib/domains/demo";
 import { prisma } from "@/lib/prisma";
+import { resolveSession, serverRequest } from "@/lib/auth";
 import { DEAL_TYPE_LABELS, VERTICAL_LABELS, dealTypeLabel, verticalEmoji, verticalLabel } from "@/lib/verticals";
-import { rub } from "@/lib/format";
+import { countText, rub } from "@/lib/format";
 import { priceText } from "@/lib/classified-fields";
 import { resolveSearchParams } from "@/lib/page-params";
 import { readCityCookie } from "@/lib/my-city";
@@ -13,11 +14,13 @@ import { normalize, type PickCity } from "@/lib/city-pick";
 import { kmBetween, kmLabel, nearbyCities } from "@/lib/nearby";
 import { listMeta } from "@/lib/ad-meta";
 import { activeAdClause } from "@/lib/ad-active";
+import { textMatchOr } from "@/lib/text-match";
 import { CityFilter } from "./CityFilter";
 
 export const dynamic = "force-dynamic";
 
 const NEARBY_RADIUS_KM = 300;
+const AD_FORMS: [string, string, string] = ["объявление", "объявления", "объявлений"];
 
 /** Заголовок списка по разделу и городу из ссылки; поиск по тексту не индексируется. */
 export async function generateMetadata({
@@ -62,6 +65,8 @@ export default async function ClassifiedsPage({
   // Пустая база: показываем помеченные примеры, пока нет настоящих объявлений.
   await ensureDemoClassifieds();
   const tree = await getGeoTree();
+  // Кнопке «Сохранить поиск» нужно знать, вошёл ли человек.
+  const { user: viewer } = await resolveSession(await serverRequest()).catch(() => ({ user: null }));
 
   // Все города одним списком, крупные первыми (для подсказок в фильтре).
   const cities: PickCity[] = tree
@@ -114,7 +119,8 @@ export default async function ClassifiedsPage({
           AND: [activeAdClause()],
           ...(query.vertical ? { vertical: query.vertical } : {}),
           ...(query.dealType ? { dealType: query.dealType } : {}),
-          ...(q && q.length >= 2 ? { OR: [{ title: { contains: q } }, { description: { contains: q } }] } : {}),
+          // Без учёта регистра, как и основной поиск.
+          ...(q && q.length >= 2 ? { OR: textMatchOr(q, ["title", "description"] as const) } : {}),
         },
         orderBy: { createdAt: "desc" },
         take: 12,
@@ -152,6 +158,14 @@ export default async function ClassifiedsPage({
   everywhere.set("cityId", "all");
   const everywhereHref = `/classifieds?${everywhere.toString()}`;
   const nearestHref = `${everywhereHref}&sort=near`;
+
+  // Текущие фильтры для возврата после входа (гость нажал «Сохранить поиск»).
+  const here = new URLSearchParams();
+  if (query.vertical) here.set("vertical", query.vertical);
+  if (query.dealType) here.set("dealType", query.dealType);
+  if (query.q) here.set("q", query.q);
+  if (query.cityId) here.set("cityId", query.cityId);
+  const hereHref = here.toString() ? `/classifieds?${here.toString()}` : "/classifieds";
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6">
@@ -218,6 +232,31 @@ export default async function ClassifiedsPage({
         </div>
       </form>
 
+      {/* Сохранённый поиск: уведомление о новых объявлениях по этим фильтрам. */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+        {viewer ? (
+          <form method="post" action="/api/saved-searches">
+            <input type="hidden" name="vertical" value={query.vertical ?? ""} />
+            <input type="hidden" name="dealType" value={query.dealType ?? ""} />
+            <input type="hidden" name="cityId" value={cityId ?? ""} />
+            <input type="hidden" name="q" value={query.q ?? ""} />
+            <button type="submit" data-testid="save-search" className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 font-medium">
+              🔔 Сохранить поиск
+            </button>
+          </form>
+        ) : (
+          <Link href={`/login?next=${encodeURIComponent(hereHref)}`} data-testid="save-search" className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 font-medium">
+            🔔 Сохранить поиск
+          </Link>
+        )}
+        {viewer && (
+          <Link href="/classifieds/saved" className="text-zinc-600 underline">
+            Мои поиски
+          </Link>
+        )}
+        <span className="text-xs text-zinc-500">Пришлём уведомление, когда по этим фильтрам появятся новые объявления.</span>
+      </div>
+
       {myCity && (
         <p className="mb-3 rounded-lg bg-svetlana-50 px-3 py-2 text-sm text-ink" role="status">
           Показаны объявления в городе {myCity.name}.{" "}
@@ -239,7 +278,7 @@ export default async function ClassifiedsPage({
         </nav>
       )}
 
-      <p className="mb-3 text-sm text-zinc-500">{items.length} объявлений</p>
+      <p className="mb-3 text-sm text-zinc-500">{countText(items.length, AD_FORMS)}</p>
 
       {items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 p-12 text-center text-zinc-500">
@@ -249,7 +288,7 @@ export default async function ClassifiedsPage({
               <Link href={everywhereHref} className="underline">Посмотреть по всей России</Link>
             </>
           ) : (
-            "Ничего не найдено. Попробуйте изменить фильтры."
+            "Ничего не найдено. Попробуйте изменить фильтры или сохраните поиск, чтобы узнать о новых объявлениях."
           )}
         </div>
       ) : (

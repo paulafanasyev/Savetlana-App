@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { headers } from "next/headers";
+import Script from "next/script";
+import { cookies, headers } from "next/headers";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { SvetlanaDock } from "@/components/SvetlanaDock";
@@ -7,9 +8,10 @@ import { GuestCartSync } from "@/components/GuestCartSync";
 import { ConsentGateServer } from "@/components/ConsentGateServer";
 import { WeatherWidget } from "@/components/WeatherWidget";
 import { PromoLayout } from "@/components/PromoRail";
+import { ViewToggle } from "@/components/ViewToggle";
 import { env } from "@/lib/env";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/seo";
-import { viewportFor } from "@/lib/viewport";
+import { VIEW_COOKIE, isDesktopView, parseViewPref, viewportFor } from "@/lib/viewport";
 
 // The whole app is auth-gated and interactive, so pages render per request.
 // Setting this at the root propagates to every route and synthesized page.
@@ -23,6 +25,8 @@ export const metadata: Metadata = {
   description:
     "АИКО: маркетплейс, где ИИ-помощник Светлана помогает найти товар, выбрать подарок, оформить заказ, а продавцам продавать и разбирать продажи.",
   applicationName: SITE_NAME,
+  authors: [{ name: "Афанасьев Павел Петрович" }],
+  creator: "Афанасьев Павел Петрович",
   metadataBase: new URL(env.publicAppUrl),
   alternates: { canonical: "/" },
   openGraph: {
@@ -34,13 +38,21 @@ export const metadata: Metadata = {
   },
 };
 
-/** «Полная версия» в браузере телефона должна показывать широкую страницу (lib/viewport.ts). */
-export async function generateViewport(): Promise<Viewport> {
+async function viewState() {
   const ua = (await headers()).get("user-agent");
-  return viewportFor(ua);
+  const pref = parseViewPref((await cookies()).get(VIEW_COOKIE)?.value);
+  return { ua, pref };
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+/** «Полная версия»: кнопка в подвале или настройка браузера телефона (lib/viewport.ts). */
+export async function generateViewport(): Promise<Viewport> {
+  const { ua, pref } = await viewState();
+  return viewportFor(ua, pref);
+}
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const { ua, pref } = await viewState();
+  const desktop = isDesktopView(ua, pref);
   return (
     <html lang="ru">
       <body className="min-h-screen flex flex-col">
@@ -61,6 +73,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/privacy" className="hover:text-svetlana-700">Конфиденциальность</a>
               <a href="/svetlana" className="hover:text-svetlana-700">Светлана</a>
               <a href="/favorites" className="hover:text-svetlana-700">Избранное</a>
+              <a href="/sell" className="font-medium text-svetlana-700 hover:underline">Продавать на АИКО</a>
               <a href="/seller" className="hover:text-svetlana-700">Кабинет продавца</a>
               <a href="/city" className="hover:text-svetlana-700">Мой город и погода</a>
               <a href="/promote" className="hover:text-svetlana-700">Продвижение от 5 ₽</a>
@@ -71,11 +84,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/legal/offer" className="hover:text-svetlana-700">Оферта</a>
               <a href="/contacts" className="hover:text-svetlana-700">Контакты и реквизиты</a>
             </div>
+            <div className="pt-2">
+              <ViewToggle desktop={desktop} />
+            </div>
+            <div className="pt-2">
+              © 2026 Афанасьев Павел Петрович. Все права защищены. Копирование материалов сайта без письменного разрешения запрещено.
+            </div>
           </div>
         </footer>
         <SvetlanaDock />
         <GuestCartSync />
         <ConsentGateServer />
+        {/* Защита от копирования: источник к скопированному тексту, картинки не сохраняются (public/copy-guard.js). */}
+        <Script src="/copy-guard.js" strategy="afterInteractive" />
       </body>
     </html>
   );

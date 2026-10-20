@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { rub, availabilityLabel } from "@/lib/format";
+import { rub, availabilityLabel, countText, REVIEW_FORMS } from "@/lib/format";
 import { readCityCookie } from "@/lib/my-city";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 
@@ -16,7 +16,7 @@ interface CatalogItem {
   rating: number;
   reviewsCount: number;
   availability: string;
-  seller: { id: string; name: string };
+  seller: { id: string; name: string; demo?: boolean };
   shipCity?: string | null;
   signals: string[];
   imageUrl?: string | null;
@@ -39,6 +39,8 @@ function CatalogInner() {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [photo, setPhoto] = useState<VisionResult | null>(null);
+  // Запрос с исправленной опечаткой, если поиск его исправил.
+  const [corrected, setCorrected] = useState<string | null>(null);
   // useSearchParams() can be null during server rendering.
   const [q, setQ] = useState(params?.get("q") ?? "");
   // «Мой город» живёт в куке браузера, читаем её после загрузки страницы.
@@ -64,10 +66,14 @@ function CatalogInner() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((d) => setItems(d.items ?? []))
+      .then((d) => {
+        setItems(d.items ?? []);
+        setCorrected(typeof d.corrected === "string" && d.corrected ? d.corrected : null);
+      })
       .catch(() => {
         // A failed request is not the same as "nothing found": say so honestly.
         setItems([]);
+        setCorrected(null);
         setFailed(true);
       })
       .finally(() => setLoading(false));
@@ -100,6 +106,7 @@ function CatalogInner() {
         <PhotoSearch onResult={(d) => {
           setPhoto(d);
           setFailed(false);
+          setCorrected(null);
           setItems(d.candidates.map((c) => ({
             id: c.productId,
             title: c.title,
@@ -143,7 +150,7 @@ function CatalogInner() {
           )}
           {photo.candidates.length > 0 && (
             <div className="mt-2 text-ink-soft">
-              Показаны {photo.candidates.length} похожих товаров из каталога.
+              Похожие товары из каталога: {photo.candidates.length}.
             </div>
           )}
         </div>
@@ -196,16 +203,31 @@ function CatalogInner() {
             )
           ) : (
             <>
+              {corrected && !photo && (
+                <p className="mb-3 rounded-lg bg-svetlana-50 px-3 py-2 text-sm text-ink" role="status" data-testid="search-corrected">
+                  Исправили опечатку: показано по запросу «<b>{corrected}</b>».
+                </p>
+              )}
               <div className="mb-3 text-sm text-ink-soft">Найдено: {items.length}</div>
+              {items.some((item) => item.seller.demo) && (
+                <p className="mb-3 rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-700" role="note" data-testid="catalog-demo-note">
+                  Товары с пометкой «демо» выставила площадка, чтобы показать работу каталога. Их продавцы не проходили проверку.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 {items.map((item) => (
                   <Link key={item.id} href={`/product/${item.id}`} className="card overflow-hidden transition-shadow hover:shadow-float">
-                    <div className="aspect-square bg-surface-muted">
+                    <div className="relative aspect-square bg-surface-muted">
                       {item.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={item.imageUrl} alt={item.title} loading="lazy" className="h-full w-full object-contain" />
                       ) : (
                         <div className="flex h-full items-center justify-center text-4xl" aria-hidden>📦</div>
+                      )}
+                      {item.seller.demo && (
+                        <span className="absolute left-2 top-2 rounded bg-zinc-800/80 px-1.5 py-0.5 text-[10px] font-medium text-white" data-testid="demo-mark">
+                          демо
+                        </span>
                       )}
                     </div>
                     <div className="space-y-1.5 p-3">
@@ -213,14 +235,17 @@ function CatalogInner() {
                         {item.title}
                       </div>
                       <div className="text-base font-bold text-svetlana-700">{rub(item.priceKopecks)}</div>
-                      <div className="text-xs text-ink-soft">{item.seller.name}</div>
+                      <div className="text-xs text-ink-soft">
+                        {item.seller.name}
+                        {item.seller.demo ? " · демо-магазин" : ""}
+                      </div>
                       {item.shipCity && <div className="text-xs text-ink-soft">📍 Отправка из г. {item.shipCity}</div>}
                       <div className="flex items-center gap-1 text-xs text-ink-faint">
                         {item.reviewsCount > 0 ? (
                           <>
                             <span>★ {item.rating.toFixed(1)}</span>
                             <span>·</span>
-                            <span>{item.reviewsCount} отз.</span>
+                            <span>{countText(item.reviewsCount, REVIEW_FORMS)}</span>
                           </>
                         ) : (
                           <span>пока без отзывов</span>
