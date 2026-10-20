@@ -17,6 +17,7 @@
  *      завершается через 7 дней, и деньги становятся доступны продавцу.
  *   9. Напоминание автору объявления за 3 дня до конца срока.
  *  10. Новые объявления по сохранённым поискам.
+ *  11. Одно напоминание подать заявку тем, кто открыл кабинет продавца и застрял.
  *
  * This module exposes a single `runJobs()` entry point that performs one
  * bounded slice of every category, so it can be driven by Vercel Cron
@@ -40,6 +41,7 @@ import { expirePromotions } from "./seller-promotions";
 import { sendLowStockAlerts } from "./stock-alerts";
 import { sendListingExpiryReminders } from "./listing-expiry";
 import { sendSavedSearchAlerts } from "./saved-searches";
+import { sendApplicationReminders } from "./seller-application-reminder";
 import { autoAcceptDelivered } from "./safe-deal-actions";
 import { retryFailedDeliveries } from "../notification-delivery";
 import { ShipmentStatus_VALUES } from "../db/enums";
@@ -94,6 +96,7 @@ export async function runJobs(): Promise<JobRunResult> {
     timed("low_stock_alerts", () => sendLowStockAlerts(), (n) => `${n} alerts sent`),
     timed("listing_expiry_reminders", () => sendListingExpiryReminders(), (n) => `${n} reminders sent`),
     timed("saved_search_alerts", () => sendSavedSearchAlerts(), (n) => `${n} alerts sent`),
+    timed("seller_application_reminders", () => sendApplicationReminders(), (n) => `${n} reminders sent`),
     timed("safe_deal_auto_accept", () => autoAcceptDelivered({ limit: 25 }), (r) =>
       `${r.checked} checked, ${r.completed} completed, ${r.failed} failed`),
   ]);
