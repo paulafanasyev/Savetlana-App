@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import { audit } from "./audit";
 import { notify } from "./notifications";
 import { fromKopecks } from "../utils";
+import { FNS_AUTO_IDENTITY, isDemoSeller } from "./seller-trust-display";
 
 export interface AdminOverview {
   users: { total: number; buyers: number; sellers: number; blocked: number };
@@ -14,9 +15,10 @@ export interface AdminOverview {
 }
 
 export async function getAdminOverview(): Promise<AdminOverview> {
-  const [userCounts, blocked, productCounts, productActive, aiDraft, orderStatuses, paymentAgg, feeAgg, reviewCounts, reviewHidden, riskOpen, riskLevels, pendingSellers, verifiedSellers] = await Promise.all([
-    prisma.user.groupBy({ by: ["role"], _count: { _all: true } }), prisma.user.count({ where: { isBlocked: true } }), prisma.product.count(), prisma.product.count({ where: { status: "ACTIVE" } }), prisma.product.count({ where: { aiDraft: true } }), prisma.order.groupBy({ by: ["status"], _count: { _all: true } }), prisma.payment.aggregate({ _sum: { amountKopecks: true }, where: { status: "SUCCEEDED" } }), prisma.settlement.aggregate({ _sum: { platformFeeKopecks: true } }), prisma.review.count(), prisma.review.count({ where: { isHidden: true } }), prisma.riskEvent.count({ where: { reviewedAt: null } }), prisma.riskEvent.groupBy({ by: ["level"], _count: { _all: true }, where: { reviewedAt: null } }), prisma.sellerProfile.count({ where: { OR: [{ isActivated: false }, { identityStatus: { not: "VERIFIED" } }, { AND: [{ businessStatus: { not: "VERIFIED" } }, { npdStatus: { not: "VERIFIED" } }] }] } }), prisma.sellerProfile.count({ where: { identityStatus: "VERIFIED", isActivated: true } }),
+  const [userCounts, blocked, productCounts, productActive, aiDraft, orderStatuses, paymentAgg, feeAgg, reviewCounts, reviewHidden, riskOpen, riskLevels, queue, verifiedSellers] = await Promise.all([
+    prisma.user.groupBy({ by: ["role"], _count: { _all: true } }), prisma.user.count({ where: { isBlocked: true } }), prisma.product.count(), prisma.product.count({ where: { status: "ACTIVE" } }), prisma.product.count({ where: { aiDraft: true } }), prisma.order.groupBy({ by: ["status"], _count: { _all: true } }), prisma.payment.aggregate({ _sum: { amountKopecks: true }, where: { status: "SUCCEEDED" } }), prisma.settlement.aggregate({ _sum: { platformFeeKopecks: true } }), prisma.review.count(), prisma.review.count({ where: { isHidden: true } }), prisma.riskEvent.count({ where: { reviewedAt: null } }), prisma.riskEvent.groupBy({ by: ["level"], _count: { _all: true }, where: { reviewedAt: null } }), listVerificationQueue(500), prisma.sellerProfile.count({ where: { identityStatus: "VERIFIED", isActivated: true } }),
   ]);
+  const pendingSellers = queue.length;
   const users = { total: 0, buyers: 0, sellers: 0, blocked };
   for (const row of userCounts) { users.total += row._count._all; if (row.role === "BUYER") users.buyers = row._count._all; if (row.role === "SELLER") users.sellers = row._count._all; }
   const byStatus: Record<string, number> = {}; for (const row of orderStatuses) byStatus[row.status] = row._count._all;
@@ -54,13 +56,58 @@ export async function listAdminPayments(limit = 50) {
   return { payments: payments.map((p) => ({ ...p, buyerName: p.buyer?.name ?? null, createdAt: p.createdAt.toISOString() })), payouts: payouts.map((p) => ({ ...p, sandbox: p.provider === "sandbox-payout", sellerName: p.sellerProfile.displayName, createdAt: p.createdAt.toISOString() })) };
 }
 
+/** Не до конца проверенные магазины (без демо): из них выбираем тех, кому нужно решение. */
+const NOT_FULLY_VERIFIED = {
+  NOT: { slug: { startsWith: "demo-" } },
+  OR: [{ isActivated: false }, { identityStatus: { not: "VERIFIED" } }, { AND: [{ businessStatus: { not: "VERIFIED" } }, { npdStatus: { not: "VERIFIED" } }] }],
+};
+
+type QueueCandidate = {
+  slug: string;
+  identityStatus: string;
+  verificationRecords: { status: string }[];
+};
+
+/**
+ * Нужно ли решение администратора: последняя заявка (не автоматическая проверка ФНС)
+ * ждёт проверки, или самозанятый одобрен по ФНС и ждёт проверки личности. Те, кто
+ * только открыл кабинет и заявку не подал, и демо-магазины в очередь не попадают.
+ */
+export function needsAdminDecision(s: QueueCandidate): boolean {
+  if (isDemoSeller(s)) return false;
+  if (s.identityStatus === FNS_AUTO_IDENTITY) return true;
+  return s.verificationRecords[0]?.status === "PENDING";
+}
+
+const LATEST_APPLICATION = {
+  where: { NOT: { source: "fns" } },
+  orderBy: { createdAt: "desc" as const },
+  take: 1,
+  select: { status: true, createdAt: true },
+};
+
 export async function listVerificationQueue(limit = 50) {
   const sellers = await prisma.sellerProfile.findMany({
-    where: { OR: [{ isActivated: false }, { identityStatus: { not: "VERIFIED" } }, { AND: [{ businessStatus: { not: "VERIFIED" } }, { npdStatus: { not: "VERIFIED" } }] }] },
-    orderBy: { createdAt: "desc" }, take: limit,
-    select: { id: true, displayName: true, sellerType: true, slug: true, identityStatus: true, businessStatus: true, npdStatus: true, inn: true, ogrn: true, createdAt: true, _count: { select: { verificationRecords: true, documents: true } } },
+    where: NOT_FULLY_VERIFIED,
+    orderBy: { updatedAt: "desc" }, take: Math.min(limit * 4, 2000),
+    select: { id: true, displayName: true, sellerType: true, slug: true, identityStatus: true, businessStatus: true, npdStatus: true, inn: true, ogrn: true, createdAt: true, verificationRecords: LATEST_APPLICATION, _count: { select: { verificationRecords: true, documents: true } } },
   });
-  return sellers.map((s) => ({ ...s, createdAt: s.createdAt.toISOString() }));
+  return sellers
+    .filter(needsAdminDecision)
+    .slice(0, limit)
+    .map(({ verificationRecords, ...s }) => ({
+      ...s,
+      createdAt: s.createdAt.toISOString(),
+      submittedAt: verificationRecords[0]?.createdAt.toISOString() ?? null,
+      fnsAuto: s.identityStatus === FNS_AUTO_IDENTITY,
+    }));
+}
+
+/** Сколько человек открыли кабинет продавца, но заявку ещё не подали (без демо). */
+export async function countSellersWithoutApplication(): Promise<number> {
+  return prisma.sellerProfile.count({
+    where: { NOT: { slug: { startsWith: "demo-" } }, isActivated: false, verificationRecords: { none: { NOT: { source: "fns" } } } },
+  });
 }
 
 export async function listRiskEvents(limit = 50) {
@@ -91,17 +138,20 @@ export async function reviewRiskEvent(riskEventId: string, decision: string, act
 
 /**
  * Продавцу: решение по заявке. Раньше он узнавал об одобрении только сам, зайдя в кабинет.
- * Уведомление дублируется письмом и в Telegram, если они подключены.
+ * Уведомление дублируется письмом и в Telegram, если они подключены. Самозанятый, уже
+ * торгующий по ФНС, узнаёт, что личность проверена и выплаты открыты.
  */
-async function notifySellerDecision(userId: string, approved: boolean, note: string | undefined): Promise<void> {
+async function notifySellerDecision(userId: string, approved: boolean, note: string | undefined, wasFnsAuto: boolean): Promise<void> {
   await notify(
     approved
       ? {
           userId,
           kind: "document_status",
-          title: "Магазин прошёл проверку",
-          body: "Теперь можно публиковать товары. Карточку можно создать вместе со Светланой за пару минут.",
-          url: "/seller/products",
+          title: wasFnsAuto ? "Личность проверена, выплаты открыты" : "Магазин прошёл проверку",
+          body: wasFnsAuto
+            ? "Администратор проверил личность. Теперь можно запрашивать выплаты, а покупатели видят отметку «Личность подтверждена»."
+            : "Теперь можно публиковать товары. Карточку можно создать вместе со Светланой за пару минут.",
+          url: wasFnsAuto ? "/seller/payouts" : "/seller/products",
         }
       : {
           userId,
@@ -127,7 +177,7 @@ export async function decideVerification(sellerId: string, kind: string, approve
   if (Object.keys(data).length) await prisma.sellerProfile.update({ where: { id: sellerId }, data });
   await audit({ actorId, actorRole: "admin", action: approved ? "verification_approved" : "verification_rejected", targetType: "SellerProfile", targetId: sellerId, before, after: { recordId: record.id, kind, status, source: "manual_review", ...data } });
   // Решение уже сохранено: сбой уведомления его не отменяет.
-  if (kind === "business" || kind === "npd") await notifySellerDecision(seller.userId, approved, note).catch(() => undefined);
+  if (kind === "business" || kind === "npd") await notifySellerDecision(seller.userId, approved, note, seller.identityStatus === FNS_AUTO_IDENTITY).catch(() => undefined);
   return { sellerId, kind, status };
 }
 
