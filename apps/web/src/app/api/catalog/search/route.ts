@@ -49,7 +49,7 @@ export const GET = apiRoute(async (request) => {
       ? prisma.sellerProfile.findMany({ where: { id: { in: sellerIds } }, select: { id: true, slug: true } }).catch(() => [] as { id: string; slug: string }[])
       : Promise.resolve([] as { id: string; slug: string }[]),
   ]);
-  const demoSellers = new Set(sellerSlugs.filter((s) => isDemoSeller(s.slug)).map((s) => s.id));
+  const demoSellers = new Set(sellerSlugs.filter((s) => isDemoSeller({ slug: s.slug })).map((s) => s.id));
   const firstImage = new Map<string, string>();
   for (const image of images) if (!firstImage.has(image.productId)) firstImage.set(image.productId, image.url);
   return Response.json({
