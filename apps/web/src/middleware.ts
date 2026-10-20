@@ -31,6 +31,10 @@ const STATE_CHANGING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
  * script-src must allow inline scripts: Next.js App Router streams the page
  * data as inline <script> tags. Without them React cannot hydrate, throws away
  * the server HTML and the page turns blank right after loading.
+ *
+ * Framing: only our own origin may embed our pages (the checkpoint
+ * presentation shows live screens of the site in iframes). Third-party sites
+ * still cannot frame us, so clickjacking protection is kept.
  */
 const CSP = [
   "default-src 'self'",
@@ -40,7 +44,8 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   "connect-src 'self'",
-  "frame-ancestors 'none'",
+  "frame-src 'self'",
+  "frame-ancestors 'self'",
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",

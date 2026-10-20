@@ -37,6 +37,8 @@ const nextConfig = {
   async headers() {
     // Next.js App Router передаёт данные страницы встроенными <script>. Если их
     // запретить, страница видна при загрузке и сразу пропадает (пустой экран).
+    // Встраивать страницы во фрейм можно только с нашего же сайта (живые экраны на
+    // страницах /checkpoint); чужие сайты по-прежнему блокируются (защита от clickjacking).
     const csp = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline'",
@@ -45,7 +47,8 @@ const nextConfig = {
       "media-src 'self' blob: https:",
       "font-src 'self' data:",
       "connect-src 'self'",
-      "frame-ancestors 'none'",
+      "frame-src 'self'",
+      "frame-ancestors 'self'",
       "form-action 'self'",
       "base-uri 'self'",
       "object-src 'none'",
@@ -56,7 +59,7 @@ const nextConfig = {
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=()" },
           { key: "Content-Security-Policy", value: csp },

@@ -40,10 +40,14 @@ h2 .n{display:inline-flex;width:40px;height:40px;border-radius:12px;background:v
 .violet{background:var(--s50);border-color:var(--s200)}
 .dark{background:linear-gradient(135deg,var(--s900),var(--s700));color:#fff;border:0}
 .dark p,.dark li{color:var(--s200)}
-.shot{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 14px 34px -16px rgba(30,27,46,.35)}
-.shot .bar{height:30px;background:#efedf5;display:flex;align-items:center;gap:6px;padding:0 12px;font-size:12px;color:var(--faint)}
-.shot .bar i{width:10px;height:10px;border-radius:50%;background:#d6d2e2;display:inline-block}
-.shot .bar span{margin-left:10px;background:#fff;border-radius:6px;padding:2px 10px;flex:1}
+.shot,.live{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 14px 34px -16px rgba(30,27,46,.35);position:relative;break-inside:avoid}
+.shot .bar,.live .bar{height:30px;background:#efedf5;display:flex;align-items:center;gap:6px;padding:0 12px;font-size:12px;color:var(--faint)}
+.shot .bar i,.live .bar i{width:10px;height:10px;border-radius:50%;background:#d6d2e2;display:inline-block}
+.shot .bar span,.live .bar span{margin-left:10px;background:#fff;border-radius:6px;padding:2px 10px;flex:1}
+.live .bar a{font-weight:700;text-decoration:none;margin-left:8px;white-space:nowrap}
+.live .frame{position:relative;overflow:hidden;background:#fff;height:420px}
+.live .frame iframe{position:absolute;left:0;top:0;width:1280px;border:0;transform-origin:0 0;pointer-events:none;background:#fff}
+.live .badge{position:absolute;right:12px;top:40px;background:var(--ok);color:#fff;font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;z-index:2;box-shadow:0 4px 10px -4px rgba(0,0,0,.4)}
 .shot img.real{display:block;width:100%}.shot img.real+.mock{display:none}
 .mock{padding:14px 16px;font-size:13px}
 .msg{display:flex;gap:8px;margin-bottom:10px;align-items:flex-start}
@@ -75,7 +79,7 @@ table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--li
 .foot .qr{background:#fff;border-radius:16px;padding:12px;line-height:0}
 .print{position:fixed;right:20px;bottom:20px;background:var(--s600);color:#fff;border:0;border-radius:999px;padding:13px 20px;font-weight:800;cursor:pointer;box-shadow:0 10px 24px -8px rgba(56,36,78,.6)}
 @page{size:A4;margin:12mm}
-@media print{body{background:#fff}.print{display:none}.wrap{padding:0;max-width:none}h2{break-after:avoid}.hero,.foot,.card,.shot,svg{break-inside:avoid}}
+@media print{body{background:#fff}.print{display:none}.wrap{padding:0;max-width:none}h2{break-after:avoid}.hero,.foot,.card,.shot,.live,svg{break-inside:avoid}}
 @media (max-width:820px){.hero{grid-template-columns:1fr;text-align:center}.hero img.av{margin:0 auto;width:160px;height:160px}.stats{grid-template-columns:repeat(3,1fr);margin:-20px 8px 0}.g2,.g3,.g4{grid-template-columns:1fr}.foot{grid-template-columns:1fr}.layers b{min-width:0}}
 </style>
 </head>
@@ -104,12 +108,7 @@ table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--li
 <h2><span class="n">1</span>Кто такая Светлана</h2>
 <p class="sub">Наша собственная обученная модель (сервер Svetlana Core) и мастер-агент над 22 профильными агентами.</p>
 <div class="g2">
-<div class="shot"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/svetlana</span></div><img class="real" src="/checkpoint/shots/chat-buyer.png" alt="" onerror="this.remove()"><div class="mock">
-<div class="msg u"><div>Ищу беспроводные наушники с шумоподавлением до 12 000 ₽, чтобы в метро было тихо</div></div>
-<div class="msg"><img src="/images/avatar/svetlana-master.jpg" alt=""><div>Нашла 3 подходящих. Лучший по отзывам: <b>Harmonia Pro</b>, 11 990 ₽, в наличии, продавец проверен. Хвалят шумоподавление и 24 ч автономности.</div></div>
-<div class="msg u"><div>А есть дешевле?</div></div>
-<div class="msg"><img src="/images/avatar/svetlana-master.jpg" alt=""><div>Harmonia Lite за 2 990 ₽, но без шумоподавления. Для метро советую Pro. Добавить в корзину?</div></div>
-<p style="margin:4px 0 0"><span class="btn">Добавить в корзину</span><span class="btn g">Сравнить</span></p></div></div>
+<div class="live"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/svetlana</span><a href="https://savetlana-app-web.vercel.app/svetlana">открыть ↗</a></div><div class="badge">● живой экран</div><div class="frame"><iframe src="/svetlana" width="1280" height="1000" data-h="1000" scrolling="no" tabindex="-1" title="Страница Светланы"></iframe></div></div>
 <div style="display:grid;gap:14px">
 <div class="card violet"><div class="ic">🧠</div><h3>Своя модель</h3><p>обучена нами, данные остаются у нас; дальше — дообучение на обезличенных торгах и КП площадки</p></div>
 <div class="card"><div class="ic o">🧮</div><h3>Модель понимает, код считает</h3><p>цены, торг, скидки и наличие считает серверный код — «придумать» цену нельзя</p></div>
@@ -118,6 +117,7 @@ table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--li
 
 <h2><span class="n">2</span>Что умеет для покупателя</h2>
 <p class="sub">«Не ищите товар, объясните задачу»: для кого, зачем, бюджет, срок.</p>
+<div class="live" style="margin-bottom:16px"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app</span><a href="https://savetlana-app-web.vercel.app">открыть ↗</a></div><div class="badge">● живой экран</div><div class="frame"><iframe src="/" width="1280" height="760" data-h="760" scrolling="no" tabindex="-1" title="Главная АИКО"></iframe></div></div>
 <div class="g4">
 <div class="card"><div class="ic">🔎</div><h3>Поиск задачей</h3><p>по тексту, смыслу, цене, рейтингу и наличию, с объяснением выбора</p></div>
 <div class="card"><div class="ic">⚖️</div><h3>Сравнение и «дешевле»</h3><p>характеристики, продавцы, доставка, аналоги и цены внешних площадок</p></div>
@@ -157,6 +157,9 @@ table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--li
 <div class="card"><h3>Правила задают люди</h3><ul><li><b>продавец</b> в кабинете: скидки за объём, максимум уступки, мин. партия, сроки, предоплата, отсрочка или выключатель торга</li><li><b>покупатель</b> в чате: объём, желаемая цена, потолок бюджета, срок, оплата</li><li>договорённость — только проект КП: его подтверждают оба человека</li></ul></div>
 </div></div>
 
+<h3 style="margin:26px 0 10px;font-size:20px">Тот же торг на живом сайте (открывается без входа)</h3>
+<div class="live"><div class="bar"><i></i><i></i><i></i><span>savetlana-app-web.vercel.app/b2b/negotiation</span><a href="https://savetlana-app-web.vercel.app/b2b/negotiation">открыть ↗</a></div><div class="badge">● живой экран</div><div class="frame"><iframe src="/b2b/negotiation" width="1280" height="1250" data-h="1250" scrolling="no" tabindex="-1" title="B2B-переговоры агентов"></iframe></div></div>
+
 <h3 style="margin:26px 0 10px;font-size:20px">Реверсивный аукцион одной фразой: «Собери КП на перчатки, 500 штук»</h3>
 <div class="g2">
 <div class="card">
@@ -178,6 +181,7 @@ table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--li
 <div style="border:1px solid #1f7a45;background:#eef8f2;border-radius:10px;padding:8px 10px;margin-top:4px"><b>✓ Проверка продавца</b><br><span style="color:#5b5670">ИНН/ОГРН ✓ · модерация ✓ · ЕГРЮЛ ? · РНП ? · история !</span></div>
 <p style="margin:8px 0 0"><span class="btn">Оформить заказ по КП</span><span class="btn g">Договор · Счёт · УПД</span></p></div></div>
 </div>
+<p class="cap">Диалог аукциона и кабинет продавца ниже показаны примером: на сайте они доступны после входа в аккаунт.</p>
 
 <h3 style="margin:26px 0 10px;font-size:20px">Весь путь сделки</h3>
 <div class="flow">
@@ -299,7 +303,7 @@ table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--li
 <text x="0" y="18" font-size="14" font-weight="700" fill="#1e1b2e">B2B-маркетплейсы, трлн ₽</text>
 <line x1="30" y1="180" x2="400" y2="180" stroke="#e6e3ef"/>
 <rect x="90" y="79" width="80" height="101" rx="8" fill="#bca9e0"/><rect x="250" y="20" width="80" height="160" rx="8" fill="#654493"/>
-<g font-size="16" font-weight="800" text-anchor="middle"><text x="130" y="72" fill="#523577">1,8</text><text x="290" y="14" fill="#523577" dy="0"></text></g>
+<text x="130" y="72" text-anchor="middle" font-size="16" font-weight="800" fill="#523577">1,8</text>
 <text x="290" y="45" text-anchor="middle" font-size="16" font-weight="800" fill="#fff">2,84</text>
 <g font-size="13" fill="#5b5670" text-anchor="middle"><text x="130" y="199">2024</text><text x="290" y="199">2030 (прогноз)</text></g>
 </svg></div>
@@ -330,5 +334,24 @@ table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--li
 
 </div>
 <button class="print" onclick="window.print()">Скачать PDF</button>
+<script>
+(function(){
+  function fit(){
+    var frames=document.querySelectorAll('.live .frame');
+    for(var k=0;k<frames.length;k++){
+      var f=frames[k],i=f.querySelector('iframe');
+      var s=f.clientWidth/1280; if(!s) continue;
+      var h=+(i.getAttribute('data-h')||800);
+      i.style.height=h+'px';
+      i.style.transform='scale('+s+')';
+      f.style.height=Math.round(h*s)+'px';
+    }
+  }
+  fit();
+  window.addEventListener('load',fit);
+  window.addEventListener('resize',fit);
+  window.addEventListener('beforeprint',fit);
+})();
+</script>
 </body>
 </html>
