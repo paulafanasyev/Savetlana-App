@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { rub } from "@/lib/format";
-import { absoluteImage } from "@/lib/seo";
+import { absoluteImage, siteUrl } from "@/lib/seo";
 import { isDemoSeller } from "@/lib/domains/seller-trust-display";
 import { loadOgFont } from "@/lib/og-font";
 
@@ -21,7 +21,7 @@ function allowedImageUrl(url: string): boolean {
     const u = new URL(url);
     if (u.protocol !== "https:") return false;
     const hosts = new Set<string>();
-    for (const base of [env.publicAppUrl, absoluteImage("/")]) {
+    for (const base of [env.publicAppUrl, siteUrl("/")]) {
       try {
         hosts.add(new URL(base).host);
       } catch {
