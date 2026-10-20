@@ -13,6 +13,10 @@
  * Демо-магазины (slug demo-…, см. demo-catalog.ts) никто не проверял: их статусы
  * условные, чтобы демо-заказы проходили. Покупателю пишем «демо, без проверки»
  * и не даём галочек.
+ *
+ * Самозанятый, одобренный автоматически по ответу ФНС, получает отметку
+ * «Самозанятый, подтверждено ФНС», но не «Личность подтверждена» и не
+ * «Проверенный продавец»: ФНС подтверждает ИНН, а не то, что за аккаунтом его владелец.
  */
 
 export interface SellerBadge {
@@ -25,6 +29,12 @@ type SellerStatuses = { sellerType: string; identityStatus: string; businessStat
 
 /** Статус для показа у демо-магазина вместо условного VERIFIED. */
 export const DEMO_STATUS = "DEMO";
+
+/**
+ * Личность не проверена человеком, но ИНН подтверждён ФНС как ИНН самозанятого.
+ * Такому продавцу можно торговать, а выплаты ждут ручной проверки личности.
+ */
+export const FNS_AUTO_IDENTITY = "FNS_AUTO";
 
 /** Демо-магазин из демо-каталога (те же slug, что считает demoCatalogStatus). */
 export function isDemoSeller(s: { slug?: string | null }): boolean {
@@ -77,6 +87,8 @@ export function checkStatusLabel(status: string): string {
       return "не подтверждено";
     case DEMO_STATUS:
       return "демо, без проверки";
+    case FNS_AUTO_IDENTITY:
+      return "ещё не проверена";
     default:
       return "не проверено";
   }

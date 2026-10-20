@@ -7,7 +7,8 @@ import { createHash } from "node:crypto";
 import { prisma } from "../prisma";
 import { audit } from "./audit";
 import { notify } from "./notifications";
-import { deviceLabel, holdMessage, isNewDevice, payoutHold, type PayoutHold } from "./account-guard";
+import { deviceLabel, holdMessage, identityPayoutHold, isNewDevice, payoutHold, type PayoutHold } from "./account-guard";
+import { FNS_AUTO_IDENTITY } from "./seller-trust-display";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -79,10 +80,15 @@ export async function flagBankDetailsChange(sellerId: string, userId: string): P
   });
 }
 
-/** Действующая пауза выплат продавца или null. */
+/**
+ * Действующая пауза выплат продавца или null. Самозанятый, одобренный автоматически
+ * по ФНС, торгует, но деньги не выводит, пока администратор не проверит личность:
+ * ИНН чужого самозанятого иначе давал бы путь к чужим деньгам покупателей.
+ */
 export async function getPayoutHold(sellerId: string, now = new Date()): Promise<PayoutHold | null> {
-  const seller = await prisma.sellerProfile.findUnique({ where: { id: sellerId }, select: { userId: true } });
+  const seller = await prisma.sellerProfile.findUnique({ where: { id: sellerId }, select: { userId: true, identityStatus: true } });
   if (!seller) return null;
+  if (seller.identityStatus === FNS_AUTO_IDENTITY) return identityPayoutHold(now);
   const since = new Date(now.getTime() - 3 * DAY);
   const [bank, reset] = await Promise.all([
     prisma.auditLog.findFirst({

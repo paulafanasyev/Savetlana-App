@@ -21,6 +21,7 @@ const IDENTITY: Record<string, string> = {
   REJECTED: "отклонён",
   NOT_PROVEN: "не подтверждён",
   MOCK_VERIFIED: "тестовая проверка",
+  FNS_AUTO: "ИНН подтвердила ФНС, личность не проверена",
 };
 
 const RISK_LEVEL: Record<string, string> = {

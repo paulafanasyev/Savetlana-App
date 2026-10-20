@@ -20,10 +20,14 @@
  * Налоговый статус считается по типу продавца (taxCheck): самозанятому нужен НПД из
  * ФНС, ИП и организации регистрация в ЕГРИП/ЕГРЮЛ. Раньше хватало любого,
  * и самозанятый с непроверенным НПД торговал по отметке «бизнес подтверждён».
+ *
+ * Самозанятый, одобренный автоматически по ответу ФНС (личность FNS_AUTO), проходит
+ * шаг личности, только пока ФНС подтверждает НПД. Выплаты ему закрывает getPayoutHold
+ * до ручной проверки личности.
  */
 import { prisma } from "../prisma";
 import { receiptInnBlocker, receiptSettings } from "./receipt";
-import { taxCheck } from "./seller-trust-display";
+import { FNS_AUTO_IDENTITY, taxCheck } from "./seller-trust-display";
 
 export type SellerOnboardingState =
   | "REGISTERED"
@@ -51,6 +55,11 @@ export function taxStatusOk(s: { sellerType?: string | null; businessStatus: str
   const tax = taxCheck({ sellerType: s.sellerType ?? "", identityStatus: "", businessStatus: s.businessStatus, npdStatus: s.npdStatus });
   if (tax) return tax.status === "VERIFIED";
   return s.businessStatus === "VERIFIED" || s.npdStatus === "VERIFIED";
+}
+
+/** Самозанятый, одобренный автоматически: ИНН подтвердила ФНС, личность ещё не проверена. */
+export function fnsAutoIdentityOk(s: { sellerType?: string | null; identityStatus: string; npdStatus: string }): boolean {
+  return s.sellerType === "SELF_EMPLOYED" && s.identityStatus === FNS_AUTO_IDENTITY && s.npdStatus === "VERIFIED";
 }
 
 /**
@@ -85,7 +94,7 @@ export async function getSellerOnboardingGate(sellerId: string): Promise<Onboard
   const blockers: string[] = [];
   let state: SellerOnboardingState = "REGISTERED";
 
-  if (seller.identityStatus !== "VERIFIED") {
+  if (seller.identityStatus !== "VERIFIED" && !fnsAutoIdentityOk(seller)) {
     blockers.push("личность не подтверждена");
     return {
       state,
