@@ -108,7 +108,7 @@ body{margin:0;background:#e9e5f2;font-family:system-ui,-apple-system,"Segoe UI",
 <div class="tags"><span>собственная модель «Светлана»</span><span>23 ИИ-агента</span><span>торг агент ↔ агент</span><span>безопасная сделка</span><span>КП, договор, счёт, УПД</span></div>
 <div class="bottom">
 <div class="qr"><img src="/checkpoint/aiko-qr.svg" alt="QR: savetlana-app-web.vercel.app" width="118" height="118" style="width:118px;height:118px"></div>
-<div class="who">Автор и разработчик<br><b>Афанасьев Павел Петрович</b><br><span class="role">Руководитель Лаборатории ИИ-разработок и внедрения<br>АНО ЦПС «Мир Самозанятых»</span><br>xongphavietnam@gmail.com · <a href="https://savetlana-app-web.vercel.app">savetlana-app-web.vercel.app</a><br>Октябрь 2026</div>
+<div class="who">Автор и разработчик<br><b>Афанасьев Павел Петрович</b><br><span class="role">Технический директор (CTO), руководитель направления<br>ИИ-разработок и внедрения АНО ЦПС «Мир Самозанятых»</span><br>xongphavietnam@gmail.com · <a href="https://savetlana-app-web.vercel.app">savetlana-app-web.vercel.app</a><br>Октябрь 2026</div>
 </div>
 </div>
 <img class="av" src="/images/avatar/svetlana-master.jpg" alt="Светлана">
@@ -150,7 +150,7 @@ body{margin:0;background:#e9e5f2;font-family:system-ui,-apple-system,"Segoe UI",
 <p>Сайт: <a href="https://savetlana-app-web.vercel.app">savetlana-app-web.vercel.app</a></p>
 <p>Торг агентов без входа: <a href="https://savetlana-app-web.vercel.app/b2b/negotiation">savetlana-app-web.vercel.app/b2b/negotiation</a></p>
 <p>Код: github.com/paulafanasyev/Savetlana-App</p>
-<p style="margin-top:16px">Автор и разработчик: <b>Афанасьев Павел Петрович</b>, руководитель Лаборатории ИИ-разработок и внедрения АНО ЦПС «Мир Самозанятых» · xongphavietnam@gmail.com</p>
+<p style="margin-top:16px">Автор и разработчик: <b>Афанасьев Павел Петрович</b>, технический директор (CTO), руководитель направления ИИ-разработок и внедрения АНО ЦПС «Мир Самозанятых» · xongphavietnam@gmail.com</p>
 <div class="q"><img src="/images/avatar/svetlana-master.jpg" alt=""><span>«Напишите мне задачу, остальное я возьму на себя» — Светлана</span></div>
 <div class="copy">© 2026 Афанасьев Павел Петрович. Все права защищены. Копирование, распространение и использование материалов без письменного разрешения автора запрещены.</div>
 </div>
@@ -163,7 +163,6 @@ body{margin:0;background:#e9e5f2;font-family:system-ui,-apple-system,"Segoe UI",
 <script>
 (function(){
   var FULL = "Афанасьев Павел Петрович";
-  var ROLE = "руководитель Лаборатории ИИ-разработок и внедрения АНО ЦПС «Мир Самозанятых»";
 
   function get(u){
     return fetch(u, {cache: "no-cache"}).then(function(r){
@@ -256,8 +255,6 @@ body{margin:0;background:#e9e5f2;font-family:system-ui,-apple-system,"Segoe UI",
     src = src.replace(/\r/g, "");
     var cut = src.indexOf("\n## Приложение");
     if (cut > 0) src = src.slice(0, cut);
-    src = src.replace("запрет встраивания во фреймы", "встраивание страниц только с собственного домена (защита от clickjacking)");
-    src = src.replace("**Контакт:** Павел Афанасьев,", "**Автор и разработчик:** " + FULL + ", " + ROLE + ",");
     var L = src.split("\n"), h = "", i = 0;
     var special = /^(#{1,6} |\||- |\d+\. )/;
     function cells(r){ return r.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(function(c){ return c.trim(); }); }
@@ -306,20 +303,6 @@ body{margin:0;background:#e9e5f2;font-family:system-ui,-apple-system,"Segoe UI",
     }
   }
 
-  /* Слайд «Команда»: один человек, с должностью. */
-  function patchTeam(deck){
-    var slides = deck.querySelectorAll("section.slide");
-    for (var i = 0; i < slides.length; i++){
-      var k = slides[i].querySelector(".kicker");
-      if (!k || k.textContent.indexOf("Команда") < 0) continue;
-      var card = slides[i].querySelector(".card");
-      if (!card) return;
-      card.innerHTML = "<h3>" + FULL + "</h3><p><b style=\"color:#523577\">" + ROLE.charAt(0).toUpperCase() + ROLE.slice(1) +
-        "</b></p><p style=\"margin-top:8px\">автор и единственный разработчик АИКО: продукт, архитектура, код, обучение модели «Светлана», безопасность и внедрение</p>";
-      return;
-    }
-  }
-
   function buildDeck(text){
     var d = new DOMParser().parseFromString(text, "text/html");
     var st = d.querySelector("style");
@@ -344,7 +327,6 @@ body{margin:0;background:#e9e5f2;font-family:system-ui,-apple-system,"Segoe UI",
         img.parentNode.removeChild(img);
       }
     });
-    patchTeam(deck);
     document.getElementById("partA").appendChild(deck);
   }
 
@@ -359,8 +341,6 @@ body{margin:0;background:#e9e5f2;font-family:system-ui,-apple-system,"Segoe UI",
     if (home) drop.push(home.closest(".live"));
     [].slice.call(wrap.querySelectorAll("img.real")).forEach(function(x){ drop.push(x); });
     drop.forEach(function(x){ if (x && x.parentNode) x.parentNode.removeChild(x); });
-    var dev = wrap.querySelector(".dev b");
-    if (dev) dev.insertAdjacentHTML("afterend", ", " + ROLE);
     document.getElementById("partB").appendChild(document.importNode(wrap, true));
   }
 
