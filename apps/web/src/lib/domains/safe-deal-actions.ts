@@ -6,6 +6,7 @@ import { prisma } from "../prisma";
 import { transitionOrder } from "./orders";
 import { notify } from "./notifications";
 import { ACCEPT_DAYS, ordersDueForAutoAccept } from "../safe-deal";
+import { PAYOUT_BLOCKING_DISPUTE_STATUSES } from "../dispute-hold";
 import { UserFacingError } from "./engagement-rules";
 
 async function notifySellerPaid(orderId: string, number: string, auto: boolean): Promise<void> {
@@ -50,6 +51,7 @@ export async function confirmReceipt(orderId: string, buyerId: string): Promise<
 /**
  * Фоновая задача: доставленные заказы без возврата и спора через ACCEPT_DAYS
  * дней завершаются сами. Время считается от последней записи о доставке.
+ * Заказ с открытым спором не завершается: деньги ждут решения по спору.
  */
 export async function autoAcceptDelivered(input: { limit?: number; now?: Date } = {}): Promise<{ checked: number; completed: number; failed: number }> {
   const now = input.now ?? new Date();
@@ -61,7 +63,14 @@ export async function autoAcceptDelivered(input: { limit?: number; now?: Date } 
     take: 200,
   });
   if (delivered.length === 0) return { checked: 0, completed: 0, failed: 0 };
-  const ids = delivered.map((o) => o.id);
+  const allIds = delivered.map((o) => o.id);
+  const disputed = await prisma.dispute.findMany({
+    where: { orderId: { in: allIds }, status: { in: [...PAYOUT_BLOCKING_DISPUTE_STATUSES] } },
+    select: { orderId: true },
+  });
+  const held = new Set(disputed.map((d) => d.orderId));
+  const ids = allIds.filter((id) => !held.has(id));
+  if (ids.length === 0) return { checked: allIds.length, completed: 0, failed: 0 };
   const rows = await prisma.orderHistory.findMany({
     where: { orderId: { in: ids }, toStatus: "DELIVERED" },
     select: { orderId: true, createdAt: true },
@@ -96,5 +105,5 @@ export async function autoAcceptDelivered(input: { limit?: number; now?: Date } 
       failed += 1;
     }
   }
-  return { checked: ids.length, completed, failed };
+  return { checked: allIds.length, completed, failed };
 }

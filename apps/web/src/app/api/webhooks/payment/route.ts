@@ -1,21 +1,28 @@
 import { apiRoute } from "@/lib/api-helpers";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
-import { audit } from "@/lib/domains/audit";
-import { markOrderPaid } from "@/lib/domains/payments";
+import { applyVerifiedPayment, type VerifiedStatus } from "@/lib/domains/payment-webhooks";
 
 export const dynamic = "force-dynamic";
 
+/** Платёжный партнёр общего вида (PAYMENT_PROVIDER_*): его ключ в таблице платежей. */
+const PARTNER_KEY = "partner-payment";
+
+function mapStatus(raw: string | undefined): VerifiedStatus {
+  const s = (raw ?? "").toUpperCase();
+  if (s === "SUCCEEDED") return "SUCCEEDED";
+  if (s === "FAILED" || s === "CANCELED" || s === "CANCELLED") return "FAILED";
+  return "PENDING";
+}
+
 /**
- * Payment provider webhook (P0-7, spec §25/§50).
+ * Webhook платёжного партнёра общего вида (P0-7, spec §25/§50).
  *
- * The provider — not our own code — is the source of truth for whether money
- * arrived. Without this endpoint the platform could only learn about a
- * successful charge by polling, which is what made the sandbox the default.
- *
- * Security: the request must carry the provider's signing secret. Every
- * accepted event is recorded in an idempotency ledger keyed by the provider's
- * own event id, so a redelivery is acknowledged but never applied twice.
+ * Подпись проверяется общим секретом. Но одной подписи мало: заказ становится
+ * оплаченным, только если у него уже есть наш платёж у этого же партнёра с тем же
+ * номером операции и сумма совпадает с суммой заказа. Это та же проверка, что у
+ * ЮKassa, Т-Банка, Сбера и Альфы (applyVerifiedPayment): двойная оплата и оплата
+ * отменённого заказа обрабатываются там же. Повтор события не применяется дважды.
  */
 export const POST = apiRoute(async (request) => {
   const secret = env.paymentWebhookSecret;
@@ -30,7 +37,7 @@ export const POST = apiRoute(async (request) => {
     return Response.json({ error: "Нет доступа", code: "bad_signature" }, { status: 401 });
   }
 
-  const event = JSON.parse(body) as {
+  let event: {
     event_id?: string;
     type?: string;
     data?: {
@@ -40,45 +47,51 @@ export const POST = apiRoute(async (request) => {
       amount_kopecks?: number;
     };
   };
+  try {
+    event = JSON.parse(body);
+  } catch {
+    return Response.json({ error: "Некорректное событие", code: "bad_event" }, { status: 400 });
+  }
 
-  if (!event.event_id || !event.data?.order_id) {
+  if (!event.event_id || !event.data?.order_id || !event.data.provider_ref) {
     return Response.json({ error: "Некорректное событие", code: "bad_event" }, { status: 400 });
   }
 
   // Idempotent processing: a redelivered event is acknowledged, not re-applied.
-  const eventId = `payment:${event.event_id}`;
+  const eventId = `payment:${event.event_id}`.slice(0, 190);
   const existing = await prisma.outboxMessage.findUnique({ where: { id: eventId } }).catch(() => null);
   if (existing) return Response.json({ ok: true, deduplicated: true });
 
-  await prisma.outboxMessage.create({
-    data: {
-      id: eventId,
-      aggregate: "payment-webhook",
-      aggregateId: event.data.order_id,
-      type: event.type ?? "PAYMENT_EVENT",
-      payload: JSON.stringify(event),
-    },
-  });
-
-  const order = await prisma.order.findUnique({
-    where: { id: event.data.order_id },
-    select: { id: true, status: true },
-  });
-
-  if (event.data.status === "SUCCEEDED" && order) {
-    await markOrderPaid(order.id, false);
-    // actorId null: the actor is the payment provider, not a User row. The FK
-    // on AuditLog.actorId would otherwise reject the insert.
-    await audit({
-      actorRole: "system",
-      action: "payment.webhook.captured",
-      targetType: "Order",
-      targetId: order.id,
-      after: { providerRef: event.data.provider_ref, eventId: event.event_id },
-    }).catch(() => undefined);
+  try {
+    await prisma.outboxMessage.create({
+      data: {
+        id: eventId,
+        aggregate: "payment-webhook",
+        aggregateId: event.data.order_id,
+        type: (event.type ?? "PAYMENT_EVENT").slice(0, 120),
+        payload: body.slice(0, 8000),
+        status: "PROCESSED",
+        processedAt: new Date(),
+      },
+    });
+  } catch {
+    return Response.json({ ok: true, deduplicated: true });
   }
 
-  return Response.json({ ok: true });
+  const status = mapStatus(event.data.status);
+  if (status === "PENDING") return Response.json({ ok: true, ignored: true });
+
+  const amount = Number(event.data.amount_kopecks);
+  const result = await applyVerifiedPayment({
+    providerKey: PARTNER_KEY,
+    providerRef: String(event.data.provider_ref).slice(0, 190),
+    orderId: event.data.order_id,
+    status,
+    rawStatus: String(event.data.status ?? "").slice(0, 40),
+    amountKopecks: Number.isInteger(amount) ? amount : null,
+  });
+
+  return Response.json({ ok: true, result });
 });
 
 async function hmacHex(secret: string, payload: string): Promise<string> {
