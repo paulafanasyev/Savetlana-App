@@ -4,12 +4,15 @@
  * keyword (SQL LIKE over indexed text)
  *   + semantic (cosine similarity over stored embeddings)
  *   + structured filters (category, price, seller, rating, availability)
- *   → combined score → ranking → explanations
+ *   → combined score → relevance cut → ranking → explanations
  *
  * The keyword part deliberately runs in SQL so it works on SQLite (dev) and
  * Postgres (prod) without a separate search daemon. The semantic part uses
  * the embedding gateway (live model when configured, deterministic sandbox
  * otherwise — always reported honestly).
+ *
+ * По запросу в выдачу попадают только товары со совпавшими словами или заметной
+ * близостью по смыслу (lib/search-relevance.ts), а не весь каталог.
  *
  * Фильтр «Из моего города» (shipCity): только продавцы, у которых указан этот
  * город отгрузки (lib/ship-from.ts).
@@ -19,6 +22,7 @@ import { aiGateway } from "../ai/gateway";
 import { newTraceId } from "../ai/gateway";
 import { fromKopecks, toKopecks } from "../utils";
 import { SHIP_FROM_LABEL } from "../ship-from";
+import { normalizeHay, queryTerms, relevantIds } from "../search-relevance";
 import { Prisma } from "@prisma/client";
 
 export interface SearchFilters {
@@ -110,18 +114,17 @@ export async function searchProducts(
   }
 
   // --- Keyword scoring ----------------------------------------------------
-  const terms = q
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((t) => t.length > 2);
+  // Слова без окончаний: «кроссовки» находит «кроссовок», регистр и ё не важны.
+  const terms = queryTerms(q);
   const keywordScores = new Map<string, number>();
   if (terms.length > 0) {
     for (const p of products) {
-      const hay = `${p.title} ${p.description ?? ""} ${p.keywords}`.toLowerCase();
+      const hay = normalizeHay(`${p.title} ${p.description ?? ""} ${p.keywords}`);
+      const title = normalizeHay(p.title);
       let score = 0;
       for (const t of terms) {
         if (hay.includes(t)) score += t.length > 5 ? 3 : 2;
-        if (p.title.toLowerCase().includes(t)) score += 2;
+        if (title.includes(t)) score += 2;
       }
       if (score > 0) keywordScores.set(p.id, score);
     }
@@ -140,14 +143,26 @@ export async function searchProducts(
     }
   }
 
+  // --- Relevance cut: без запроса весь каталог, с запросом только подходящее ---
+  let pool = products;
+  let fallback = false;
+  if (q.length > 0) {
+    const cut = relevantIds(
+      products.map((p) => ({ id: p.id, kw: keywordScores.get(p.id) ?? 0, sem: semanticScores.get(p.id) ?? 0 }))
+    );
+    pool = products.filter((p) => cut.ids.has(p.id));
+    fallback = cut.fallback;
+  }
+
   // --- Combine + explain --------------------------------------------------
-  const scored: ScoredProduct[] = products.map((product) => {
+  const scored: ScoredProduct[] = pool.map((product) => {
     const kw = keywordScores.get(product.id) ?? 0;
     const sem = semanticScores.get(product.id) ?? 0;
     const score = kw * 1.0 + sem * 6.0; // semantic is the dominant signal
     const signals: string[] = [];
     if (kw > 0) signals.push(`точное совпадение по словам: +${kw}`);
     if (sem > 0.1) signals.push(`семантическая близость: ${(sem * 100).toFixed(0)}%`);
+    if (fallback) signals.push("точных совпадений нет, ближайшее по смыслу");
     if (product.rating >= 4.5) signals.push("высокий рейтинг продаваемого товара");
     if (product.inventory?.availability === "AVAILABLE")
       signals.push("подтверждённое наличие");
@@ -166,7 +181,7 @@ export async function searchProducts(
   return {
     results: scored.slice(offset, offset + limit),
     total,
-    mode: `keyword:${terms.length > 0 ? "on" : "off"}+semantic:${semanticMode}`,
+    mode: `keyword:${terms.length > 0 ? "on" : "off"}+semantic:${semanticMode}${fallback ? "+fallback" : ""}`,
   };
 }
 
