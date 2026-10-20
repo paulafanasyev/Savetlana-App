@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { cookies, headers } from "next/headers";
 import "./globals.css";
 import { Header } from "@/components/Header";
@@ -24,6 +25,8 @@ export const metadata: Metadata = {
   description:
     "АИКО: маркетплейс, где ИИ-помощник Светлана помогает найти товар, выбрать подарок, оформить заказ, а продавцам продавать и разбирать продажи.",
   applicationName: SITE_NAME,
+  authors: [{ name: "Афанасьев Павел Петрович" }],
+  creator: "Афанасьев Павел Петрович",
   metadataBase: new URL(env.publicAppUrl),
   alternates: { canonical: "/" },
   openGraph: {
@@ -83,11 +86,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="pt-2">
               <ViewToggle desktop={desktop} />
             </div>
+            <div className="pt-2">
+              © 2026 Афанасьев Павел Петрович. Все права защищены. Копирование материалов сайта без письменного разрешения запрещено.
+            </div>
           </div>
         </footer>
         <SvetlanaDock />
         <GuestCartSync />
         <ConsentGateServer />
+        {/* Защита от копирования: источник к скопированному тексту, картинки не сохраняются (public/copy-guard.js). */}
+        <Script src="/copy-guard.js" strategy="afterInteractive" />
       </body>
     </html>
   );

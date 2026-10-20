@@ -61,12 +61,29 @@ const nextConfig = {
       "media-src 'self' blob: https:",
       "font-src 'self' data:",
       "connect-src 'self'",
+      "worker-src 'self' blob:",
+      "manifest-src 'self'",
       "frame-src 'self'",
       "frame-ancestors 'self'",
       "form-action 'self'",
       "base-uri 'self'",
       "object-src 'none'",
     ].join("; ");
+
+    const permissions = [
+      "camera=(self)",
+      "microphone=(self)",
+      "geolocation=()",
+      "payment=(self)",
+      "usb=()",
+      "serial=()",
+      "bluetooth=()",
+      "hid=()",
+      "magnetometer=()",
+      "gyroscope=()",
+      "accelerometer=()",
+      "browsing-topics=()",
+    ].join(", ");
 
     return [
       {
@@ -75,10 +92,31 @@ const nextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=()" },
+          { key: "Permissions-Policy", value: permissions },
           { key: "Content-Security-Policy", value: csp },
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+          // Окно сайта изолировано от чужих вкладок; окна оплаты и входа через VK продолжают работать.
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+          { key: "Origin-Agent-Cluster", value: "?1" },
+          { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
           { key: "X-DNS-Prefetch-Control", value: "on" },
+        ],
+      },
+      {
+        // Защита от копирования: чужие сайты не могут вставлять наши картинки к себе
+        // на страницы (hotlinking), ИИ-сервисам запрещено учиться на них.
+        source: "/images/:path*",
+        headers: [
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+          { key: "X-Robots-Tag", value: "noarchive, noai, noimageai" },
+        ],
+      },
+      {
+        // Материалы чек-поинта: только по ссылке, без поиска, копий и вставки на чужие сайты.
+        source: "/checkpoint/:path*",
+        headers: [
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+          { key: "X-Robots-Tag", value: "noindex, noarchive, noai, noimageai" },
         ],
       },
     ];

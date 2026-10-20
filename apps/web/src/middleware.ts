@@ -12,12 +12,16 @@
  *   2. Content-Security-Policy on every response (audit §24).
  *   3. Passes the requested path to server components (x-forwarded-path) so
  *      a login redirect can bring the user back to the same page.
+ *   4. Copy protection (lib/copy-guard): whole-site mirroring tools get 403;
+ *      every page asks search engines not to archive it and AI crawlers not
+ *      to train on it; checkpoint materials are not indexed at all.
  *
  * Requests without our session cookie (public APIs, OAuth start, bearer
- * clients) are untouched.
+ * clients) are untouched by the CSRF gate.
  */
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isSiteRipper, robotsTagFor } from "@/lib/copy-guard";
 
 const SESSION_COOKIE = "svetlana_session";
 const STATE_CHANGING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -44,6 +48,8 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   "connect-src 'self'",
+  "worker-src 'self' blob:",
+  "manifest-src 'self'",
   "frame-src 'self'",
   "frame-ancestors 'self'",
   "base-uri 'self'",
@@ -70,6 +76,14 @@ export function middleware(request: NextRequest): NextResponse {
 
   const method = request.method.toUpperCase();
 
+  // Copy protection: refuse whole-site mirroring tools.
+  if (isSiteRipper(request.headers.get("user-agent"))) {
+    return new NextResponse("Копирование сайта запрещено.", {
+      status: 403,
+      headers: { "content-type": "text/plain; charset=utf-8", "x-trace-id": traceId },
+    });
+  }
+
   // CSRF gate: only for state-changing requests that carry our session cookie.
   const hasSession = request.cookies.get(SESSION_COOKIE)?.value;
   if (STATE_CHANGING.has(method) && hasSession) {
@@ -95,6 +109,7 @@ export function middleware(request: NextRequest): NextResponse {
   forwarded.set("x-forwarded-path", `${request.nextUrl.pathname}${request.nextUrl.search}`);
   const response = NextResponse.next({ request: { headers: forwarded } });
   response.headers.set("Content-Security-Policy", CSP);
+  response.headers.set("X-Robots-Tag", robotsTagFor(request.nextUrl.pathname));
   response.headers.set("x-trace-id", traceId);
   return response;
 }
