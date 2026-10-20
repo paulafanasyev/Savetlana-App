@@ -5,6 +5,7 @@ import { promoteConfiguredAdmin } from "@/lib/domains/admin-bootstrap";
 import { consumeRateLimit, clientIp, loginBuckets, recordAuthOutcome, AUTH_LIMITS, tooMany } from "@/lib/domains/rate-limits";
 import { inspectLogin } from "@/lib/domains/account-security";
 import { startLoginChallenge } from "@/lib/domains/login-challenge";
+import { adminTelegramSecondFactor, type AdminSecondFactor } from "@/lib/domains/admin-2fa";
 import { finishLogin } from "@/lib/login-finish";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +36,17 @@ export const POST = apiRoute(async (request) => {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: found.id } });
   // Устройство сравниваем с прошлыми входами до записи новой сессии.
   const login = await inspectLogin(user.id, request.headers.get("user-agent"), ip).catch(() => null);
+  // Администратор с привязанным Telegram: код при каждом входе, без кода не пускаем.
+  const second: AdminSecondFactor = await adminTelegramSecondFactor(user, login).catch((): AdminSecondFactor => ({ kind: user.role === "ADMIN" ? "failed" : "none" }));
+  if (second.kind === "sent") {
+    return Response.json({ needsCode: true, reason: "admin", challenge: second.challenge.challenge, sentTo: second.challenge.sentTo, device: login?.device ?? "" });
+  }
+  if (second.kind === "failed") {
+    return Response.json(
+      { error: "Не удалось отправить код в Telegram. Попробуйте войти ещё раз через минуту. Если доступа к Telegram нет, воспользуйтесь аварийным восстановлением доступа.", code: "second_factor_unavailable" },
+      { status: 503 },
+    );
+  }
   // Незнакомое устройство: пароля мало, нужен код из письма. Если письмо не
   // ушло (почта не настроена), пускаем по паролю и предупреждаем владельца.
   if (login?.isNew) {
