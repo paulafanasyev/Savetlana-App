@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { prisma } from "@/lib/prisma";
 import { isDemoSeller } from "@/lib/domains/seller-trust-display";
-import { SITE_NAME, absoluteImage, snippet } from "@/lib/seo";
+import { isSvgUrl } from "@/lib/og-font";
+import { SITE_NAME, absoluteImage, siteUrl, snippet } from "@/lib/seo";
 
 interface LayoutProps {
   params: Promise<{ id: string }>;
@@ -11,8 +12,8 @@ interface LayoutProps {
 
 /**
  * Заголовок, описание и картинка страницы магазина для поисковиков и ссылок в мессенджерах:
- * продавец делится ссылкой из кабинета. Картинка: логотип или фото свежего товара.
- * Демо-магазин не индексируется.
+ * продавец делится ссылкой из кабинета. Картинка: логотип или фото свежего товара;
+ * если фото в SVG, берём PNG-превью этого товара. Демо-магазин не индексируется.
  */
 export async function generateMetadata({ params }: LayoutProps): Promise<Metadata> {
   const { id } = await params;
@@ -29,7 +30,7 @@ export async function generateMetadata({ params }: LayoutProps): Promise<Metadat
           where: { status: "ACTIVE" },
           orderBy: { createdAt: "desc" },
           take: 1,
-          select: { images: { orderBy: { position: "asc" }, take: 1, select: { url: true } } },
+          select: { id: true, images: { orderBy: { position: "asc" }, take: 1, select: { url: true } } },
         },
         _count: { select: { products: { where: { status: "ACTIVE" } } } },
       },
@@ -40,8 +41,11 @@ export async function generateMetadata({ params }: LayoutProps): Promise<Metadat
   const description =
     snippet(seller.description ?? "", 140) ||
     `Магазин «${seller.displayName}» на ${SITE_NAME}: ${count > 0 ? `${count} товар(ов) в продаже` : "скоро появятся товары"}, безопасная сделка.`;
-  const raw = seller.logoUrl ?? seller.products[0]?.images[0]?.url ?? null;
-  const image = raw ? absoluteImage(raw) : null;
+  const latest = seller.products[0];
+  const logo = seller.logoUrl && !isSvgUrl(seller.logoUrl) ? absoluteImage(seller.logoUrl) : null;
+  const photoRaw = latest?.images[0]?.url ?? null;
+  const photo = photoRaw ? absoluteImage(photoRaw) : null;
+  const image = logo ?? (photo && !isSvgUrl(photo) ? photo : latest ? siteUrl(`/og/product/${latest.id}`) : null);
   const title = `${seller.displayName}: магазин на ${SITE_NAME}`;
   return {
     title,

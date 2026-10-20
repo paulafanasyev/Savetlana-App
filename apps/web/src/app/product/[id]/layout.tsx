@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { rub } from "@/lib/format";
 import { isDemoSeller } from "@/lib/domains/seller-trust-display";
-import { SITE_NAME, absoluteImage, inStock, jsonLdString, productJsonLd, snippet, type SeoProduct } from "@/lib/seo";
+import { isSvgUrl } from "@/lib/og-font";
+import { SITE_NAME, absoluteImage, inStock, jsonLdString, productJsonLd, siteUrl, snippet, type SeoProduct } from "@/lib/seo";
 
 interface LayoutProps {
   params: Promise<{ id: string }>;
@@ -51,7 +52,8 @@ async function loadSeoProduct(id: string): Promise<LoadedProduct | null> {
 /**
  * Заголовок и описание карточки для поисковиков и ссылок в мессенджерах.
  * Товар демо-магазина не индексируется: купить его по-настоящему нельзя, и в выдаче Яндекса
- * или ChatGPT он вводил бы в заблуждение.
+ * или ChatGPT он вводил бы в заблуждение. Фото в SVG мессенджеры не показывают, для
+ * таких товаров превью рисуется в PNG (/og/product/[id]).
  */
 export async function generateMetadata({ params }: LayoutProps): Promise<Metadata> {
   const { id } = await params;
@@ -61,7 +63,8 @@ export async function generateMetadata({ params }: LayoutProps): Promise<Metadat
   const description =
     snippet(product.description, 140) ||
     `${product.title} за ${price}${inStock(product) ? ", в наличии" : ""}. Продавец ${product.sellerName}.`;
-  const image = product.images.map((i) => absoluteImage(i.url)).find(Boolean) ?? undefined;
+  const first = product.images.map((i) => absoluteImage(i.url)).find(Boolean) ?? undefined;
+  const image = !first || isSvgUrl(first) ? siteUrl(`/og/product/${product.id}`) : first;
   return {
     title: `${product.title}: купить за ${price}`,
     description,
@@ -73,8 +76,9 @@ export async function generateMetadata({ params }: LayoutProps): Promise<Metadat
       type: "website",
       siteName: SITE_NAME,
       locale: "ru_RU",
-      ...(image ? { images: [{ url: image }] } : {}),
+      images: [image === first ? { url: image } : { url: image, width: 1200, height: 630, type: "image/png" }],
     },
+    twitter: { card: "summary_large_image", title: product.title, description, images: [image] },
   };
 }
 
