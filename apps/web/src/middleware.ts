@@ -12,31 +12,19 @@
  *   2. Content-Security-Policy on every response (audit §24).
  *   3. Passes the requested path to server components (x-forwarded-path) so
  *      a login redirect can bring the user back to the same page.
- *   4. Copy protection: whole-site mirroring tools (HTTrack, Teleport,
- *      Offline Explorer, wget mirror, Scrapy…) get 403; every page asks
- *      search engines and AI crawlers not to archive or train on it.
+ *   4. Copy protection (lib/copy-guard): whole-site mirroring tools get 403;
+ *      every page asks search engines not to archive it and AI crawlers not
+ *      to train on it; checkpoint materials are not indexed at all.
  *
  * Requests without our session cookie (public APIs, OAuth start, bearer
  * clients) are untouched by the CSRF gate.
  */
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isSiteRipper, robotsTagFor } from "@/lib/copy-guard";
 
 const SESSION_COOKIE = "svetlana_session";
 const STATE_CHANGING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-
-/**
- * Tools whose only purpose is to download a whole website for offline reuse.
- * Ordinary browsers, search engines, link previews and monitoring are not
- * affected.
- */
-const SITE_RIPPERS =
-  /(httrack|webcopier|offline explorer|sitesucker|teleport ?pro|webzip|webstripper|webreaper|webwhacker|blackwidow|website quester|website extractor|sitesnagger|grab-site|scrapy|wget)/i;
-
-/** Exported for tests: is this User-Agent a site-mirroring tool? */
-export function isSiteRipper(userAgent: string | null): boolean {
-  return !!userAgent && SITE_RIPPERS.test(userAgent);
-}
 
 /**
  * CSP: allow same-origin everything; allow https images/media/styles
@@ -67,7 +55,6 @@ const CSP = [
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
-  "upgrade-insecure-requests",
 ].join("; ");
 
 function hostOf(url: string | null): string | null {
@@ -122,9 +109,7 @@ export function middleware(request: NextRequest): NextResponse {
   forwarded.set("x-forwarded-path", `${request.nextUrl.pathname}${request.nextUrl.search}`);
   const response = NextResponse.next({ request: { headers: forwarded } });
   response.headers.set("Content-Security-Policy", CSP);
-  // Search engines may index public pages but not keep copies; AI crawlers
-  // are asked not to train on the content (robots.txt says the same).
-  response.headers.set("X-Robots-Tag", "noarchive, noai, noimageai");
+  response.headers.set("X-Robots-Tag", robotsTagFor(request.nextUrl.pathname));
   response.headers.set("x-trace-id", traceId);
   return response;
 }
