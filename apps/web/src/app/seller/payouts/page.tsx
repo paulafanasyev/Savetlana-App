@@ -7,7 +7,7 @@ import { getPayoutHold } from "@/lib/domains/account-security";
 import { holdMessage } from "@/lib/domains/account-guard";
 import { ACCEPT_DAYS } from "@/lib/safe-deal";
 import { BankDetailsForm } from "./BankDetailsForm";
-import { rub, timeAgo } from "@/lib/format";
+import { countText, rub, timeAgo } from "@/lib/format";
 import { settlementStatusLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +22,8 @@ const RESULT_TEXT: Record<string, string> = {
   bank_details_required: "Сначала укажите реквизиты для выплат ниже.",
   security_hold: "Выплата временно приостановлена для защиты аккаунта.",
 };
+
+const DAY_FORMS = ["день", "дня", "дней"] as const;
 
 export default async function SellerPayoutsPage({ searchParams }: { searchParams?: Promise<{ payout?: string; test?: string }> }) {
   const { sellerId } = await requireSellerServer();
@@ -54,7 +56,7 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
         </p>
       )}
       <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">
-        🛡 Безопасная сделка: деньги покупателя лежат на счёте площадки, пока он не получит и не примет заказ. Если покупатель не нажмёт «Товар получен» и не откроет спор, заказ примется сам через {ACCEPT_DAYS} дней после доставки.
+        🛡 Безопасная сделка: деньги покупателя лежат на счёте площадки, пока он не получит и не примет заказ. Если покупатель не нажмёт «Товар получен» и не откроет спор, заказ примется сам через {countText(ACCEPT_DAYS, DAY_FORMS)} после доставки.
       </p>
       <div className="grid gap-3 sm:grid-cols-4">
         <Stat label="Оборот" value={rub(statement.totals.grossKopecks)} />
