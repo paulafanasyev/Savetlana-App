@@ -6,6 +6,9 @@
  *   Поля ввода и короткие фрагменты (номер заказа, трек, адрес) копируются как есть.
  * - Картинки, аватар Светланы и графики нельзя сохранить правой кнопкой или
  *   перетаскиванием.
+ * - Исключение: картинка внутри ссылки (карточка товара, объявления, магазина).
+ *   Там меню и долгое нажатие нужны покупателю, чтобы открыть товар в новой вкладке
+ *   или скопировать ссылку, поэтому их не трогаем.
  * Выделение текста не запрещено: это ломает доступность и работу с заказами.
  */
 (function () {
@@ -37,15 +40,22 @@
     return t && t.closest ? t.closest("img, picture, svg, canvas, video") : null;
   }
 
+  /** Картинка внутри ссылки: меню ссылки оставляем («Открыть в новой вкладке», «Копировать ссылку»). */
+  function insideLink(t) {
+    return !!(t && t.closest && t.closest("a[href]"));
+  }
+
   document.addEventListener("contextmenu", function (e) {
-    if (media(e.target)) e.preventDefault();
+    if (media(e.target) && !insideLink(e.target)) e.preventDefault();
   });
 
   document.addEventListener("dragstart", function (e) {
-    if (media(e.target)) e.preventDefault();
+    if (media(e.target) && !insideLink(e.target)) e.preventDefault();
   });
 
   var style = document.createElement("style");
-  style.textContent = "img,svg,canvas,video{-webkit-user-drag:none;-webkit-touch-callout:none}";
+  style.textContent =
+    "img,svg,canvas,video{-webkit-user-drag:none;-webkit-touch-callout:none}" +
+    "a[href] img,a[href] svg{-webkit-touch-callout:default}";
   (document.head || document.documentElement).appendChild(style);
 })();
