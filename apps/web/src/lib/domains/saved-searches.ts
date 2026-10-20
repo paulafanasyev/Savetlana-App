@@ -16,6 +16,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { notify } from "./notifications";
 import { activeAdClause } from "../ad-active";
+import { textMatchOr } from "../text-match";
 import { DEAL_TYPE_LABELS, VERTICAL_LABELS } from "../verticals";
 import {
   MAX_SAVED_SEARCHES,
@@ -146,7 +147,8 @@ export async function countNewAds(userId: string, p: SavedSearchParams, since: D
       ...(p.vertical ? { vertical: p.vertical } : {}),
       ...(p.dealType ? { dealType: p.dealType } : {}),
       ...(p.cityId ? { cityId: p.cityId } : {}),
-      ...(q && q.length >= 2 ? { OR: [{ title: { contains: q } }, { description: { contains: q } }] } : {}),
+      // Без учёта регистра, как и сам поиск объявлений.
+      ...(q && q.length >= 2 ? { OR: textMatchOr(q, ["title", "description"] as const) } : {}),
     },
   });
 }

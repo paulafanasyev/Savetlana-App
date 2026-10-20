@@ -14,6 +14,7 @@ import { normalize, type PickCity } from "@/lib/city-pick";
 import { kmBetween, kmLabel, nearbyCities } from "@/lib/nearby";
 import { listMeta } from "@/lib/ad-meta";
 import { activeAdClause } from "@/lib/ad-active";
+import { textMatchOr } from "@/lib/text-match";
 import { CityFilter } from "./CityFilter";
 
 export const dynamic = "force-dynamic";
@@ -118,7 +119,8 @@ export default async function ClassifiedsPage({
           AND: [activeAdClause()],
           ...(query.vertical ? { vertical: query.vertical } : {}),
           ...(query.dealType ? { dealType: query.dealType } : {}),
-          ...(q && q.length >= 2 ? { OR: [{ title: { contains: q } }, { description: { contains: q } }] } : {}),
+          // Без учёта регистра, как и основной поиск.
+          ...(q && q.length >= 2 ? { OR: textMatchOr(q, ["title", "description"] as const) } : {}),
         },
         orderBy: { createdAt: "desc" },
         take: 12,
