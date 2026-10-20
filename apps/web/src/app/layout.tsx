@@ -17,9 +17,12 @@ import { VIEW_COOKIE, isDesktopView, parseViewPref, viewportFor } from "@/lib/vi
 // Setting this at the root propagates to every route and synthesized page.
 export const dynamic = "force-dynamic";
 
+/** «АИКО: маркетплейс с ИИ-помощником Светланой»: маленькая только первая буква, ИИ и имя не трогаем. */
+const HOME_TITLE = `${SITE_NAME}: ${SITE_TAGLINE.charAt(0).toLowerCase()}${SITE_TAGLINE.slice(1)}`;
+
 export const metadata: Metadata = {
   title: {
-    default: `${SITE_NAME}: ${SITE_TAGLINE.toLowerCase()}`,
+    default: HOME_TITLE,
     template: `%s · ${SITE_NAME}`,
   },
   description:
@@ -30,7 +33,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(env.publicAppUrl),
   alternates: { canonical: "/" },
   openGraph: {
-    title: `${SITE_NAME}: ${SITE_TAGLINE.toLowerCase()}`,
+    title: HOME_TITLE,
     description: "Покупки и продажи с ИИ-помощником Светланой",
     siteName: SITE_NAME,
     locale: "ru_RU",

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { prisma } from "@/lib/prisma";
 import { isDemoSeller } from "@/lib/domains/seller-trust-display";
 import { isSvgUrl } from "@/lib/og-font";
+import { countText } from "@/lib/format";
 import { SITE_NAME, absoluteImage, siteUrl, snippet } from "@/lib/seo";
 
 interface LayoutProps {
@@ -40,7 +41,7 @@ export async function generateMetadata({ params }: LayoutProps): Promise<Metadat
   const count = seller._count.products;
   const description =
     snippet(seller.description ?? "", 140) ||
-    `Магазин «${seller.displayName}» на ${SITE_NAME}: ${count > 0 ? `${count} товар(ов) в продаже` : "скоро появятся товары"}, безопасная сделка.`;
+    `Магазин «${seller.displayName}» на ${SITE_NAME}: ${count > 0 ? `${countText(count, ["товар", "товара", "товаров"])} в продаже` : "скоро появятся товары"}, безопасная сделка.`;
   const latest = seller.products[0];
   const logo = seller.logoUrl && !isSvgUrl(seller.logoUrl) ? absoluteImage(seller.logoUrl) : null;
   const photoRaw = latest?.images[0]?.url ?? null;
