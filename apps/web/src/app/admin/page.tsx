@@ -7,6 +7,18 @@ export const dynamic = "force-dynamic";
 
 type Overview = Awaited<ReturnType<typeof getAdminOverview>>;
 
+/** Уровни риска по-русски; незнакомый код показываем как есть. */
+const RISK_LEVEL_LABEL: Record<string, string> = {
+  LOW: "низкий",
+  MEDIUM: "средний",
+  HIGH: "высокий",
+  CRITICAL: "критический",
+};
+
+function riskLevelLabel(level: string): string {
+  return RISK_LEVEL_LABEL[level.toUpperCase()] ?? level;
+}
+
 export default async function AdminOverviewPage() {
   // Сводка не должна ронять всю админку: без неё демо-режим всё равно доступен.
   let overview: Overview | null = null;
@@ -35,7 +47,7 @@ export default async function AdminOverviewPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Пользователи" value={overview.users.total} hint={`покупателей: ${overview.users.buyers} · продавцов: ${overview.users.sellers}`} />
         <Stat label="Заблокировано" value={overview.users.blocked} />
-        <Stat label="Товары" value={overview.products.total} hint={`активных: ${overview.products.active} · AI-черновиков: ${overview.products.aiDraft}`} />
+        <Stat label="Товары" value={overview.products.total} hint={`активных: ${overview.products.active} · черновиков от ИИ: ${overview.products.aiDraft}`} />
         <Stat label="Заказов" value={overview.orders.total} />
       </div>
 
@@ -43,7 +55,7 @@ export default async function AdminOverviewPage() {
         <Stat label="Оборот (оплачено)" value={rub(overview.payments.grossKopecks)} />
         <Stat label="Комиссия платформы" value={rub(overview.payments.platformFeeKopecks)} hint="из расчётов по заказам" />
         <Stat label="Отзывы" value={overview.reviews.total} hint={`скрытых: ${overview.reviews.hidden}`} />
-        <Stat label="Открытые риски" value={overview.risk.openEvents} hint={riskLevels.map(([l, n]) => `${l}: ${n}`).join(" · ") || "нет"} />
+        <Stat label="Открытые риски" value={overview.risk.openEvents} hint={riskLevels.map(([l, n]) => `${riskLevelLabel(l)}: ${n}`).join(" · ") || "нет"} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
