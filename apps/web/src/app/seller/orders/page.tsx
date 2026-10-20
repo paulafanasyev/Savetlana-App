@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireSellerServer } from "@/lib/auth";
 import { getOrdersForSeller } from "@/lib/domains/orders";
-import { rub, timeAgo } from "@/lib/format";
+import { countText, rub, timeAgo } from "@/lib/format";
 import { orderStatusLabel, paymentStatusLabel, shipmentStatusLabel } from "@/lib/labels";
 import { deliveryLabel } from "@/lib/delivery-options";
 import { isLiveDeployment } from "@/lib/live-mode";
@@ -11,6 +11,8 @@ import { serviceMeta, servicePerformerNote } from "@/lib/service-deal";
 import { FulfillActions } from "./FulfillActions";
 
 export const dynamic = "force-dynamic";
+
+const DAY_FORMS = ["день", "дня", "дней"] as const;
 
 // Адрес и телефон покупателя продавец видит только после оплаты заказа.
 const HIDE_CONTACTS = ["CREATED", "PAYMENT_PENDING", "CANCELLED"];
@@ -66,7 +68,7 @@ export default async function SellerOrdersPage() {
                       <b>{rub(order.totalKopecks)}</b>
                     </div>
                   </div>
-                  <p className="text-sm">Услуга «{service.title}»{service.days > 0 ? ` · срок ${service.days} дн.` : ""}</p>
+                  <p className="text-sm">Услуга «{service.title}»{service.days > 0 ? ` · срок ${countText(service.days, DAY_FORMS)}` : ""}</p>
                   <p className="text-sm text-ink-faint">Оплата: {paymentStatusLabel(order.payment?.status)}</p>
                   <p className="rounded-lg bg-emerald-50 p-2 text-sm text-emerald-900">🛡 {servicePerformerNote(order.status)}</p>
                   <Link href={`/classifieds/${service.classifiedId}/chat`} className="btn btn-ghost inline-flex px-3 py-2 text-sm">Открыть переписку и сдать работу</Link>
