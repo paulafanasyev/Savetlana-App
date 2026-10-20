@@ -18,6 +18,8 @@
  *  - Письма со ссылками идут как "security": это служебные письма, и согласие
  *    на рекламную рассылку для них не требуется. Отправки ждём до ответа,
  *    иначе хостинг может оборвать её после ответа.
+ *  - Почта из ADMIN_EMAILS получает права администратора только после подтверждения
+ *    (admin-bootstrap.ts), и сразу в момент подтверждения.
  */
 import { prisma } from "../prisma";
 import { env } from "../env";
@@ -26,6 +28,7 @@ import { notify } from "./notifications";
 import { assertEnum } from "../db/enums";
 import { ApiError, hashPassword } from "../auth";
 import { notifyPasswordChanged } from "./password-changed";
+import { promoteConfiguredAdmin } from "./admin-bootstrap";
 
 const TICKET_TTL_MINUTES = 30;
 const RESET_TTL_MINUTES = 30;
@@ -186,6 +189,8 @@ export async function confirmEmail(secret: string): Promise<{ email: string }> {
     targetType: "user",
     targetId: userId,
   });
+  // Почта из ADMIN_EMAILS теперь подтверждена: права администратора сразу, без перевхода.
+  await promoteConfiguredAdmin(userId, user.email).catch(() => false);
   return { email: user.email };
 }
 
