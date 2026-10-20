@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
 import { audit } from "./audit";
+import { notify } from "./notifications";
 import { fromKopecks } from "../utils";
 
 export interface AdminOverview {
@@ -88,8 +89,32 @@ export async function reviewRiskEvent(riskEventId: string, decision: string, act
   return after;
 }
 
+/**
+ * Продавцу: решение по заявке. Раньше он узнавал об одобрении только сам, зайдя в кабинет.
+ * Уведомление дублируется письмом и в Telegram, если они подключены.
+ */
+async function notifySellerDecision(userId: string, approved: boolean, note: string | undefined): Promise<void> {
+  await notify(
+    approved
+      ? {
+          userId,
+          kind: "document_status",
+          title: "Магазин прошёл проверку",
+          body: "Теперь можно публиковать товары. Карточку можно создать вместе со Светланой за пару минут.",
+          url: "/seller/products",
+        }
+      : {
+          userId,
+          kind: "document_status",
+          title: "Заявка продавца отклонена",
+          body: `${note?.trim() ? `Причина: ${note.trim().slice(0, 300)}. ` : ""}Исправьте данные и отправьте заявку снова.`,
+          url: "/seller/onboarding",
+        },
+  );
+}
+
 export async function decideVerification(sellerId: string, kind: string, approved: boolean, note: string | undefined, actorId: string) {
-  const seller = await prisma.sellerProfile.findUniqueOrThrow({ where: { id: sellerId }, select: { id: true, identityStatus: true, businessStatus: true, npdStatus: true, isActivated: true, inn: true } });
+  const seller = await prisma.sellerProfile.findUniqueOrThrow({ where: { id: sellerId }, select: { id: true, userId: true, identityStatus: true, businessStatus: true, npdStatus: true, isActivated: true, inn: true } });
   const status = approved ? "VERIFIED" : "REJECTED";
   const record = await prisma.verificationRecord.create({ data: { sellerId, kind, status, source: "manual_review", note: note?.slice(0, 500), verifiedAt: approved ? new Date() : null } });
   const before = { identityStatus: seller.identityStatus, businessStatus: seller.businessStatus, npdStatus: seller.npdStatus, isActivated: seller.isActivated };
@@ -101,6 +126,8 @@ export async function decideVerification(sellerId: string, kind: string, approve
   if (!approved) data.isActivated = false;
   if (Object.keys(data).length) await prisma.sellerProfile.update({ where: { id: sellerId }, data });
   await audit({ actorId, actorRole: "admin", action: approved ? "verification_approved" : "verification_rejected", targetType: "SellerProfile", targetId: sellerId, before, after: { recordId: record.id, kind, status, source: "manual_review", ...data } });
+  // Решение уже сохранено: сбой уведомления его не отменяет.
+  if (kind === "business" || kind === "npd") await notifySellerDecision(seller.userId, approved, note).catch(() => undefined);
   return { sellerId, kind, status };
 }
 

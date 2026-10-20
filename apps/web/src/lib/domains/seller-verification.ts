@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "../prisma";
 import { audit } from "./audit";
+import { notify } from "./notifications";
 import { isValidInn, isValidOgrn } from "../legal";
 import { checkNpdStatus, type NpdCheckResult } from "./npd-check";
 
@@ -12,6 +13,28 @@ export const sellerOnboardingSchema = z.object({
 });
 
 export type SellerOnboardingInput = z.infer<typeof sellerOnboardingSchema>;
+
+const SELLER_TYPE_LABEL: Record<string, string> = { SELF_EMPLOYED: "самозанятый", IP: "ИП", COMPANY: "организация" };
+
+/**
+ * Администраторам: пришла новая заявка. Без этого заявка лежала в очереди, пока кто-то
+ * случайно не заглянет в админку, а продавец ждал и уходил. Уведомление дублируется в
+ * Telegram, если администратор его подключил. Сбой уведомления не ломает заявку.
+ */
+async function notifyAdminsAboutApplication(displayName: string, sellerType: string): Promise<void> {
+  const admins = await prisma.user.findMany({ where: { role: "ADMIN", isBlocked: false }, select: { id: true }, take: 20 });
+  await Promise.all(
+    admins.map((a) =>
+      notify({
+        userId: a.id,
+        kind: "document_status",
+        title: "Новая заявка продавца",
+        body: `«${displayName}» (${SELLER_TYPE_LABEL[sellerType] ?? "продавец"}) ждёт проверки. Пока заявка не одобрена, продавец не может публиковать товары.`,
+        url: "/admin/verification",
+      }).catch(() => undefined),
+    ),
+  );
+}
 
 export async function submitSellerOnboarding(sellerId: string, input: SellerOnboardingInput, actorId: string) {
   const parsed = sellerOnboardingSchema.parse(input);
@@ -54,6 +77,7 @@ export async function submitSellerOnboarding(sellerId: string, input: SellerOnbo
   // Самозанятого сразу проверяем в ФНС: ответ сервиса и есть отметка.
   // Сбой проверки не ломает заявку, она остаётся на модерации.
   const npd = parsed.sellerType === "SELF_EMPLOYED" ? await verifySellerNpd(sellerId, actorId).catch(() => null) : null;
+  await notifyAdminsAboutApplication(parsed.displayName, parsed.sellerType).catch(() => undefined);
   return { seller, record, npd };
 }
 
