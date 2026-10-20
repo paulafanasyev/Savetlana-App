@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "BUYER" });
@@ -12,6 +12,12 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [exists, setExists] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // Со страницы «Продавать на АИКО» (/register?role=seller) сразу выбираем «Я продавец».
+  useEffect(() => {
+    const role = new URLSearchParams(window.location.search).get("role");
+    if (role && role.toLowerCase() === "seller") setForm((f) => ({ ...f, role: "SELLER" }));
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
