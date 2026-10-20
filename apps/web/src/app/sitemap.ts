@@ -21,6 +21,14 @@ const STATIC_PAGES: { path: string; priority: number; changeFrequency: "daily" |
   { path: "/privacy", priority: 0.2, changeFrequency: "monthly" },
 ];
 
+/**
+ * Лимиты под правило Яндекса и Google: не больше 50 000 адресов в одной карте.
+ * Свежие товары идут первыми, поэтому при переполнении выпадают самые старые.
+ */
+const MAX_PRODUCTS = 40_000;
+const MAX_SELLERS = 4_000;
+const MAX_ADS = 5_000;
+
 /** Демо-магазины площадки (slug demo-…, как в isDemoSeller). */
 const NOT_DEMO_SELLER = { NOT: { slug: { startsWith: "demo-" } } };
 
@@ -43,18 +51,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         where: { status: "ACTIVE", sellerProfile: NOT_DEMO_SELLER },
         select: { id: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
-        take: 5000,
+        take: MAX_PRODUCTS,
       }),
       prisma.sellerProfile.findMany({
         where: { ...NOT_DEMO_SELLER, products: { some: { status: "ACTIVE" } } },
         select: { id: true, updatedAt: true },
-        take: 1000,
+        orderBy: { updatedAt: "desc" },
+        take: MAX_SELLERS,
       }),
       prisma.classified.findMany({
         where: { status: "PUBLISHED", author: { email: { not: DEMO_AUTHOR_EMAIL } }, AND: [activeAdClause(now)] },
         select: { id: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
-        take: 5000,
+        take: MAX_ADS,
       }),
     ]);
     for (const p of products) {
