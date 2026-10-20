@@ -17,8 +17,9 @@ const PROBE_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0
  * same route as a cheap always-200 answer so orchestrators can distinguish
  * "process alive but not ready" from "process dead".
  *
- * ?mode=storage: пробная загрузка крошечного файла и его удаление. Показывает, куда
- * реально попал файл (Blob или база) и последнюю ошибку Blob. Не чаще 3 раз в минуту.
+ * ?mode=storage: пробная загрузка крошечного файла и его удаление. Пишет в хранилище,
+ * поэтому только с ключом фоновых задач (Authorization: Bearer CRON_SECRET) и не чаще
+ * 3 раз в минуту.
  *
  * telegram: настроен ли бот уведомлений (только имена недостающих переменных, без значений).
  * scheduler: задан ли ключ фоновых задач (да/нет, без значения) и когда они в последний раз работали.
@@ -35,6 +36,10 @@ export const GET = apiRoute(async (request) => {
   }
 
   if (mode === "storage") {
+    const auth = request.headers.get("authorization") ?? "";
+    if (!env.cronSecret || auth !== `Bearer ${env.cronSecret}`) {
+      return Response.json({ error: "Нет доступа" }, { status: 403, headers: { "Cache-Control": "no-store" } });
+    }
     if (!rateLimit("health-storage", 3, 60_000)) return tooManyRequests();
     const provider = getStorageProvider().key;
     try {

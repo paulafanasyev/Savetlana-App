@@ -19,6 +19,7 @@
  *  10. Новые объявления по сохранённым поискам.
  *  11. Одно напоминание подать заявку тем, кто открыл кабинет продавца и застрял.
  *  12. Сводка за сутки администраторам (не шлётся, если ничего не произошло).
+ *  13. Возвраты по решению спора в пользу покупателя проводятся через банк.
  *
  * This module exposes a single `runJobs()` entry point that performs one
  * bounded slice of every category, so it can be driven by Vercel Cron
@@ -37,7 +38,7 @@ import { expireUnpaidOrders } from "./order-expiry";
 import { sweepStaleAvailability } from "./inventory";
 import { sweepExpiredDocuments } from "./documents";
 import { syncTracking } from "./delivery";
-import { checkSlaBreaches } from "./disputes";
+import { checkSlaBreaches, processResolvedDisputeRefunds } from "./disputes";
 import { expirePromotions } from "./seller-promotions";
 import { sendLowStockAlerts } from "./stock-alerts";
 import { sendListingExpiryReminders } from "./listing-expiry";
@@ -82,6 +83,9 @@ export async function runJobs(): Promise<JobRunResult> {
     `${r.checked} checked, ${r.updated} updated, ${r.failed} failed`);
   const expiry = await timed("unpaid_orders_expiry", () => expireUnpaidOrders({ limit: 25 }), (r) =>
     `${r.checked} checked, ${r.cancelled} cancelled, ${r.paid} paid, ${r.waiting} waiting, ${r.failed} failed`);
+  // Возвраты по спорам до выплат: сначала деньги покупателю, потом продавцу.
+  const disputeRefunds = await timed("dispute_refunds", () => processResolvedDisputeRefunds({ limit: 10 }), (r) =>
+    `${r.processed} processed, ${r.succeeded} succeeded, ${r.failed} failed`);
 
   const entries = await Promise.all([
     timed("payout_outbox", () => processPayoutOutbox({ limit: 25 }), (r) =>
@@ -107,7 +111,7 @@ export async function runJobs(): Promise<JobRunResult> {
   return {
     startedAt: startedAt.toISOString(),
     finishedAt: new Date().toISOString(),
-    categories: Object.fromEntries([reconcile, expiry, ...entries]),
+    categories: Object.fromEntries([reconcile, expiry, disputeRefunds, ...entries]),
   };
 }
 

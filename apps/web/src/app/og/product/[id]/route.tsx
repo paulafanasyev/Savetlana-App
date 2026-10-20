@@ -1,7 +1,8 @@
 import { ImageResponse } from "next/og";
 import { prisma } from "@/lib/prisma";
+import { env } from "@/lib/env";
 import { rub } from "@/lib/format";
-import { absoluteImage } from "@/lib/seo";
+import { absoluteImage, siteUrl } from "@/lib/seo";
 import { isDemoSeller } from "@/lib/domains/seller-trust-display";
 import { loadOgFont } from "@/lib/og-font";
 
@@ -10,11 +11,34 @@ export const dynamic = "force-dynamic";
 
 const SIZE = { width: 1200, height: 630 };
 
+/**
+ * Сервер скачивает фото только с нашего сайта и из нашего хранилища (Vercel Blob).
+ * Ссылки из импорта каталога могут вести куда угодно, в том числе во внутреннюю
+ * сеть хостинга, поэтому чужие адреса и переадресации не открываем.
+ */
+function allowedImageUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return false;
+    const hosts = new Set<string>();
+    for (const base of [env.publicAppUrl, siteUrl("/")]) {
+      try {
+        hosts.add(new URL(base).host);
+      } catch {
+        // пустой или неверный адрес сайта: просто пропускаем
+      }
+    }
+    return hosts.has(u.host) || u.hostname.endsWith(".public.blob.vercel-storage.com");
+  } catch {
+    return false;
+  }
+}
+
 /** Фото товара как data-URL: SVG кладём в картинку целиком, без второго запроса из рисовалки. */
 async function imageData(url: string | null): Promise<string | null> {
-  if (!url) return null;
+  if (!url || !allowedImageUrl(url)) return null;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000), redirect: "manual" });
     if (!res.ok) return null;
     const type = res.headers.get("content-type")?.split(";")[0] ?? "image/svg+xml";
     if (!/^image\/(svg\+xml|png|jpeg)$/.test(type)) return null;

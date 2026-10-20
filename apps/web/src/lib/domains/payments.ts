@@ -30,8 +30,12 @@ import { TbankPaymentProvider } from "./tbank";
 import { RbsPaymentProvider } from "./rbs";
 import { PAYOUT_READY_ORDER_STATUSES } from "../safe-deal";
 import { serviceMeta } from "../service-deal";
+import { PAYOUT_BLOCKING_DISPUTE_STATUSES, PAYOUT_BLOCKING_REFUND_STATUSES } from "../dispute-hold";
 
 export const PLATFORM_FEE_PERCENT = env.platformFeePercent;
+
+/** Сколько воркер держит строку выплаты: другой воркер возьмёт её только после этого. */
+const PAYOUT_LEASE_MS = 10 * 60_000;
 
 export interface SettlementBreakdown {
   grossKopecks: number;
@@ -545,10 +549,26 @@ async function reservePayout(input: {
     }
 
     // Безопасная сделка: только расчёты по принятым покупателем заказам.
-    const pending = await tx.settlement.findMany({
+    const ready = await tx.settlement.findMany({
       where: { sellerId: input.sellerId, status: "PENDING", payoutId: null, order: { status: { in: [...PAYOUT_READY_ORDER_STATUSES] } } },
       orderBy: { createdAt: "asc" },
     });
+    if (ready.length === 0) return null;
+
+    // Спор или незавершённый возврат по заказу держат его деньги до решения.
+    const orderIds = ready.map((s) => s.orderId);
+    const [disputed, refunding] = await Promise.all([
+      tx.dispute.findMany({
+        where: { orderId: { in: orderIds }, status: { in: [...PAYOUT_BLOCKING_DISPUTE_STATUSES] } },
+        select: { orderId: true },
+      }),
+      tx.refund.findMany({
+        where: { orderId: { in: orderIds }, status: { in: [...PAYOUT_BLOCKING_REFUND_STATUSES] } },
+        select: { orderId: true },
+      }),
+    ]);
+    const held = new Set([...disputed.map((d) => d.orderId), ...refunding.map((r) => r.orderId)]);
+    const pending = ready.filter((s) => !held.has(s.orderId));
     if (pending.length === 0) return null;
 
     const total = pending.reduce((sum, s) => sum + s.payoutKopecks, 0);
@@ -670,10 +690,14 @@ async function attemptPayoutRow(row: {
   attempts: number;
   maxAttempts: number;
 }): Promise<"succeeded" | "failed" | "skipped"> {
-  // Atomic claim so parallel workers never double-execute the same row.
+  // Atomic claim with a lease: a row another worker is processing right now
+  // (IN_FLIGHT, lease not expired) is never picked up again. A row stuck
+  // IN_FLIGHT after a crash becomes claimable once its lease runs out; the
+  // partner call is idempotent on idempotencyKey, so the retry is safe.
+  const now = new Date();
   const claimed = await prisma.outboxMessage.updateMany({
-    where: { id: row.id, status: { in: ["PENDING", "IN_FLIGHT"] } },
-    data: { status: "IN_FLIGHT" },
+    where: { id: row.id, status: { in: ["PENDING", "IN_FLIGHT"] }, nextAttemptAt: { lte: now } },
+    data: { status: "IN_FLIGHT", nextAttemptAt: new Date(now.getTime() + PAYOUT_LEASE_MS) },
   });
   if (claimed.count === 0) return "skipped";
 
@@ -840,6 +864,25 @@ export async function processRefund(params: {
     };
   }
 
+  // Вернуть можно не больше, чем заплачено, с учётом уже сделанных возвратов.
+  const others = await prisma.refund.aggregate({
+    where: { paymentId: refund.paymentId, id: { not: refund.id }, status: { in: ["SUCCEEDED", "PROCESSING"] } },
+    _sum: { amountKopecks: true },
+  });
+  const alreadyRefunded = others._sum.amountKopecks ?? 0;
+  if (refund.amountKopecks <= 0 || alreadyRefunded + refund.amountKopecks > refund.payment.amountKopecks) {
+    await prisma.refund.update({ where: { id: refund.id }, data: { status: "FAILED" } });
+    await audit({
+      actorId: params.actorId === "system" ? undefined : params.actorId,
+      actorRole: params.actorRole,
+      action: "payment.refund.over_limit",
+      targetType: "Refund",
+      targetId: refund.id,
+      after: { amountKopecks: refund.amountKopecks, alreadyRefunded, paid: refund.payment.amountKopecks },
+    });
+    throw new Error("сумма возврата больше оплаченной");
+  }
+
   // Возврат идёт через тот банк, которым платили.
   const provider = getPaymentProviderByKey(refund.payment.provider) ?? getPaymentProvider();
 
@@ -882,7 +925,18 @@ export async function processRefund(params: {
   const settlement = await prisma.settlement.findFirst({
     where: { orderId: refund.orderId },
   });
-  if (settlement) {
+  if (settlement && settlement.status === "PAID") {
+    // Деньги продавцу уже выплачены: цифрами в базе их не вернуть. Фиксируем
+    // долг продавца для ручного удержания из следующей выплаты.
+    await audit({
+      actorId: params.actorId === "system" ? undefined : params.actorId,
+      actorRole: params.actorRole,
+      action: "payment.refund.clawback_required",
+      targetType: "Settlement",
+      targetId: settlement.id,
+      after: { orderId: refund.orderId, sellerId: settlement.sellerId, amountKopecks: Math.min(refund.amountKopecks, settlement.payoutKopecks) },
+    });
+  } else if (settlement) {
     const compensated = Math.min(refund.amountKopecks, settlement.payoutKopecks);
     await prisma.settlement.update({
       where: { id: settlement.id },
@@ -900,7 +954,7 @@ export async function processRefund(params: {
   });
 
   await audit({
-    actorId: params.actorId,
+    actorId: params.actorId === "system" ? undefined : params.actorId,
     actorRole: params.actorRole,
     action: "payment.refund.processed",
     targetType: "Refund",
