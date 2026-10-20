@@ -39,6 +39,8 @@ function CatalogInner() {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [photo, setPhoto] = useState<VisionResult | null>(null);
+  // Запрос с исправленной опечаткой, если поиск его исправил.
+  const [corrected, setCorrected] = useState<string | null>(null);
   // useSearchParams() can be null during server rendering.
   const [q, setQ] = useState(params?.get("q") ?? "");
   // «Мой город» живёт в куке браузера, читаем её после загрузки страницы.
@@ -64,10 +66,14 @@ function CatalogInner() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((d) => setItems(d.items ?? []))
+      .then((d) => {
+        setItems(d.items ?? []);
+        setCorrected(typeof d.corrected === "string" && d.corrected ? d.corrected : null);
+      })
       .catch(() => {
         // A failed request is not the same as "nothing found": say so honestly.
         setItems([]);
+        setCorrected(null);
         setFailed(true);
       })
       .finally(() => setLoading(false));
@@ -100,6 +106,7 @@ function CatalogInner() {
         <PhotoSearch onResult={(d) => {
           setPhoto(d);
           setFailed(false);
+          setCorrected(null);
           setItems(d.candidates.map((c) => ({
             id: c.productId,
             title: c.title,
@@ -196,6 +203,11 @@ function CatalogInner() {
             )
           ) : (
             <>
+              {corrected && !photo && (
+                <p className="mb-3 rounded-lg bg-svetlana-50 px-3 py-2 text-sm text-ink" role="status" data-testid="search-corrected">
+                  Исправили опечатку: показано по запросу «<b>{corrected}</b>».
+                </p>
+              )}
               <div className="mb-3 text-sm text-ink-soft">Найдено: {items.length}</div>
               {items.some((item) => item.seller.demo) && (
                 <p className="mb-3 rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-700" role="note" data-testid="catalog-demo-note">

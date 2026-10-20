@@ -12,7 +12,8 @@
  * otherwise — always reported honestly).
  *
  * По запросу в выдачу попадают только товары со совпавшими словами или заметной
- * близостью по смыслу (lib/search-relevance.ts), а не весь каталог.
+ * близостью по смыслу (lib/search-relevance.ts), а не весь каталог. Слова с опечатками
+ * исправляются по словарю самих товаров, исправленный запрос возвращается в corrected.
  *
  * Фильтр «Из моего города» (shipCity): только продавцы, у которых указан этот
  * город отгрузки (lib/ship-from.ts).
@@ -22,7 +23,7 @@ import { aiGateway } from "../ai/gateway";
 import { newTraceId } from "../ai/gateway";
 import { fromKopecks, toKopecks } from "../utils";
 import { SHIP_FROM_LABEL } from "../ship-from";
-import { normalizeHay, queryTerms, relevantIds } from "../search-relevance";
+import { buildVocabulary, correctQuery, normalizeHay, relevantIds } from "../search-relevance";
 import { Prisma } from "@prisma/client";
 
 export interface SearchFilters {
@@ -65,7 +66,7 @@ const DEFAULT_LIMIT = 24;
 export async function searchProducts(
   filters: SearchFilters,
   traceId = newTraceId("search")
-): Promise<{ results: ScoredProduct[]; total: number; mode: string }> {
+): Promise<{ results: ScoredProduct[]; total: number; mode: string; corrected: string | null }> {
   const limit = Math.min(filters.limit ?? DEFAULT_LIMIT, 60);
   const offset = filters.offset ?? 0;
   const q = (filters.query ?? "").trim();
@@ -110,16 +111,26 @@ export async function searchProducts(
   });
 
   if (products.length === 0) {
-    return { results: [], total: 0, mode: "no-candidates" };
+    return { results: [], total: 0, mode: "no-candidates", corrected: null };
   }
 
   // --- Keyword scoring ----------------------------------------------------
   // Слова без окончаний: «кроссовки» находит «кроссовок», регистр и ё не важны.
-  const terms = queryTerms(q);
+  // Слово, которого нет ни в одном товаре, исправляем по словарю каталога (опечатка).
+  const hays = new Map(products.map((p) => [p.id, normalizeHay(`${p.title} ${p.description ?? ""} ${p.keywords}`)]));
+  const allHays = [...hays.values()];
+  const correction = q
+    ? correctQuery(
+        q,
+        buildVocabulary(products.map((p) => `${p.title} ${p.keywords}`)),
+        (stem) => allHays.some((h) => h.includes(stem))
+      )
+    : { terms: [] as string[], fixes: [], corrected: null };
+  const terms = correction.terms;
   const keywordScores = new Map<string, number>();
   if (terms.length > 0) {
     for (const p of products) {
-      const hay = normalizeHay(`${p.title} ${p.description ?? ""} ${p.keywords}`);
+      const hay = hays.get(p.id) ?? "";
       const title = normalizeHay(p.title);
       let score = 0;
       for (const t of terms) {
@@ -135,7 +146,7 @@ export async function searchProducts(
   let semanticMode = "none";
   if (q.length > 0) {
     const trace = newTraceId("embed");
-    const queryVec = (await aiGateway.embed({ texts: [q], traceId: trace })).vectors[0];
+    const queryVec = (await aiGateway.embed({ texts: [correction.corrected ?? q], traceId: trace })).vectors[0];
     semanticMode = "live";
     for (const p of products) {
       const vec = await getProductEmbedding(p, trace);
@@ -181,7 +192,8 @@ export async function searchProducts(
   return {
     results: scored.slice(offset, offset + limit),
     total,
-    mode: `keyword:${terms.length > 0 ? "on" : "off"}+semantic:${semanticMode}${fallback ? "+fallback" : ""}`,
+    mode: `keyword:${terms.length > 0 ? "on" : "off"}+semantic:${semanticMode}${fallback ? "+fallback" : ""}${correction.corrected ? "+typo" : ""}`,
+    corrected: correction.corrected,
   };
 }
 

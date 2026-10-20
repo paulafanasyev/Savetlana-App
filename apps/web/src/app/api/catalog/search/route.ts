@@ -31,10 +31,10 @@ export const GET = apiRoute(async (request) => {
     limit: toNum(url.searchParams.get("limit")),
     offset: toNum(url.searchParams.get("offset")),
   };
-  const { results, total, mode } = await searchProducts(filters, newTraceId("api-search"));
+  const { results, total, mode, corrected } = await searchProducts(filters, newTraceId("api-search"));
   await recordEvent({
     type: "SEARCH",
-    payload: { query: filters.query, mode, count: results.length },
+    payload: { query: filters.query, mode, count: results.length, corrected },
     anonymous: true,
   });
   const ids = results.map((r) => r.product.id);
@@ -56,6 +56,7 @@ export const GET = apiRoute(async (request) => {
     total,
     mode,
     city: city ?? null,
+    corrected,
     items: results.map((r) => ({
       id: r.product.id,
       title: r.product.title,
