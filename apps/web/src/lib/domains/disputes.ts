@@ -4,11 +4,15 @@
  * Svetlana collects evidence and timelines, but she does not issue legally
  * binding verdicts — a dispute that requires a judgement is escalated to a
  * human (spec §91). Every status change is journaled.
+ *
+ * Пока спор идёт, деньги по заказу держатся: автоприёмка и выплата продавцу
+ * его пропускают (см. lib/dispute-hold.ts).
  */
 import { prisma } from "../prisma";
 import { parseEnum } from "../db/enums";
 import { readStringArray } from "../db/json";
 import { audit } from "./audit";
+import { processRefund } from "./payments";
 
 export type DisputeStatus =
   | "OPEN"
@@ -188,9 +192,14 @@ export async function transitionDispute(
   return updated;
 }
 
+/**
+ * Споры пользователя: как покупателя и как продавца. В споре хранится id профиля
+ * продавца, а не пользователя, поэтому сначала находим его профиль.
+ */
 export async function listDisputesForUser(userId: string) {
+  const profile = await prisma.sellerProfile.findUnique({ where: { userId }, select: { id: true } });
   return prisma.dispute.findMany({
-    where: { OR: [{ buyerId: userId }, { sellerId: userId }] },
+    where: { OR: [{ buyerId: userId }, ...(profile ? [{ sellerId: profile.id }] : [])] },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -262,9 +271,13 @@ export async function attachEvidence(
     contentHash: string;
   }
 ) {
-  const dispute = await prisma.dispute.findUnique({ where: { id: disputeId } });
+  const dispute = await prisma.dispute.findUnique({
+    where: { id: disputeId },
+    include: { sellerProfile: { select: { userId: true } } },
+  });
   if (!dispute) throw new Error("спор не найден");
-  if (dispute.buyerId !== uploadedById && dispute.sellerId !== uploadedById) {
+  // В споре хранится id профиля продавца; сравниваем с владельцем профиля.
+  if (dispute.buyerId !== uploadedById && dispute.sellerProfile?.userId !== uploadedById) {
     throw new Error("только участники спора могут прикреплять доказательства");
   }
   if (params.sizeBytes > 25 * 1024 * 1024) throw new Error("файл превышает 25 МБ");
@@ -428,7 +441,8 @@ export interface ResolveDisputeInput {
  * A human (admin/support) resolves the dispute. When the buyer wins, a real
  * refund is created and executed through the payment provider — never
  * fabricated (spec §49). Payout to the seller is blocked until the refund
- * settles.
+ * settles. Возврат не больше оплаченного за вычетом уже возвращённого; проводит
+ * его фоновая задача processResolvedDisputeRefunds.
  */
 export async function resolveDispute(input: ResolveDisputeInput) {
   const dispute = await prisma.dispute.findUnique({
@@ -448,7 +462,19 @@ export async function resolveDispute(input: ResolveDisputeInput) {
     if (!payment) throw new Error("нельзя оформить возврат: платёж не найден");
     const amount =
       input.refundAmountKopecks ?? dispute.order.totalKopecks ?? payment.amountKopecks;
-    if (amount <= 0) throw new Error("сумма возврата должна быть положительной");
+    if (!Number.isInteger(amount) || amount <= 0) throw new Error("сумма возврата должна быть положительной");
+    const prior = await prisma.refund.aggregate({
+      where: { paymentId: payment.id, status: { in: ["PENDING", "PROCESSING", "SUCCEEDED"] } },
+      _sum: { amountKopecks: true },
+    });
+    const refundable = payment.amountKopecks - (prior._sum.amountKopecks ?? 0);
+    if (amount > refundable) {
+      throw new Error(
+        refundable > 0
+          ? `сумма возврата больше доступной: можно вернуть не больше ${(refundable / 100).toFixed(2)} ₽`
+          : "по этому платежу уже всё возвращено"
+      );
+    }
 
     const refund = await prisma.refund.create({
       data: {
@@ -494,6 +520,58 @@ export async function resolveDispute(input: ResolveDisputeInput) {
     after: { winner: input.winner, reasonCode: input.reasonCode, refundId },
   });
   return { status: to, refundId };
+}
+
+/**
+ * Фоновая задача: возвраты по решению спора в пользу покупателя реально проводятся
+ * через банк. Берём только возвраты, привязанные к решённому спору, старше 2 минут
+ * (чтобы администратор успел заметить опечатку). Строка захватывается атомарно, а
+ * возврат в банке идемпотентен (ключ refund-<id>), поэтому деньги не уйдут дважды.
+ */
+export async function processResolvedDisputeRefunds(options?: { limit?: number; now?: Date }): Promise<{
+  processed: number;
+  succeeded: number;
+  failed: number;
+}> {
+  const now = options?.now ?? new Date();
+  const resolved = await prisma.dispute.findMany({
+    where: { refundId: { not: null }, status: { in: ["RESOLVED_BUYER", "CLOSED"] } },
+    select: { refundId: true },
+    orderBy: { updatedAt: "asc" },
+    take: 200,
+  });
+  const ids = resolved.map((d) => d.refundId).filter((x): x is string => Boolean(x));
+  if (ids.length === 0) return { processed: 0, succeeded: 0, failed: 0 };
+  const refunds = await prisma.refund.findMany({
+    where: { id: { in: ids }, status: "PENDING", createdAt: { lte: new Date(now.getTime() - 2 * 60_000) } },
+    select: { id: true, orderId: true },
+    orderBy: { createdAt: "asc" },
+    take: options?.limit ?? 10,
+  });
+
+  let processed = 0;
+  let succeeded = 0;
+  let failed = 0;
+  for (const r of refunds) {
+    const claimed = await prisma.refund.updateMany({ where: { id: r.id, status: "PENDING" }, data: { status: "PROCESSING" } });
+    if (claimed.count === 0) continue;
+    processed += 1;
+    try {
+      const result = await processRefund({ refundId: r.id, actorId: "system", actorRole: "system" });
+      if (result.status === "SUCCEEDED") succeeded += 1;
+      else failed += 1;
+    } catch (error) {
+      failed += 1;
+      await audit({
+        actorRole: "system",
+        action: "payment.refund.manual_required",
+        targetType: "Refund",
+        targetId: r.id,
+        after: { orderId: r.orderId, error: error instanceof Error ? error.message.slice(0, 200) : "unknown" },
+      });
+    }
+  }
+  return { processed, succeeded, failed };
 }
 
 export async function getDisputeCase(disputeId: string, userId: string, role: string) {
