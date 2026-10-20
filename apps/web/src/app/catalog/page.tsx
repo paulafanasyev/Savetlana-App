@@ -208,7 +208,7 @@ function CatalogInner() {
                   Исправили опечатку: показано по запросу «<b>{corrected}</b>».
                 </p>
               )}
-              <div className="mb-3 text-sm text-ink-soft">Найдено: {items.length}</div>
+              <div className="mb-3 text-sm text-ink-soft">Найдено: {countText(items.length, ["товар", "товара", "товаров"])}</div>
               {items.some((item) => item.seller.demo) && (
                 <p className="mb-3 rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-700" role="note" data-testid="catalog-demo-note">
                   Товары с пометкой «демо» выставила площадка, чтобы показать работу каталога. Их продавцы не проходили проверку.
