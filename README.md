@@ -1,103 +1,86 @@
-# Svetlana AI Commerce
+# АИКО · Светлана
 
-AI-нативная платформа, где центральным интерфейсом пользователя является **Светлана** — Master AI Agent, координирующий специализированных субагентов, инструменты и доменные сервисы.
+ИИ-маркетплейс, где агенты покупателя и продавца сами договариваются о цене, сроке и оплате, а люди только подтверждают решения. Центральный интерфейс — **Светлана**, собственная обученная модель и мастер-агент над 22 профильными агентами.
 
-Пользователь никогда не видит название внешнего AI-провайдера, модель или внутреннюю архитектуру — только Светлану.
+**Разработчик:** Афанасьев Павел Петрович · xongphavietnam@gmail.com
+
+| | |
+|---|---|
+| Сайт | https://savetlana-app-web.vercel.app |
+| Торг агентов без входа | https://savetlana-app-web.vercel.app/b2b/negotiation |
+| Книга проекта (RLT.Startup, A4 альбомная) | https://savetlana-app-web.vercel.app/checkpoint/aiko-book.html |
+| Презентация | https://savetlana-app-web.vercel.app/checkpoint/aiko-deck.html |
+| Функционал, безопасность, преимущества | https://savetlana-app-web.vercel.app/checkpoint/aiko-features.html |
+| Подробное описание для чек-поинта | [docs/checkpoint-rlt/AIKO_checkpoint.md](docs/checkpoint-rlt/AIKO_checkpoint.md) |
+
+## В цифрах
+
+| | |
+|---|---|
+| ИИ-агенты | 23: мастер-агент «Светлана» + 22 профильные роли |
+| Инструменты агентов | 50, у каждого роли и уровень риска (READ / LOW / HIGH / FINANCIAL) |
+| Кабинеты | покупатель (35 разделов), продавец (20), площадка (16) |
+| Данные | 74 модели, PostgreSQL (прод) / SQLite (тесты) через Prisma |
+| Качество | 145 файлов автотестов, 8 проверок CI на каждый релиз |
+| Торг агентов | 0 нарушений пределов в 3 000 случайных переговорах (автотест) |
 
 ## Стек
 
-| Слой | Технология |
-|------|-----------|
-| Frontend / API | Next.js 14.2 (App Router), React 18, TypeScript |
-| База данных | SQLite (разработка) / PostgreSQL (production) через Prisma |
-| AI Gateway | Собственная абстракция: Provider Router + адаптеры |
-| Тесты | Vitest (285 тестов, 32 файла) |
-| Деплой | Vercel-готово (server-side AI calls) |
+Next.js 15 (App Router), React, TypeScript, Prisma, Tailwind, Vitest, Playwright, Vercel. ИИ-ядро: собственная модель «Светлана» (сервер Svetlana Core) + резервный детерминированный движок. Платежи: ЮKassa, Т-Банк, Сбер, Альфа; чеки 54-ФЗ; СДЭК; ФНС; DaData; Яндекс Маркет; Telegram.
+
+## Как работает Светлана
+
+```
+Пользователь → Светлана (мастер-агент)
+  → намерение → планировщик → политика безопасности
+  → маршрутизатор (22 агента, детерминированно)
+  → инструмент из белого списка (50, права + подтверждение)
+  → серверная бизнес-логика → проверка результата → ответ
+```
+
+Модель понимает задачу, а цены, торг, скидки и проверки считает серверный код. Деньги и обязательства двигает только человек после явного подтверждения. Подробно: [docs/AI_AGENTS.md](docs/AI_AGENTS.md), [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md).
+
+## Безопасность сайта
+
+- **Агенты:** белый список инструментов по ролям, подтверждение с хешем аргументов и одноразовым ключом, защита от инъекций, отпечаток КП (sha256), сверка оплаты с банком, антифрод (6 правил), анти-«Мамонт».
+- **Данные:** ПДн вычищаются до модели, реквизиты зашифрованы AES-256-GCM, bcrypt, подписанные токены в httpOnly/Secure-cookie.
+- **Веб:** CSP с запретом сторонних скриптов и отправки данных на чужие серверы; CSRF-проверка Origin/Referer; HSTS (preload); встраивание во фреймы только с собственного домена (защита от clickjacking); Cross-Origin-Opener-Policy, Origin-Agent-Cluster, строгий Permissions-Policy (нет доступа к USB, Bluetooth, датчикам), лимиты запросов.
+- **Код:** CI из 8 проверок (линт, типы, тесты, схема БД, сборка, браузерная проверка, npm audit, Gitleaks), Dependabot.
+
+Подробно: [docs/SECURITY.md](docs/SECURITY.md).
+
+## Защита от копирования
+
+- Программы, которые скачивают сайт целиком (HTTrack, Teleport, Offline Explorer, wget-зеркало, Scrapy и др.), получают отказ (`apps/web/src/lib/copy-guard.ts`).
+- Сборщикам данных для обучения ИИ сайт закрыт в robots.txt; все страницы отдают `X-Robots-Tag: noarchive, noai, noimageai`, материалы чек-поинта ещё и `noindex`.
+- Картинки, аватар Светланы и материалы чек-поинта нельзя вставить на чужой сайт (`Cross-Origin-Resource-Policy: same-origin`), а сам сайт нельзя встроить в чужой фрейм.
+- На страницах к скопированному длинному тексту добавляется источник и авторство, картинки не сохраняются правой кнопкой и перетаскиванием (`apps/web/public/copy-guard.js`). Поля ввода и короткие фрагменты (номер заказа, трек) копируются как обычно.
+- Код и материалы защищены проприетарной лицензией: [LICENSE](LICENSE).
 
 ## Быстрый старт
 
 ```bash
+npm ci
 cd apps/web
-cp .env.example .env          # только плейсхолдеры — реальных ключей нет
-npm install
-npx prisma migrate deploy     # применить миграции
-npm run seed                  # русская демо-данные: 19 пользователей, 17 товаров, 7 продавцов
+cp .env.example .env          # только плейсхолдеры, реальных ключей нет
+npx prisma migrate deploy
+npm run seed                  # демо-данные
 npm run dev                   # http://localhost:3000
 ```
 
-Проверка сборки и тестов:
-
-```bash
-npm run build                 # production-сборка (23 страницы, 58 API-роутов)
-npm run test                  # 285 тестов
-```
-
-## Структура монорепо
-
-```
-apps/web/
-├── prisma/            schema.prisma (56 моделей), миграции, seed
-├── src/app/           страницы (31) + API-роуты (58)
-├── src/components/    переиспользуемые UI-компоненты
-├── src/lib/
-│   ├── ai/            gateway, privacy guard, providers, tools, agents
-│   ├── domains/       27 доменных сервисов (бизнес-логика)
-│   ├── db/            Prisma-клиент, канонические enum-значения
-│   └── auth.ts        HMAC-токены, RBAC, сессионные хелперы
-└── tests/             15 тестовых файлов
-```
-
-## Светлана — единый AI-интерфейс
-
-Светлана не «чат-бот внутри магазина». Это оркестратор:
-
-```
-Пользователь → Светлана (Master Agent)
-                 ↓
-         Intent Detection → Planner → Policy
-                 ↓
-         Agent Router (19 субагентов, детерминированный)
-                 ↓
-         Tool Registry (31 инструмент, permissions + confirmation)
-                 ↓
-         Domain services / Prisma / external adapters
-                 ↓
-         Verification → ответ пользователю
-```
-
-Подробности: [docs/AI_AGENTS.md](docs/AI_AGENTS.md).
-
-## Статусы проверок (spec §58)
-
-Любая функция помечается одним из:
-
-- **VERIFIED** — реально проверена в runtime
-- **MOCK VERIFIED** — работает только на sandbox/mock, промаркировано
-- **NOT PROVEN** — код существует, работа не доказана
-- **PENDING_EXTERNAL_ACCESS** — требуется внешний ключ/партнёр
-- **BLOCKED** — технический блокер
-
-Текущее состояние внешних интеграций: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
-
-## Главное правило
-
-Платформа не «магазин с чат-ботом». Она помогает:
-
-**ПОИСКАТЬ → ПОНЯТЬ → СРАВНИТЬ → ПРОВЕРИТЬ → ВЫБРАТЬ → КУПИТЬ → ОПЛАТИТЬ → ПОЛУЧИТЬ → ВЕРНУТЬ → ПОДАРИТЬ → ПРОДАТЬ → АНАЛИЗИРОВАТЬ**
+Проверка: `npm run build`, `npm run test`. Все изменения вливаются только при зелёном CI (8 проверок), ветка `svetlana/initial-implementation` автоматически деплоится на Vercel.
 
 ## Документация
 
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) — системная архитектура
-- [AI_AGENTS.md](docs/AI_AGENTS.md) — Master Agent, субагенты, tools
-- [DATABASE.md](docs/DATABASE.md) — схема, миграции
-- [API.md](docs/API.md) — контракты эндпоинтов
+- [AI_AGENTS.md](docs/AI_AGENTS.md) — мастер-агент, субагенты, инструменты
 - [SECURITY.md](docs/SECURITY.md) — секреты, RBAC, аудит
-- [PAYMENTS.md](docs/PAYMENTS.md) — платёжная архитектура, комиссия
-- [DELIVERY.md](docs/DELIVERY.md) — доставка, tracking
-- [INTEGRATIONS.md](docs/INTEGRATIONS.md) — VK, ЕСИА, Alipay, статусы
-- [PRIVACY.md](docs/PRIVACY.md) — конфиденциальность, consent
-- [SELLER_GUIDE.md](docs/SELLER_GUIDE.md) — руководство продавца
-- [BUYER_GUIDE.md](docs/BUYER_GUIDE.md) — руководство покупателя
-- [TESTING.md](docs/TESTING.md) — тестовая матрица
-- [DEPLOYMENT.md](docs/DEPLOYMENT.md) — Vercel, окружения
-- [LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) — локальная разработка
+- [PAYMENTS.md](docs/PAYMENTS.md), [PAYMENTS_RU.md](docs/PAYMENTS_RU.md) — платежи и комиссия
+- [DELIVERY.md](docs/DELIVERY.md) — доставка и трекинг
+- [INTEGRATIONS.md](docs/INTEGRATIONS.md) — интеграции и статусы
+- [SELLER_PLATFORM.md](docs/SELLER_PLATFORM.md), [SELLER_GUIDE.md](docs/SELLER_GUIDE.md), [BUYER_GUIDE.md](docs/BUYER_GUIDE.md)
+- [DATABASE.md](docs/DATABASE.md), [API.md](docs/API.md), [TESTING.md](docs/TESTING.md), [DEPLOYMENT.md](docs/DEPLOYMENT.md), [LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)
+
+## Лицензия
+
+© 2026 Афанасьев Павел Петрович. Все права защищены. Это не open source: просмотр для оценки разрешён, использование, копирование и обучение моделей на материалах — только с письменного разрешения. См. [LICENSE](LICENSE).
