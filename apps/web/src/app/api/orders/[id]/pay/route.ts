@@ -12,6 +12,9 @@ export const dynamic = "force-dynamic";
  * status without a second charge. Audit fix: the provider is called only for
  * orders that are actually awaiting payment.
  *
+ * Заказ, который проверка риска при оформлении пометила BLOCKED (сумма не совпала
+ * с ценой в каталоге), оплатить нельзя.
+ *
  * Тело (необязательно): { method: "card" | "sbp" }. Ответ содержит confirmationUrl —
  * страницу банка или ссылку СБП. Заказ становится оплаченным по уведомлению банка
  * (/api/webhooks/yookassa | tbank | sber | alfa) после перезапроса статуса.
@@ -28,6 +31,7 @@ export const POST = apiRoute(async (request, { params }) => {
     select: {
       id: true,
       buyerId: true,
+      groupId: true,
       number: true,
       status: true,
       totalKopecks: true,
@@ -45,6 +49,23 @@ export const POST = apiRoute(async (request, { params }) => {
   }
 
   const wasPaid = order.payment?.status === "SUCCEEDED";
+  if (!wasPaid && order.groupId) {
+    const risk = await prisma.riskEvent.findFirst({
+      where: { actorType: "order", actorId: order.groupId },
+      orderBy: { createdAt: "desc" },
+      select: { level: true },
+    });
+    if (risk?.level === "BLOCKED") {
+      return Response.json(
+        {
+          error: "Оплата этого заказа приостановлена: сумма в заказе не совпала с ценой в каталоге. Оформите заказ заново или напишите в поддержку.",
+          code: "risk_blocked",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   const result = await capturePayment(order.id, method);
   const provider = getPaymentProvider();
 

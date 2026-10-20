@@ -14,10 +14,13 @@ export const dynamic = "force-dynamic";
  * explicit confirm flag (spec §12, §147), and the seller must have cleared
  * the verification machine (P0 fix, spec §19/§21). A card without price,
  * photo or stock is never published.
+ *
+ * Лимит публикаций свой у каждого продавца: один активный продавец не должен
+ * блокировать публикацию всем остальным.
  */
 export const POST = apiRoute(async (request, routeCtx) => {
-  if (!rateLimit("ai:publish", 10, 60_000)) return tooManyRequests();
   const ctx = await requireVerifiedSeller(request, "публиковать товары");
+  if (!rateLimit(`ai:publish:${ctx.sellerId}`, 10, 60_000)) return tooManyRequests();
   const body = await jsonBody<{ confirm?: boolean }>(request).catch(
     () => ({}) as { confirm?: boolean }
   );
