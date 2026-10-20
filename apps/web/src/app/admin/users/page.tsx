@@ -1,5 +1,6 @@
 import { listAdminUsers } from "@/lib/domains/admin";
-import { timeAgo } from "@/lib/format";
+import { countText, timeAgo } from "@/lib/format";
+import { identityStatusLabel, roleLabel } from "@/lib/admin-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ export default async function AdminUsersPage() {
     <section className="card overflow-hidden">
       <div className="border-b border-line p-4">
         <h2 className="text-base font-bold text-ink">Пользователи</h2>
-        <p className="text-xs text-ink-soft">Последние {users.length} записей</p>
+        <p className="text-xs text-ink-soft">Последние {countText(users.length, ["запись", "записи", "записей"])}</p>
       </div>
       {users.length === 0 ? (
         <p className="p-6 text-sm text-ink-soft">Пользователей пока нет</p>
@@ -20,12 +21,12 @@ export default async function AdminUsersPage() {
             <thead className="bg-surface text-xs uppercase tracking-wide text-ink-faint">
               <tr>
                 <th className="px-4 py-2">Имя</th>
-                <th className="px-4 py-2">Email</th>
+                <th className="px-4 py-2">Почта</th>
                 <th className="px-4 py-2">Роль</th>
                 <th className="px-4 py-2">Продавец</th>
                 <th className="px-4 py-2">Статус</th>
                 <th className="px-4 py-2">Создан</th>
-                <th className="px-4 py-2"></th>
+                <th className="px-4 py-2"><span className="sr-only">Действие</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -34,13 +35,13 @@ export default async function AdminUsersPage() {
                   <td className="px-4 py-2 font-medium text-ink">{u.name}</td>
                   <td className="px-4 py-2 text-ink-soft">{u.email}</td>
                   <td className="px-4 py-2">
-                    <span className="rounded bg-surface px-2 py-0.5 text-xs">{u.role}</span>
+                    <span className="rounded bg-surface px-2 py-0.5 text-xs">{roleLabel(u.role)}</span>
                   </td>
                   <td className="px-4 py-2 text-ink-soft">
                     {u.seller ? (
                       <span>
                         {u.seller.displayName}
-                        <span className="ml-1 text-xs text-ink-faint">{u.seller.identityStatus}</span>
+                        <span className="ml-1 text-xs text-ink-faint">· личность: {identityStatusLabel(u.seller.identityStatus)}</span>
                       </span>
                     ) : (
                       <span className="text-ink-faint">—</span>

@@ -1,23 +1,12 @@
 import { getAdminOverview } from "@/lib/domains/admin";
 import { rub } from "@/lib/format";
 import { orderStatusLabel } from "@/lib/format";
+import { riskLevelLabel } from "@/lib/admin-labels";
 import { DemoCatalogPanel } from "@/components/DemoCatalogPanel";
 
 export const dynamic = "force-dynamic";
 
 type Overview = Awaited<ReturnType<typeof getAdminOverview>>;
-
-/** Уровни риска по-русски; незнакомый код показываем как есть. */
-const RISK_LEVEL_LABEL: Record<string, string> = {
-  LOW: "низкий",
-  MEDIUM: "средний",
-  HIGH: "высокий",
-  CRITICAL: "критический",
-};
-
-function riskLevelLabel(level: string): string {
-  return RISK_LEVEL_LABEL[level.toUpperCase()] ?? level;
-}
 
 export default async function AdminOverviewPage() {
   // Сводка не должна ронять всю админку: без неё демо-режим всё равно доступен.

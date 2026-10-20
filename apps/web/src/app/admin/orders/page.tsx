@@ -1,5 +1,6 @@
 import { listAdminOrders } from "@/lib/domains/admin";
-import { orderStatusLabel, rub, timeAgo } from "@/lib/format";
+import { countText, orderStatusLabel, rub, timeAgo } from "@/lib/format";
+import { paymentStatusLabel, shipmentStatusLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ export default async function AdminOrdersPage() {
     <section className="card overflow-hidden">
       <div className="border-b border-line p-4">
         <h2 className="text-base font-bold text-ink">Заказы</h2>
-        <p className="text-xs text-ink-soft">Последние {orders.length} заказов</p>
+        <p className="text-xs text-ink-soft">Последние {countText(orders.length, ["заказ", "заказа", "заказов"])}</p>
       </div>
       {orders.length === 0 ? (
         <p className="p-6 text-sm text-ink-soft">Заказов пока нет</p>
@@ -44,8 +45,8 @@ export default async function AdminOrdersPage() {
                   <td className="px-4 py-2 text-xs text-ink-soft">
                     {o.payment ? (
                       <span>
-                        {o.payment.status}
-                        {o.payment.sandbox && <span className="ml-1 text-amber-700">sandbox</span>}
+                        {paymentStatusLabel(o.payment.status)}
+                        {o.payment.sandbox && <span className="ml-1 text-amber-700">тест</span>}
                       </span>
                     ) : (
                       <span className="text-ink-faint">—</span>
@@ -54,8 +55,8 @@ export default async function AdminOrdersPage() {
                   <td className="px-4 py-2 text-xs text-ink-soft">
                     {o.shipment ? (
                       <span>
-                        {o.shipment.status} · {o.shipment.carrierName}
-                        {o.shipment.sandbox && <span className="ml-1 text-amber-700">sandbox</span>}
+                        {shipmentStatusLabel(o.shipment.status)} · {o.shipment.carrierName}
+                        {o.shipment.sandbox && <span className="ml-1 text-amber-700">тест</span>}
                       </span>
                     ) : (
                       <span className="text-ink-faint">не создана</span>
