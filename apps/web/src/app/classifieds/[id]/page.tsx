@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getClassifiedPublic, incrementViews } from "@/lib/domains/classifieds";
 import { replyCountsByAd, replyWording } from "@/lib/domains/classified-replies";
+import { isAdFavorite, MAX_AD_FAVORITES } from "@/lib/domains/ad-favorites";
 import { resolveSession, serverRequest } from "@/lib/auth";
 import { describeAttrs, priceText } from "@/lib/classified-fields";
 import { rub, timeAgo } from "@/lib/format";
@@ -52,7 +53,7 @@ export default async function ClassifiedDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ renewed?: string; renew?: string; edited?: string }>;
+  searchParams?: Promise<{ renewed?: string; renew?: string; edited?: string; fav?: string }>;
 }) {
   const { id } = await resolveParams(params);
   const sp = (await searchParams) ?? {};
@@ -64,6 +65,8 @@ export default async function ClassifiedDetailPage({
   const { user: viewer } = await resolveSession(await serverRequest()).catch(() => ({ user: null }));
   const isAuthor = Boolean(viewer && viewer.id === ad.authorId);
   const myReplies = isAuthor && viewer ? (await replyCountsByAd(viewer.id)).get(ad.id) : undefined;
+  // Избранное: сердечко для всех, кроме автора. Ошибка хранилища не ломает страницу.
+  const favorite = viewer && !isAuthor ? await isAdFavorite(viewer.id, ad.id).catch(() => false) : false;
   // Заказ услуги: исполнители предлагают цену и срок.
   const bidMode = isBidAd(ad);
   // Пример от площадки: написать автору нельзя, вместо кнопки честное пояснение.
@@ -99,6 +102,9 @@ export default async function ClassifiedDetailPage({
       )}
       {isAuthor && sp.edited === "1" && (
         <p className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800" role="status">Изменения сохранены.</p>
+      )}
+      {sp.fav === "limit" && (
+        <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800" role="alert">В избранном уже {MAX_AD_FAVORITES} объявлений. Уберите лишние в «Избранном» и добавьте снова.</p>
       )}
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -137,6 +143,35 @@ export default async function ClassifiedDetailPage({
             <span>{dealTypeLabel(ad.dealType)}</span>
           </div>
           <h1 className="text-xl font-bold">{ad.title}</h1>
+          {!isAuthor && (
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+              {viewer ? (
+                <form action={`/api/classifieds/${ad.id}/favorite`} method="POST">
+                  <button
+                    type="submit"
+                    data-testid="ad-favorite"
+                    aria-pressed={favorite}
+                    className={`rounded-lg border px-3 py-1.5 font-medium ${favorite ? "border-rose-300 bg-rose-50 text-rose-700" : "border-zinc-300 bg-white"}`}
+                  >
+                    {favorite ? "♥ В избранном" : "♡ В избранное"}
+                  </button>
+                </form>
+              ) : (
+                <Link
+                  href={`/login?next=${encodeURIComponent(`/classifieds/${ad.id}`)}`}
+                  data-testid="ad-favorite"
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 font-medium"
+                >
+                  ♡ В избранное
+                </Link>
+              )}
+              {favorite && (
+                <Link href="/favorites#ads" className="text-zinc-600 underline">
+                  Всё избранное
+                </Link>
+              )}
+            </div>
+          )}
           {isJob ? (
             <p className={`mt-2 font-bold ${ad.priceKopecks > 0 ? "text-2xl" : "text-lg text-zinc-500"}`}>
               {ad.priceKopecks > 0 ? priceText(ad.dealType, ad.attrs, rub(ad.priceKopecks)) : "Зарплата по договорённости"}
