@@ -1,4 +1,5 @@
 import { requireSellerServer } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { getPayoutProvider, sellerSettlementStatement } from "@/lib/domains/payments";
 import { availablePayoutKopecks } from "@/lib/domains/seller-payouts";
 import { bankRegistryMode } from "@/lib/domains/payout-registry";
@@ -25,6 +26,15 @@ const RESULT_TEXT: Record<string, string> = {
 
 const DAY_FORMS = ["день", "дня", "дней"] as const;
 
+/** Номера заказов для истории расчётов: только заказы этого продавца. Ошибка не ломает страницу. */
+async function orderNumbers(sellerId: string, ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await prisma.order
+    .findMany({ where: { id: { in: ids }, sellerId }, select: { id: true, number: true } })
+    .catch(() => [] as { id: string; number: string }[]);
+  return new Map(rows.map((r) => [r.id, r.number]));
+}
+
 export default async function SellerPayoutsPage({ searchParams }: { searchParams?: Promise<{ payout?: string; test?: string }> }) {
   const { sellerId } = await requireSellerServer();
   const [statement, available, hold] = await Promise.all([
@@ -32,6 +42,7 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
     availablePayoutKopecks(sellerId),
     getPayoutHold(sellerId).catch(() => null),
   ]);
+  const numbers = await orderNumbers(sellerId, [...new Set(statement.settlements.map((s) => s.orderId))]);
   const params = (await searchParams) ?? {};
   const result = params.payout;
   const registry = bankRegistryMode();
@@ -76,7 +87,7 @@ export default async function SellerPayoutsPage({ searchParams }: { searchParams
           <tbody>
             {statement.settlements.map((settlement) => (
               <tr className="border-b" key={settlement.id}>
-                <td className="p-3">{settlement.orderId.slice(-8)}</td>
+                <td className="p-3">{numbers.get(settlement.orderId) ?? settlement.orderId.slice(-8)}</td>
                 <td className="p-3">{rub(settlement.grossKopecks)}</td>
                 <td className="p-3">{rub(settlement.payoutKopecks)}</td>
                 <td className="p-3">{settlementStatusLabel(settlement.status)}</td>
