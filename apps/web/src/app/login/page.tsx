@@ -77,11 +77,14 @@ function ConsentStep({ target }: { target: string }) {
   );
 }
 
-/** Вход с нового устройства: код из письма. */
-function CodeStep({ challenge, sentTo, device, onDone, onBack }: { challenge: string; sentTo: string; device: string; onDone: (data: { user?: { role?: string }; needsConsent?: boolean }) => void; onBack: () => void }) {
+type CodeReason = "device" | "admin";
+
+/** Второй шаг входа: код из письма (новое устройство) или из Telegram (админка). */
+function CodeStep({ challenge, sentTo, device, reason, onDone, onBack }: { challenge: string; sentTo: string; device: string; reason: CodeReason; onDone: (data: { user?: { role?: string }; needsConsent?: boolean }) => void; onBack: () => void }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const admin = reason === "admin";
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,13 +109,14 @@ function CodeStep({ challenge, sentTo, device, onDone, onBack }: { challenge: st
     <div className="mx-auto max-w-md px-4 py-10">
       <div className="card p-8">
         <h1 className="text-2xl font-bold text-ink">Подтвердите вход</h1>
-        <p className="mt-2 text-sm text-ink-soft">
-          Вы входите с нового устройства ({device}). Мы отправили код {sentTo}. Это защита на случай, если пароль
-          узнал кто-то другой.
+        <p className="mt-2 text-sm text-ink-soft" data-testid="code-step-reason">
+          {admin
+            ? `Вход в админку защищён вторым фактором. Мы отправили код ${sentTo}: откройте чат с ботом АИКО.`
+            : `Вы входите с нового устройства (${device}). Мы отправили код ${sentTo}. Это защита на случай, если пароль узнал кто-то другой.`}
         </p>
         <form className="mt-6 space-y-4" onSubmit={submit}>
           <label className="block">
-            <span className="mb-1 block text-sm font-medium text-ink">Код из письма</span>
+            <span className="mb-1 block text-sm font-medium text-ink">{admin ? "Код из Telegram" : "Код из письма"}</span>
             <input
               className="input text-center text-lg tracking-[0.4em]"
               inputMode="numeric"
@@ -131,7 +135,9 @@ function CodeStep({ challenge, sentTo, device, onDone, onBack }: { challenge: st
           </button>
         </form>
         <p className="mt-4 text-xs text-ink-faint">
-          Код действует 10 минут. Письма нет? Проверьте «Спам» или войдите заново, придёт новый код.
+          {admin
+            ? "Код действует 10 минут. Не пришёл? Войдите заново, придёт новый код."
+            : "Код действует 10 минут. Письма нет? Проверьте «Спам» или войдите заново, придёт новый код."}
         </p>
         <button className="btn btn-secondary mt-3 w-full" disabled={busy} onClick={onBack}>
           Назад
@@ -149,9 +155,9 @@ function LoginInner() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [consentTarget, setConsentTarget] = useState<string | null>(null);
-  const [codeStep, setCodeStep] = useState<{ challenge: string; sentTo: string; device: string } | null>(null);
+  const [codeStep, setCodeStep] = useState<{ challenge: string; sentTo: string; device: string; reason: CodeReason } | null>(null);
 
-  // Общий финал: и после пароля, и после кода с нового устройства.
+  // Общий финал: и после пароля, и после кода.
   const done = (data: { user?: { role?: string }; needsConsent?: boolean }) => {
     // Администратора без явного «куда» ведём сразу в админку.
     const target = next === "/" && data?.user?.role === "ADMIN" ? "/admin" : next;
@@ -178,7 +184,12 @@ function LoginInner() {
       const data = await res.json().catch(() => null);
       if (!res.ok || !data) throw new Error(data?.error ?? NO_ANSWER);
       if (data.needsCode) {
-        setCodeStep({ challenge: data.challenge, sentTo: data.sentTo ?? "на почту", device: data.device ?? "новое устройство" });
+        setCodeStep({
+          challenge: data.challenge,
+          sentTo: data.sentTo ?? "на почту",
+          device: data.device || "новое устройство",
+          reason: data.reason === "admin" ? "admin" : "device",
+        });
         setBusy(false);
         return;
       }
