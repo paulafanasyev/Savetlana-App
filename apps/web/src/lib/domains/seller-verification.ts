@@ -4,6 +4,7 @@ import { audit } from "./audit";
 import { notify } from "./notifications";
 import { isValidInn, isValidOgrn } from "../legal";
 import { checkNpdStatus, type NpdCheckResult } from "./npd-check";
+import { FNS_AUTO_IDENTITY } from "./seller-trust-display";
 
 export const sellerOnboardingSchema = z.object({
   sellerType: z.enum(["SELF_EMPLOYED", "IP", "COMPANY"]),
@@ -16,23 +17,11 @@ export type SellerOnboardingInput = z.infer<typeof sellerOnboardingSchema>;
 
 const SELLER_TYPE_LABEL: Record<string, string> = { SELF_EMPLOYED: "самозанятый", IP: "ИП", COMPANY: "организация" };
 
-/**
- * Администраторам: пришла новая заявка. Без этого заявка лежала в очереди, пока кто-то
- * случайно не заглянет в админку, а продавец ждал и уходил. Уведомление дублируется в
- * Telegram, если администратор его подключил. Сбой уведомления не ломает заявку.
- */
-async function notifyAdminsAboutApplication(displayName: string, sellerType: string): Promise<void> {
+/** Уведомление всем администраторам (и в Telegram, если подключён). Сбой не ломает заявку. */
+async function notifyAdmins(title: string, body: string): Promise<void> {
   const admins = await prisma.user.findMany({ where: { role: "ADMIN", isBlocked: false }, select: { id: true }, take: 20 });
   await Promise.all(
-    admins.map((a) =>
-      notify({
-        userId: a.id,
-        kind: "document_status",
-        title: "Новая заявка продавца",
-        body: `«${displayName}» (${SELLER_TYPE_LABEL[sellerType] ?? "продавец"}) ждёт проверки. Пока заявка не одобрена, продавец не может публиковать товары.`,
-        url: "/admin/verification",
-      }).catch(() => undefined),
-    ),
+    admins.map((a) => notify({ userId: a.id, kind: "document_status", title, body, url: "/admin/verification" }).catch(() => undefined)),
   );
 }
 
@@ -74,11 +63,75 @@ export async function submitSellerOnboarding(sellerId: string, input: SellerOnbo
     targetId: sellerId,
     after: { recordId: record.id, kind: businessKind, sellerType: seller.sellerType },
   });
-  // Самозанятого сразу проверяем в ФНС: ответ сервиса и есть отметка.
+  // Самозанятого сразу проверяем в ФНС: при подтверждении он одобряется автоматически.
   // Сбой проверки не ломает заявку, она остаётся на модерации.
   const npd = parsed.sellerType === "SELF_EMPLOYED" ? await verifySellerNpd(sellerId, actorId).catch(() => null) : null;
-  await notifyAdminsAboutApplication(parsed.displayName, parsed.sellerType).catch(() => undefined);
+  if (npd?.status !== "VERIFIED") {
+    await notifyAdmins(
+      "Новая заявка продавца",
+      `«${parsed.displayName}» (${SELLER_TYPE_LABEL[parsed.sellerType] ?? "продавец"}) ждёт проверки. Пока заявка не одобрена, продавец не может публиковать товары.`,
+    ).catch(() => undefined);
+  }
   return { seller, record, npd };
+}
+
+/**
+ * Автоодобрение самозанятого: ФНС подтвердила НПД по ИНН из отправленной заявки.
+ * Магазин сразу может публиковать товары и принимать заказы. Личность при этом
+ * не считается проверенной (FNS_AUTO): нет отметки «Личность подтверждена» для
+ * покупателей, а выплаты закрыты до ручной проверки. Иначе чужой ИНН давал бы
+ * доступ к деньгам покупателей.
+ *
+ * Срабатывает только по заявке на проверке: отклонённую администратором или ещё не
+ * отправленную не трогает.
+ */
+async function autoApproveSelfEmployed(sellerId: string, actorId: string, now: Date): Promise<boolean> {
+  const seller = await prisma.sellerProfile.findUnique({
+    where: { id: sellerId },
+    select: { userId: true, displayName: true, sellerType: true, identityStatus: true, npdStatus: true, isActivated: true },
+  });
+  if (!seller || seller.sellerType !== "SELF_EMPLOYED" || seller.npdStatus !== "VERIFIED" || seller.isActivated) return false;
+  const latest = await prisma.verificationRecord.findFirst({
+    where: { sellerId, NOT: { source: "fns" } },
+    orderBy: { createdAt: "desc" },
+    select: { status: true },
+  });
+  if (latest?.status !== "PENDING") return false;
+  const identityStatus = seller.identityStatus === "VERIFIED" ? "VERIFIED" : FNS_AUTO_IDENTITY;
+  await prisma.verificationRecord.create({
+    data: {
+      sellerId,
+      kind: "npd",
+      status: "VERIFIED",
+      source: "fns_auto",
+      externalRef: "statusnpd.nalog.ru",
+      checkedFields: JSON.stringify({ inn: true, identity: identityStatus }),
+      note: "Одобрено автоматически: ФНС подтвердила статус самозанятого. Личность не проверена, выплаты после ручной проверки.",
+      verifiedAt: now,
+    },
+  });
+  await prisma.sellerProfile.update({ where: { id: sellerId }, data: { isActivated: true, identityStatus } });
+  await audit({
+    actorId,
+    actorRole: "system",
+    action: "seller_auto_approved_npd",
+    targetType: "SellerProfile",
+    targetId: sellerId,
+    before: { identityStatus: seller.identityStatus, isActivated: seller.isActivated },
+    after: { identityStatus, isActivated: true, source: "fns" },
+  });
+  await notify({
+    userId: seller.userId,
+    kind: "document_status",
+    title: "Магазин одобрен",
+    body: "ФНС подтвердила статус самозанятого, можно публиковать товары и принимать заказы. Первая выплата станет доступна после ручной проверки личности.",
+    url: "/seller/products",
+  }).catch(() => undefined);
+  await notifyAdmins(
+    "Самозанятый одобрен по ФНС",
+    `«${seller.displayName}» уже торгует: ФНС подтвердила статус самозанятого. Проверьте личность и нажмите «Одобрить»: до этого выплаты ему закрыты.`,
+  ).catch(() => undefined);
+  return true;
 }
 
 /** Последняя попытка проверки в ФНС по продавцу (защита от частых запросов). */
@@ -90,6 +143,7 @@ const NPD_THROTTLE_MS = 60_000;
  * REJECTED ставит только ответ ФНС; если сервис недоступен, статус не меняется
  * и запись о проверке не создаётся (только журнал).
  * Не чаще раза в минуту на продавца: у ФНС ограничение частоты.
+ * Подтверждение ФНС по заявке на проверке одобряет магазин (см. autoApproveSelfEmployed).
  */
 export async function verifySellerNpd(
   sellerId: string,
@@ -138,6 +192,10 @@ export async function verifySellerNpd(
     before: { npdStatus: seller.npdStatus },
     after: { npdStatus: result.status === "UNAVAILABLE" ? seller.npdStatus : result.status, source: "fns", result: result.status },
   });
+  if (result.status === "VERIFIED") {
+    // Автоодобрение не должно сломать саму проверку: при сбое заявка остаётся администратору.
+    await autoApproveSelfEmployed(sellerId, actorId, now).catch(() => false);
+  }
   return result;
 }
 
@@ -154,8 +212,9 @@ export async function getSellerVerificationStatus(sellerId: string) {
   // записям модерации, а ответ ФНС отдаём отдельно.
   const latest = records.find((r) => r.source !== "fns") ?? null;
   const npdCheck = records.find((r) => r.source === "fns") ?? null;
-  const status = seller.isActivated && seller.identityStatus === "VERIFIED" && (seller.businessStatus === "VERIFIED" || seller.npdStatus === "VERIFIED")
+  const identityOk = seller.identityStatus === "VERIFIED" || (seller.sellerType === "SELF_EMPLOYED" && seller.identityStatus === FNS_AUTO_IDENTITY && seller.npdStatus === "VERIFIED");
+  const status = seller.isActivated && identityOk && (seller.businessStatus === "VERIFIED" || seller.npdStatus === "VERIFIED")
     ? "APPROVED"
     : latest?.status === "REJECTED" ? "REJECTED" : latest?.status === "PENDING" ? "PENDING" : "NOT_SUBMITTED";
-  return { seller, status, latest, npdCheck, records };
+  return { seller, status, latest, npdCheck, records, identityPending: seller.identityStatus === FNS_AUTO_IDENTITY };
 }
