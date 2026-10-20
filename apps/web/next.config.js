@@ -1,8 +1,22 @@
 /** @type {import('next').NextConfig} */
 const path = require("node:path");
+const fs = require("node:fs");
 
 // Docker/VPS builds set NEXT_OUTPUT=standalone; Vercel builds keep the default.
 const standalone = process.env.NEXT_OUTPUT === "standalone";
+
+// Книга чек-поинта (/checkpoint/aiko-book.html) читает подробное описание из docs.
+// Копируем его в public при сборке, чтобы источник был один (docs/checkpoint-rlt).
+try {
+  const src = path.join(__dirname, "../../docs/checkpoint-rlt/AIKO_checkpoint.md");
+  const dst = path.join(__dirname, "public/checkpoint/aiko-checkpoint.md");
+  if (fs.existsSync(src)) {
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(src, dst);
+  }
+} catch {
+  // не мешаем сборке: книга покажет ссылку на документ вместо текста
+}
 
 const nextConfig = {
   reactStrictMode: true,
