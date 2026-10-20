@@ -1,5 +1,6 @@
 import { listRiskEvents } from "@/lib/domains/admin";
 import { timeAgo } from "@/lib/format";
+import { actorTypeLabel, riskActionLabel, riskLevelLabel } from "@/lib/admin-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -17,14 +18,14 @@ export default async function AdminRiskPage() {
   return (
     <section className="card overflow-hidden">
       <div className="border-b border-line p-4">
-        <h2 className="text-base font-bold text-ink">Risk-события</h2>
+        <h2 className="text-base font-bold text-ink">События риска</h2>
         <p className="text-xs text-ink-soft">
-          Каждое решение администратора записывается в аудит. Просмотрённое событие нельзя
-          переоткрыть.
+          Каждое решение администратора записывается в журнал. Рассмотренное событие нельзя
+          открыть снова.
         </p>
       </div>
       {events.length === 0 ? (
-        <p className="p-6 text-sm text-ink-soft">Risk-событий пока нет</p>
+        <p className="p-6 text-sm text-ink-soft">Событий риска пока нет</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -35,8 +36,8 @@ export default async function AdminRiskPage() {
                 <th className="px-4 py-2">Описание</th>
                 <th className="px-4 py-2">Объект</th>
                 <th className="px-4 py-2">Действие</th>
-                <th className="px-4 py-2">Создан</th>
-                <th className="px-4 py-2"></th>
+                <th className="px-4 py-2">Создано</th>
+                <th className="px-4 py-2"><span className="sr-only">Решение</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -44,17 +45,17 @@ export default async function AdminRiskPage() {
                 <tr key={e.id}>
                   <td className="px-4 py-2">
                     <span className={`font-bold ${LEVEL_TONE[e.level] ?? "text-ink-soft"}`}>
-                      {e.level}
+                      {riskLevelLabel(e.level)}
                     </span>
                   </td>
                   <td className="px-4 py-2 font-mono text-xs text-ink-soft">{e.ruleId}</td>
                   <td className="max-w-xs px-4 py-2 text-ink-soft">{e.description}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-ink-faint">
-                    {e.actorType}:{e.actorId.slice(0, 8)}
+                  <td className="px-4 py-2 text-xs text-ink-faint">
+                    {actorTypeLabel(e.actorType)} <span className="font-mono">{e.actorId.slice(0, 8)}</span>
                   </td>
                   <td className="px-4 py-2 text-xs text-ink-soft">
                     {e.actionTaken ? (
-                      <span>{e.actionTaken}</span>
+                      <span>{riskActionLabel(e.actionTaken)}</span>
                     ) : (
                       <span className="text-amber-700">не рассмотрено</span>
                     )}
