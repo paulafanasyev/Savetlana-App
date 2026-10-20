@@ -12,6 +12,7 @@ import { firstSteps } from "@/lib/seller-first-steps";
 import { SvetlanaChat } from "@/components/SvetlanaChat";
 import { TelegramConnect } from "@/components/TelegramConnect";
 import { SellerTodo } from "@/components/SellerTodo";
+import { ShareStore } from "@/components/ShareStore";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,7 @@ export default async function SellerDashboard({ searchParams }: { searchParams?:
     )}
     {!active && !steps && <Link href="/seller/onboarding" className="block rounded-xl border-2 border-amber-300 bg-amber-50 p-5 text-amber-950"><strong>Завершите оформление продавца</strong><span className="mt-1 block">{verification.status === "REJECTED" ? "Заявка отклонена, исправьте данные и отправьте её снова." : verification.status === "PENDING" ? "Заявка на проверке." : "Заполните реквизиты, чтобы публиковать товары."}</span></Link>}
     <SellerTodo initial={todo} />
+    {active && <ShareStore sellerId={sellerId} name={verification.seller.displayName} hasProducts={activeProducts > 0} />}
     <nav className="flex flex-wrap gap-3">{[["/seller/products", "Товары"], ["/seller/orders", "Заказы"], ["/seller/customers", "Покупатели"], ["/seller/messages", "Сообщения"], ["/seller/promotions", "Акции"], ["/seller/analytics", "Аналитика"], ["/seller/payouts", "Выплаты"], ["/seller/disputes", "Споры"], ["/seller/documents", "Документы"]].map(([href, label]) => <Link className="rounded border px-4 py-2" href={href} key={href}>{label}</Link>)}</nav>
     <section className="rounded-xl border p-5" aria-labelledby="ship-city">
       <h2 id="ship-city" className="font-semibold">Город отгрузки</h2>
