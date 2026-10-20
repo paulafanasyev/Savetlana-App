@@ -64,19 +64,25 @@ const NOT_FULLY_VERIFIED = {
 
 type QueueCandidate = {
   slug: string;
+  isActivated?: boolean;
   identityStatus: string;
+  businessStatus?: string | null;
+  npdStatus?: string | null;
   verificationRecords: { status: string }[];
 };
 
 /**
  * Нужно ли решение администратора: последняя заявка (не автоматическая проверка ФНС)
- * ждёт проверки, или самозанятый одобрен по ФНС и ждёт проверки личности. Те, кто
- * только открыл кабинет и заявку не подал, и демо-магазины в очередь не попадают.
+ * ждёт проверки, или самозанятый одобрен по ФНС и ждёт проверки личности. Активный
+ * магазин со статусом «на проверке», но без записи заявки (старые магазины), тоже в очереди.
+ * Те, кто только открыл кабинет и заявку не подал, и демо-магазины в очередь не попадают.
  */
 export function needsAdminDecision(s: QueueCandidate): boolean {
   if (isDemoSeller(s)) return false;
   if (s.identityStatus === FNS_AUTO_IDENTITY) return true;
-  return s.verificationRecords[0]?.status === "PENDING";
+  const latest = s.verificationRecords[0];
+  if (latest) return latest.status === "PENDING";
+  return s.isActivated === true && [s.identityStatus, s.businessStatus, s.npdStatus].includes("PENDING");
 }
 
 const LATEST_APPLICATION = {
@@ -90,7 +96,7 @@ export async function listVerificationQueue(limit = 50) {
   const sellers = await prisma.sellerProfile.findMany({
     where: NOT_FULLY_VERIFIED,
     orderBy: { updatedAt: "desc" }, take: Math.min(limit * 4, 2000),
-    select: { id: true, displayName: true, sellerType: true, slug: true, identityStatus: true, businessStatus: true, npdStatus: true, inn: true, ogrn: true, createdAt: true, verificationRecords: LATEST_APPLICATION, _count: { select: { verificationRecords: true, documents: true } } },
+    select: { id: true, displayName: true, sellerType: true, slug: true, isActivated: true, identityStatus: true, businessStatus: true, npdStatus: true, inn: true, ogrn: true, createdAt: true, verificationRecords: LATEST_APPLICATION, _count: { select: { verificationRecords: true, documents: true } } },
   });
   return sellers
     .filter(needsAdminDecision)
