@@ -7,7 +7,7 @@ import { finishLogin } from "@/lib/login-finish";
 
 export const dynamic = "force-dynamic";
 
-/** Второй шаг входа с нового устройства: код из письма. */
+/** Второй шаг входа: код из письма (новое устройство) или из Telegram (вход администратора). */
 export const POST = apiRoute(async (request) => {
   const body = await jsonBody<{ challenge?: string; code?: string }>(request);
   const challenge = String(body.challenge ?? "").trim().toLowerCase();
@@ -21,7 +21,7 @@ export const POST = apiRoute(async (request) => {
 
   const userId = await verifyLoginChallenge(challenge, code);
   if (!userId) {
-    return Response.json({ error: "Код не подошёл или устарел. Проверьте письмо или войдите заново, чтобы получить новый код.", code: "bad_code" }, { status: 400 });
+    return Response.json({ error: "Код не подошёл или устарел. Проверьте письмо или Telegram, либо войдите заново, чтобы получить новый код.", code: "bad_code" }, { status: 400 });
   }
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || user.isBlocked) return Response.json({ error: "Аккаунт заблокирован", code: "blocked" }, { status: 403 });

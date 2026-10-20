@@ -1,6 +1,7 @@
 /**
  * Аварийное восстановление доступа администратора, когда письмо со сбросом
- * пароля не приходит (например, почта для писем ещё не настроена).
+ * пароля не приходит (например, почта для писем ещё не настроена) или потерян
+ * доступ к Telegram, куда приходит код входа в админку.
  *
  * Работает только если владелец сайта сам задал в настройках сервера секрет
  * ADMIN_RECOVERY_TOKEN (не короче 24 символов), и только для почт из ADMIN_EMAILS. Без секрета
@@ -13,7 +14,8 @@
  * уведомление, что восстановлением воспользовались.
  *
  * Попытки ограничены (5 в час с одного адреса, 20 в час всего), каждая
- * записывается в журнал. Старые входы на всех устройствах завершаются.
+ * записывается в журнал. Старые входы на всех устройствах завершаются, привязка
+ * Telegram (второй фактор) снимается: её нужно подключить заново в профиле.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { prisma } from "../prisma";
@@ -23,6 +25,7 @@ import { audit } from "./audit";
 import { notify } from "./notifications";
 import { consumeRateLimit } from "./rate-limits";
 import { notifyPasswordChanged } from "./password-changed";
+import { TELEGRAM_PROVIDER } from "./telegram-link";
 
 export const MIN_RECOVERY_TOKEN_LENGTH = 24;
 
@@ -82,11 +85,14 @@ export async function recoverAdminPassword(input: { email: string; token: string
   if (!user) throw new ApiError(404, "Аккаунта с этой почтой нет. Сначала зарегистрируйтесь с этой почтой, потом повторите восстановление.", "no_account");
 
   const passwordHash = await hashPassword(input.newPassword);
+  const now = new Date();
   await prisma.$transaction([
     prisma.user.update({ where: { id: user.id }, data: { passwordHash, role: "ADMIN", isBlocked: false } }),
-    prisma.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } }),
+    prisma.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: now } }),
+    // Доступ к Telegram мог быть потерян: снимаем привязку, иначе войти без кода нельзя.
+    prisma.integrationLink.updateMany({ where: { userId: user.id, provider: TELEGRAM_PROVIDER, unlinkedAt: null }, data: { status: "REVOKED", unlinkedAt: now } }),
   ]);
-  await audit({ actorId: user.id, actorRole: "admin", action: "auth.admin_recovery", targetType: "User", targetId: user.id, after: { email, token: fingerprint } });
+  await audit({ actorId: user.id, actorRole: "admin", action: "auth.admin_recovery", targetType: "User", targetId: user.id, after: { email, token: fingerprint, telegramUnlinked: true } });
   await notifyPasswordChanged(user.id, "admin_recovery");
 
   // Другие администраторы должны узнать, что кто-то вошёл через аварийный секрет.
