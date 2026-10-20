@@ -103,9 +103,17 @@ const nextConfig = {
         ],
       },
       {
-        // Защита от копирования: чужие сайты не могут вставлять наши картинки,
-        // аватар Светланы и материалы чек-поинта к себе на страницы (hotlinking).
-        source: "/(images|checkpoint)/:path*",
+        // Защита от копирования: чужие сайты не могут вставлять наши картинки к себе
+        // на страницы (hotlinking), ИИ-сервисам запрещено учиться на них.
+        source: "/images/:path*",
+        headers: [
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+          { key: "X-Robots-Tag", value: "noarchive, noai, noimageai" },
+        ],
+      },
+      {
+        // Материалы чек-поинта: только по ссылке, без поиска, копий и вставки на чужие сайты.
+        source: "/checkpoint/:path*",
         headers: [
           { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
           { key: "X-Robots-Tag", value: "noindex, noarchive, noai, noimageai" },
