@@ -25,6 +25,9 @@ export type AvailabilityState =
 
 export const LISTING_DEFAULT_DAYS = 30;
 
+/** Сколько строк остатков разбираем за один запуск: остальное догонит следующий запуск. */
+export const SWEEP_BATCH = 500;
+
 export function computeAvailability(
   quantity: number,
   confirmed: boolean,
@@ -210,18 +213,36 @@ export async function extendListing(
  *   - stop promising guaranteed availability (→ UNKNOWN)
  *   - auto-hide products whose grace period elapsed
  *
+ * Берём из базы только те строки, с которыми есть что делать, и не больше
+ * SWEEP_BATCH за запуск: уже скрытые товары за пределами льготного срока не
+ * разбираем заново, иначе с ростом каталога задача упирается в таймаут.
+ *
  * Returns the sweep result so a background job / cron can report it.
  */
-export async function sweepStaleAvailability(now = new Date()): Promise<{
+export async function sweepStaleAvailability(now = new Date(), batch = SWEEP_BATCH): Promise<{
   warned: string[];
   unknown: string[];
   hidden: string[];
 }> {
   const GRACE_DAYS = 7;
   const result = { warned: [] as string[], unknown: [] as string[], hidden: [] as string[] };
+  const graceStart = new Date(now.getTime() - GRACE_DAYS * 24 * 60 * 60 * 1000);
+  const needsAction = [{ product: { is: { status: "ACTIVE" } } }, { autoExtend: true }];
 
   const inventories = await prisma.inventory.findMany({
-    where: { confirmedBySeller: true },
+    where: {
+      confirmedBySeller: true,
+      OR: [
+        // В льготный срок: напоминаем продавцу.
+        { saleUntil: { lt: now, gte: graceStart } },
+        { saleUntil: null, confirmedAt: { lt: now, gte: graceStart } },
+        // После него: только если товар ещё на витрине или продавец включил автопродление.
+        ...needsAction.map((extra) => ({ saleUntil: { lt: graceStart }, ...extra })),
+        ...needsAction.map((extra) => ({ saleUntil: null, confirmedAt: { lt: graceStart }, ...extra })),
+      ],
+    },
+    orderBy: { saleUntil: "asc" },
+    take: batch,
     include: { product: { select: { id: true, sellerId: true, title: true, status: true } } },
   });
 
@@ -232,10 +253,12 @@ export async function sweepStaleAvailability(now = new Date()): Promise<{
     if (ageDays <= 0) continue;
 
     const availability = computeAvailability(inv.quantity, false, inv.saleUntil, now);
-    await prisma.inventory.update({
-      where: { id: inv.id },
-      data: { availability },
-    });
+    if (inv.availability !== availability) {
+      await prisma.inventory.update({
+        where: { id: inv.id },
+        data: { availability },
+      });
+    }
     result.unknown.push(inv.productId);
 
     if (ageDays <= GRACE_DAYS) {
