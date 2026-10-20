@@ -73,6 +73,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <a href="/privacy" className="hover:text-svetlana-700">Конфиденциальность</a>
               <a href="/svetlana" className="hover:text-svetlana-700">Светлана</a>
               <a href="/favorites" className="hover:text-svetlana-700">Избранное</a>
+              <a href="/sell" className="font-medium text-svetlana-700 hover:underline">Продавать на АИКО</a>
               <a href="/seller" className="hover:text-svetlana-700">Кабинет продавца</a>
               <a href="/city" className="hover:text-svetlana-700">Мой город и погода</a>
               <a href="/promote" className="hover:text-svetlana-700">Продвижение от 5 ₽</a>
