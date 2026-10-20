@@ -3,12 +3,18 @@
  *
  * Раньше поиск возвращал весь каталог, просто отсортированный: на «нож» приходили
  * кроссовки и смартфоны. Теперь товар остаётся, если совпало слово запроса
- * (с учётом окончаний) или он заметно близок по смыслу. Если не нашлось ничего,
- * показываем несколько самых близких по смыслу (спасает при опечатках).
+ * (с учётом окончаний) или он по смыслу не хуже лучшего совпадения.
+ *
+ * Порог по смыслу относительный: у модели близость сильно гуляет от запроса к запросу
+ * (на «кроссовки» дизайн-проект набирал 46%, на «нож» настоящий нож только 32%), поэтому
+ * сравниваем с лучшим товаром этого же запроса. Если слова не совпали ни с чем
+ * (опечатка), показываем несколько самых близких по смыслу с пометкой.
  */
 
-/** Близость по смыслу, при которой товар показываем и без совпадения слов. */
+/** Нижняя граница близости для товара без совпадения слов. */
 export const SEM_STRONG = 0.3;
+/** Товар без совпадения слов должен набрать не меньше такой доли от лучшего. */
+export const SEM_RELATIVE = 0.9;
 /** Нижняя граница для запасной выдачи, когда слова не совпали ни с чем. */
 export const SEM_FALLBACK = 0.25;
 export const FALLBACK_MAX = 6;
@@ -41,9 +47,14 @@ export interface RelevanceRow {
 }
 
 /** Какие товары оставить в выдаче. */
-export function relevantIds(rows: RelevanceRow[]): { ids: Set<string>; fallback: boolean } {
-  const ids = new Set(rows.filter((r) => r.kw > 0 || r.sem >= SEM_STRONG).map((r) => r.id));
-  if (ids.size > 0) return { ids, fallback: false };
+export function relevantIds(rows: RelevanceRow[]): { ids: Set<string> ; fallback: boolean } {
+  const matched = rows.filter((r) => r.kw > 0);
+  if (matched.length > 0) {
+    // Планка по смыслу: не ниже 90% от лучшего товара со совпавшими словами.
+    const bar = Math.max(SEM_STRONG, SEM_RELATIVE * Math.max(...matched.map((r) => r.sem)));
+    const ids = new Set(rows.filter((r) => r.kw > 0 || r.sem >= bar).map((r) => r.id));
+    return { ids, fallback: false };
+  }
   const near = rows
     .filter((r) => r.sem >= SEM_FALLBACK)
     .sort((a, b) => b.sem - a.sem)

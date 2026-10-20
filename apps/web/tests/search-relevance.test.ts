@@ -26,6 +26,16 @@ describe("релевантность поиска", () => {
     expect(fallback).toBe(false);
   });
 
+  it("на «кроссовки» убирает дизайн-проект и шуруповёрт: близость сравнивается с лучшим", () => {
+    const { ids } = relevantIds([
+      { id: "pegasus", kw: 5, sem: 0.53 },
+      { id: "runfalcon", kw: 5, sem: 0.51 },
+      { id: "design", kw: 0, sem: 0.46 },
+      { id: "drill", kw: 0, sem: 0.33 },
+    ]);
+    expect([...ids].sort()).toEqual(["pegasus", "runfalcon"]);
+  });
+
   it("без совпадений даёт несколько ближайших или ничего", () => {
     const rows = Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, kw: 0, sem: 0.26 + i / 1000 }));
     const near = relevantIds(rows);
