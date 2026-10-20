@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { env, integrationStatus } from "@/lib/env";
 import { ACCEPT_DAYS } from "@/lib/safe-deal";
@@ -8,10 +9,15 @@ export const dynamic = "force-dynamic";
 
 const DAY_FORMS = ["день", "дня", "дней"] as const;
 
+/** Комиссия по-русски: 1,5 а не 1.5. */
+function feeText(): string {
+  return String(env.platformFeePercent).replace(".", ",");
+}
+
 export function generateMetadata(): Metadata {
   return {
     title: "Продавать на АИКО",
-    description: `Откройте магазин на АИКО: комиссия ${env.platformFeePercent}% с продажи, самозанятых одобряем по данным ФНС, карточки товаров помогает составить ИИ-помощник Светлана.`,
+    description: `Откройте магазин на АИКО: комиссия ${feeText()}% с продажи, самозанятых одобряем по данным ФНС, карточки товаров помогает составить ИИ-помощник Светлана.`,
     alternates: { canonical: "/sell" },
   };
 }
@@ -24,7 +30,7 @@ const START = "/register?role=seller";
  * безопасной сделки. Пока банк для приёма оплаты не подключён, честно пишем об этом.
  */
 export default function SellPage() {
-  const fee = env.platformFeePercent;
+  const fee = feeText();
   const paymentsReady = integrationStatus.payment === "READY";
   return (
     <div className="mx-auto max-w-5xl space-y-10 px-4 py-10">
@@ -78,7 +84,7 @@ export default function SellPage() {
       <section aria-labelledby="steps" className="card space-y-4 p-6">
         <h2 id="steps" className="text-2xl font-bold text-ink">Как начать</h2>
         <ol className="grid gap-4 sm:grid-cols-3">
-          <Step n={1} title="Регистрация">Почта и пароль, больше ничего.</Step>
+          <Step n={1} title="Регистрация">Имя, почта и пароль.</Step>
           <Step n={2} title="Реквизиты">Тип (самозанятый, ИП или организация), название магазина и ИНН.</Step>
           <Step n={3} title="Первый товар">Сами, со Светланой или файлом с другой площадки.</Step>
         </ol>
@@ -90,7 +96,7 @@ export default function SellPage() {
       <section aria-labelledby="faq" className="space-y-3">
         <h2 id="faq" className="text-2xl font-bold text-ink">Частые вопросы</h2>
         <Faq q="Когда приходят деньги?">
-          После того, как покупатель примет заказ (или через {countText(ACCEPT_DAYS, DAY_FORMS)} после доставки, если он не открыл спор)
+          После того, как покупатель примет заказ (или через {countText(ACCEPT_DAYS, DAY_FORMS)} после доставки, если он не открыл спор),
           сумма за вычетом комиссии становится доступна к выплате в разделе «Выплаты».
           Самозанятым, одобренным автоматически, перед первой выплатой администратор проверяет личность.
         </Faq>
@@ -99,7 +105,7 @@ export default function SellPage() {
           зарегистрировались в «Мой налог», статус может появиться в течение дня.
         </Faq>
         <Faq q="Что видит покупатель о моём магазине?">
-          Отметки только по фактам: «Самозанятый, подтверждено ФНС», «ИП подтверждён», «Личность подтверждена», и рейтинг
+          Отметки только по фактам («Самозанятый, подтверждено ФНС», «ИП подтверждён», «Личность подтверждена») и рейтинг
           по настоящим заказам и отзывам.
         </Faq>
       </section>
@@ -107,7 +113,7 @@ export default function SellPage() {
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="card p-5">
       <h3 className="font-semibold text-ink">{title}</h3>
@@ -116,7 +122,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   );
 }
 
-function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
   return (
     <li className="rounded-xl bg-surface-muted p-4">
       <div className="text-sm font-semibold text-svetlana-700">Шаг {n}</div>
@@ -126,7 +132,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   );
 }
 
-function Faq({ q, children }: { q: string; children: React.ReactNode }) {
+function Faq({ q, children }: { q: string; children: ReactNode }) {
   return (
     <details className="card p-4">
       <summary className="cursor-pointer font-medium text-ink">{q}</summary>
