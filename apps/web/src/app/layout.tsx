@@ -20,6 +20,17 @@ export const dynamic = "force-dynamic";
 /** «АИКО: маркетплейс с ИИ-помощником Светланой»: маленькая только первая буква, ИИ и имя не трогаем. */
 const HOME_TITLE = `${SITE_NAME}: ${SITE_TAGLINE.charAt(0).toLowerCase()}${SITE_TAGLINE.slice(1)}`;
 
+/**
+ * Подтверждение прав на сайт в Яндекс.Вебмастере и Google Search Console: код из мета-тега
+ * (только значение content) задаётся в настройках сервера, без правки кода.
+ */
+function verificationCode(raw: string | undefined): string | undefined {
+  const v = raw?.trim();
+  return v && /^[A-Za-z0-9_-]{6,128}$/.test(v) ? v : undefined;
+}
+const yandexVerification = verificationCode(process.env.YANDEX_VERIFICATION);
+const googleVerification = verificationCode(process.env.GOOGLE_SITE_VERIFICATION);
+
 export const metadata: Metadata = {
   title: {
     default: HOME_TITLE,
@@ -39,6 +50,14 @@ export const metadata: Metadata = {
     locale: "ru_RU",
     type: "website",
   },
+  ...(yandexVerification || googleVerification
+    ? {
+        verification: {
+          ...(yandexVerification ? { yandex: yandexVerification } : {}),
+          ...(googleVerification ? { google: googleVerification } : {}),
+        },
+      }
+    : {}),
 };
 
 async function viewState() {
