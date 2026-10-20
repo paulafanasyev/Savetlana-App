@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireSellerServer } from "@/lib/auth";
 import { getSellerVerificationStatus } from "@/lib/domains/seller-verification";
 import { SellerOnboardingForm } from "@/components/SellerOnboardingForm";
@@ -15,8 +16,17 @@ export default async function SellerOnboardingPage() {
         <h1 className="text-2xl font-semibold">Проверка продавца</h1>
         <p className="mt-2 text-ink-soft">Заполните реквизиты магазина. После проверки вы сможете публиковать товары.</p>
       </div>
-      {data.status === "PENDING" && <div className="rounded-xl bg-amber-50 p-4 text-amber-900">Заявка на проверке</div>}
-      {data.status === "APPROVED" && <div className="rounded-xl bg-green-50 p-4 text-green-900">Проверка пройдена. Магазин активирован.</div>}
+      {data.status === "PENDING" && (
+        <div className="rounded-xl bg-amber-50 p-4 text-amber-900" role="status">
+          <strong>Заявка на проверке.</strong> Администратор уже получил её. О решении вы узнаете из уведомления
+          на сайте (и в Telegram, если подключите его на <Link href="/seller" className="underline">главной кабинета</Link>).
+        </div>
+      )}
+      {data.status === "APPROVED" && (
+        <div className="rounded-xl bg-green-50 p-4 text-green-900">
+          Проверка пройдена. Магазин активирован. <Link href="/seller/products" className="font-medium underline">Перейти к товарам</Link>
+        </div>
+      )}
       {data.status === "REJECTED" && (
         <div className="rounded-xl bg-red-50 p-4 text-red-900">
           <strong>Заявка отклонена.</strong>{data.latest?.note ? ` Причина: ${data.latest.note}` : " Исправьте данные и отправьте заявку повторно."}
