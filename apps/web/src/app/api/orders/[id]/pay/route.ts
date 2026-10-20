@@ -1,7 +1,7 @@
 import { apiRoute, readIdempotencyKey, rateLimit, tooManyRequests } from "@/lib/api-helpers";
 import { requireBuyer } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { capturePayment, getPaymentProvider, type PaymentMethod } from "@/lib/domains/payments";
+import { capturePayment, getPaymentProvider, getPaymentProviderByKey, type PaymentMethod } from "@/lib/domains/payments";
 import { notify } from "@/lib/domains/notifications";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +14,9 @@ export const dynamic = "force-dynamic";
  *
  * Заказ, который проверка риска при оформлении пометила BLOCKED (сумма не совпала
  * с ценой в каталоге), оплатить нельзя.
+ *
+ * Двойная оплата: если предыдущий платёж (например, картой) банк уже провёл, а
+ * уведомление ещё не дошло, новый платёж (например, через СБП) не создаём.
  *
  * Тело (необязательно): { method: "card" | "sbp" }. Ответ содержит confirmationUrl —
  * страницу банка или ссылку СБП. Заказ становится оплаченным по уведомлению банка
@@ -36,7 +39,7 @@ export const POST = apiRoute(async (request, { params }) => {
       status: true,
       totalKopecks: true,
       currency: true,
-      payment: { select: { status: true } },
+      payment: { select: { status: true, provider: true, providerRef: true, sandbox: true } },
       sellerProfile: { select: { userId: true } },
     },
   });
@@ -60,6 +63,21 @@ export const POST = apiRoute(async (request, { params }) => {
         {
           error: "Оплата этого заказа приостановлена: сумма в заказе не совпала с ценой в каталоге. Оформите заказ заново или напишите в поддержку.",
           code: "risk_blocked",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
+  // Предыдущий платёж ждёт подтверждения: спрашиваем банк, не прошёл ли он уже.
+  if (!wasPaid && order.payment?.status === "PENDING" && order.payment.providerRef && !order.payment.sandbox) {
+    const previous = getPaymentProviderByKey(order.payment.provider);
+    const live = previous ? await previous.getStatus(order.payment.providerRef).catch(() => null) : null;
+    if (live?.status === "SUCCEEDED") {
+      return Response.json(
+        {
+          error: "Оплата уже прошла, ждём подтверждения банка. Обновите страницу заказа через минуту, платить ещё раз не нужно.",
+          code: "payment_in_progress",
         },
         { status: 409 },
       );
