@@ -27,6 +27,11 @@ const SELLER_TYPE: Record<string, string> = {
   COMPANY: "Юридическое лицо",
 };
 
+/** Услуга, а не товар: у неё нет остатка в штуках и самовывоза. */
+function isServiceProduct(title: string, categoryName: string | null | undefined): boolean {
+  return /^услуга[:\s]/i.test(title.trim()) || /услуг/i.test(categoryName ?? "");
+}
+
 export default async function ProductPage({ params }: PageProps) {
   const { id } = await resolveParams(params);
   const product = await prisma.product.findFirst({
@@ -66,8 +71,12 @@ export default async function ProductPage({ params }: PageProps) {
   const tax = taxCheck(product.sellerProfile);
   const verifiedSeller = sellerBadges(product.sellerProfile).some((b) => b.key === "verified_seller");
   const demoSeller = isDemoSeller(product.sellerProfile);
+  const service = isServiceProduct(product.title, product.category?.name);
   const outOfStock = !product.inventory || product.inventory.quantity <= 0 || product.inventory.availability === "OUT_OF_STOCK";
   const variants = product.variants.map((v) => ({ id: v.id, name: v.name, priceKopecks: product.priceKopecks + v.priceDelta }));
+  const availabilityText = service
+    ? outOfStock ? "Сейчас не принимает заказы" : "Можно заказать"
+    : outOfStock ? "Нет в наличии" : availabilityLabel(product.inventory?.availability);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
@@ -93,7 +102,7 @@ export default async function ProductPage({ params }: PageProps) {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={product.images[0].url} alt={product.title} className="h-full w-full object-contain" />
             ) : (
-              <div className="flex h-full items-center justify-center text-5xl">📦</div>
+              <div className="flex h-full items-center justify-center text-5xl">{service ? "🛠️" : "📦"}</div>
             )}
           </div>
           {product.images.length > 1 && (
@@ -113,9 +122,15 @@ export default async function ProductPage({ params }: PageProps) {
           <div>
             <h1 className="text-2xl font-bold text-ink">{product.title}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-ink-soft">
-              <span>★ {product.rating.toFixed(1)}</span>
-              <span>·</span>
-              <span>{countText(product.reviewsCount, REVIEW_FORMS)}</span>
+              {product.reviewsCount > 0 ? (
+                <>
+                  <span>★ {product.rating.toFixed(1)}</span>
+                  <span>·</span>
+                  <span>{countText(product.reviewsCount, REVIEW_FORMS)}</span>
+                </>
+              ) : (
+                <span>пока без отзывов</span>
+              )}
               <span>·</span>
               <span>Артикул {product.sku}</span>
             </div>
@@ -130,11 +145,11 @@ export default async function ProductPage({ params }: PageProps) {
 
           <div className="card p-4 text-sm">
             <div className="flex items-center justify-between">
-              <span className="font-medium text-ink">{outOfStock ? "Нет в наличии" : availabilityLabel(product.inventory?.availability)}</span>
+              <span className="font-medium text-ink">{availabilityText}</span>
               {product.inventory?.confirmedBySeller ? (
                 <span className="chip">подтверждено продавцом</span>
               ) : (
-                <span className="chip bg-amber-50 text-amber-700">наличие не подтверждено</span>
+                <span className="chip bg-amber-50 text-amber-700">{service ? "не подтверждено" : "наличие не подтверждено"}</span>
               )}
             </div>
             {product.inventory?.confirmedAt && (
@@ -142,11 +157,13 @@ export default async function ProductPage({ params }: PageProps) {
                 Последнее подтверждение: {new Date(product.inventory.confirmedAt).toLocaleDateString("ru-RU")}
               </div>
             )}
-            {product.inventory?.quantity !== undefined && product.inventory.quantity > 0 && (
+            {!service && product.inventory?.quantity !== undefined && product.inventory.quantity > 0 && (
               <div className="mt-1 text-xs text-ink-soft">Остаток: {product.inventory.quantity} шт.</div>
             )}
             {shipCity && (
-              <div className="mt-2 text-xs text-ink-soft">📍 Отправка из г. {shipCity}, там же самовывоз</div>
+              <div className="mt-2 text-xs text-ink-soft">
+                {service ? `📍 Исполнитель в г. ${shipCity}` : `📍 Отправка из г. ${shipCity}, там же самовывоз`}
+              </div>
             )}
           </div>
 
@@ -179,9 +196,9 @@ export default async function ProductPage({ params }: PageProps) {
 
         {/* Svetlana + seller */}
         <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-          <SvetlanaChat side="buyer" title="Спросите Светлану о товаре" />
+          <SvetlanaChat side="buyer" title={service ? "Спросите Светлану об услуге" : "Спросите Светлану о товаре"} />
           <div className="card p-4">
-            <h3 className="text-sm font-bold text-ink">Продавец</h3>
+            <h3 className="text-sm font-bold text-ink">{service ? "Исполнитель" : "Продавец"}</h3>
             <Link
               href={`/sellers/${product.sellerProfile.id}`}
               className="mt-2 block text-base font-semibold text-svetlana-700 hover:underline"
@@ -199,7 +216,7 @@ export default async function ProductPage({ params }: PageProps) {
             )}
             <div className="mt-3 space-y-1 text-xs text-ink-soft">
               <div>{SELLER_TYPE[product.sellerProfile.sellerType] ?? "Продавец"}</div>
-              {shipCity && <div>Город отгрузки: {shipCity}</div>}
+              {shipCity && <div>{service ? "Город" : "Город отгрузки"}: {shipCity}</div>}
               <div>Личность: {checkStatusLabel(shownStatus(product.sellerProfile, product.sellerProfile.identityStatus))}</div>
               {tax && <div>{tax.label}: {checkStatusLabel(shownStatus(product.sellerProfile, tax.status))}</div>}
               <div>На площадке с {new Date(product.sellerProfile.createdAt).getFullYear()}</div>
@@ -208,7 +225,7 @@ export default async function ProductPage({ params }: PageProps) {
               href={`/messages/${product.sellerProfile.id}?about=${product.id}`}
               className="btn btn-ghost mt-3 w-full justify-center text-sm"
             >
-              Задать вопрос продавцу
+              {service ? "Задать вопрос исполнителю" : "Задать вопрос продавцу"}
             </Link>
           </div>
         </div>
@@ -217,18 +234,20 @@ export default async function ProductPage({ params }: PageProps) {
       {/* Reviews */}
       <section className="mt-10">
         <h2 className="mb-4 text-xl font-bold text-ink">Отзывы</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="card p-4">
-            <div className="text-3xl font-bold text-ink">{reviewSummary.averageRating.toFixed(1)}</div>
-            <div className="text-xs text-ink-soft">средняя оценка, {countText(reviewSummary.count, REVIEW_FORMS)}</div>
-          </div>
-          {Object.entries(reviewSummary.distribution).map(([rating, count]) => (
-            <div key={rating} className="card p-4 text-sm">
-              <div className="text-ink-soft">{rating} ★</div>
-              <div className="text-lg font-bold text-ink">{count}</div>
+        {reviewSummary.count > 0 && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="card p-4">
+              <div className="text-3xl font-bold text-ink">{reviewSummary.averageRating.toFixed(1)}</div>
+              <div className="text-xs text-ink-soft">средняя оценка, {countText(reviewSummary.count, REVIEW_FORMS)}</div>
             </div>
-          ))}
-        </div>
+            {Object.entries(reviewSummary.distribution).map(([rating, count]) => (
+              <div key={rating} className="card p-4 text-sm">
+                <div className="text-ink-soft">{rating} ★</div>
+                <div className="text-lg font-bold text-ink">{count}</div>
+              </div>
+            ))}
+          </div>
+        )}
         {reviewSummary.recurringTerms.length > 0 && (
           <div className="mt-4 card p-4">
             <h3 className="mb-2 text-sm font-bold text-ink">Что чаще всего упоминают</h3>
@@ -247,7 +266,7 @@ export default async function ProductPage({ params }: PageProps) {
 
         {myReview?.kind === "can_review" && (
           <div className="mt-6 card p-4">
-            <h3 className="mb-3 text-sm font-bold text-ink">Ваш отзыв о товаре</h3>
+            <h3 className="mb-3 text-sm font-bold text-ink">{service ? "Ваш отзыв об услуге" : "Ваш отзыв о товаре"}</h3>
             <ReviewForm productId={product.id} orderId={myReview.orderId} />
           </div>
         )}
@@ -280,7 +299,7 @@ export default async function ProductPage({ params }: PageProps) {
           </div>
         ) : (
           <p className="mt-4 text-sm text-ink-soft">
-            Отзывов пока нет. После получения заказа вы сможете оставить первый.
+            Отзывов пока нет. {service ? "После выполнения заказа" : "После получения заказа"} вы сможете оставить первый.
           </p>
         )}
       </section>
