@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { JuryGuestButton } from "@/components/JuryGuestButton";
 
 /** Куда вернуться после входа: только на страницу этого же сайта (защита от open redirect). */
 function safeNext(raw: string | null | undefined): string {
@@ -266,6 +267,7 @@ function LoginInner() {
             Зарегистрироваться
           </Link>
         </div>
+        <JuryGuestButton next={next === "/" ? "/catalog" : next} />
       </div>
     </div>
   );
