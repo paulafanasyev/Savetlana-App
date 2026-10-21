@@ -5,6 +5,12 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+/** Куда вернуться после регистрации: только на страницу этого же сайта (защита от open redirect). */
+function safeNext(raw: string | null | undefined): string | null {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return null;
+  return raw;
+}
+
 export default function RegisterPage() {
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "BUYER" });
   const [accepted, setAccepted] = useState(false);
@@ -12,11 +18,15 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [exists, setExists] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [next, setNext] = useState<string | null>(null);
 
   // Со страницы «Продавать на АИКО» (/register?role=seller) сразу выбираем «Я продавец».
+  // Со страницы входа (/register?next=/gifts) после регистрации вернём туда, куда шли.
   useEffect(() => {
-    const role = new URLSearchParams(window.location.search).get("role");
+    const params = new URLSearchParams(window.location.search);
+    const role = params.get("role");
     if (role && role.toLowerCase() === "seller") setForm((f) => ({ ...f, role: "SELLER" }));
+    setNext(safeNext(params.get("next")));
   }, []);
 
   const submit = async (e: React.FormEvent) => {
@@ -43,12 +53,14 @@ export default function RegisterPage() {
       // Администратор (почта из ADMIN_EMAILS) сразу попадает в админку.
       // Полная перезагрузка, чтобы шапка сайта сразу показала, что вход выполнен.
       const role = data?.user?.role;
-      window.location.assign(role === "ADMIN" ? "/admin" : form.role === "SELLER" ? "/seller" : "/");
+      window.location.assign(role === "ADMIN" ? "/admin" : next ?? (form.role === "SELLER" ? "/seller" : "/"));
     } catch (e2) {
       setError(e2 instanceof Error ? e2.message : "Ошибка регистрации");
       setBusy(false);
     }
   };
+
+  const loginHref = next ? `/login?next=${encodeURIComponent(next)}` : "/login";
 
   return (
     <div className="mx-auto max-w-md px-4 py-10">
@@ -135,7 +147,7 @@ export default function RegisterPage() {
               {error}
               {exists && (
                 <div className="mt-2 flex gap-3">
-                  <Link href="/login" className="font-medium text-svetlana-700 hover:underline">Войти</Link>
+                  <Link href={loginHref} className="font-medium text-svetlana-700 hover:underline">Войти</Link>
                   <Link href={`/password-reset?email=${encodeURIComponent(form.email)}`} className="font-medium text-svetlana-700 hover:underline">Забыли пароль?</Link>
                 </div>
               )}
@@ -147,7 +159,7 @@ export default function RegisterPage() {
         </form>
         <div className="mt-4 text-center text-sm text-ink-soft">
           Уже есть аккаунт?{" "}
-          <Link href="/login" className="font-medium text-svetlana-700 hover:underline">
+          <Link href={loginHref} className="font-medium text-svetlana-700 hover:underline">
             Войти
           </Link>
         </div>
