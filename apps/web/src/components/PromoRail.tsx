@@ -33,9 +33,8 @@ function Card({ c, compact = false }: { c: RailCard; compact?: boolean }) {
  * Каркас страницы с продвижением. На широком экране справа колонка с
  * продвигаемыми объявлениями и товарами, на телефоне и планшете те же
  * карточки лентой под содержимым страницы. Карточки берутся из базы один раз.
- * Пока продвигать нечего, колонки нет совсем: пустое «здесь может быть ваше
- * объявление» на каждой странице выглядит недоделанным, а ссылка на продвижение
- * есть в подвале. На юридических и служебных страницах блок скрыт (PromoVisibility).
+ * Пока продвигать нечего, в колонке оформленное приглашение с ценой, а не пустое
+ * «здесь может быть…». На юридических и служебных страницах блок скрыт (PromoVisibility).
  */
 export async function PromoLayout({ children }: { children: React.ReactNode }) {
   let cards: RailCard[] = [];
@@ -70,14 +69,24 @@ export async function PromoLayout({ children }: { children: React.ReactNode }) {
           </PromoVisibility>
         )}
       </div>
-      {hasCards && (
-        <PromoVisibility>
-          <aside className="hidden w-60 shrink-0 border-l border-surface-line bg-white px-3 py-4 xl:block" aria-label="Продвижение">
-            <div className="sticky top-20 space-y-3">
+      <PromoVisibility>
+        <aside className="hidden w-60 shrink-0 border-l border-surface-line bg-white px-3 py-4 xl:block" aria-label="Продвижение">
+          <div className="sticky top-20 space-y-3">
+            {hasCards ? (
               <div className="flex items-baseline justify-between">
                 <h2 className="text-sm font-semibold text-ink">Продвигается</h2>
                 <span className="text-[10px] uppercase tracking-wide text-ink-faint">Реклама</span>
               </div>
+            ) : (
+              <div className="rounded-xl bg-svetlana-50 p-3" data-testid="promo-invite">
+                <div className="text-2xl" aria-hidden>🚀</div>
+                <h2 className="mt-1 text-sm font-semibold text-ink">Покажите своё первым</h2>
+                <p className="mt-1 text-xs leading-relaxed text-ink-soft">
+                  Товар или объявление в этой колонке видят на каждой странице площадки.
+                </p>
+              </div>
+            )}
+            {hasCards && (
               <ul className="space-y-3">
                 {cards.map((c) => (
                   <li key={`${c.kind}-${c.id}`}>
@@ -85,13 +94,13 @@ export async function PromoLayout({ children }: { children: React.ReactNode }) {
                   </li>
                 ))}
               </ul>
-              <Link href="/promote" className="btn btn-primary w-full justify-center px-3 py-2 text-xs">
-                Продвинуть своё от {CHEAPEST} ₽
-              </Link>
-            </div>
-          </aside>
-        </PromoVisibility>
-      )}
+            )}
+            <Link href="/promote" className="btn btn-primary w-full justify-center px-3 py-2 text-xs">
+              Продвинуть своё от {CHEAPEST} ₽
+            </Link>
+          </div>
+        </aside>
+      </PromoVisibility>
     </div>
   );
 }
