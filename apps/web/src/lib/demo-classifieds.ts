@@ -9,7 +9,7 @@ export const DEMO_TITLE_PREFIX = "Пример: ";
 /** Сколько настоящих опубликованных объявлений нужно, чтобы убрать примеры. */
 export const DEMO_REMOVE_AFTER_REAL = 20;
 /** Версия набора примеров: при смене старые примеры заменяются новыми. */
-export const DEMO_VERSION = 2;
+export const DEMO_VERSION = 3;
 export const DEMO_NOTE =
   "Это пример объявления, чтобы показать, как работает АИКО. Связаться с автором нельзя. Разместите своё объявление бесплатно.";
 
@@ -45,6 +45,14 @@ export const DEMO_ADS: DemoAd[] = [
   { city: "Ростов-на-Дону", vertical: "AUTO", dealType: "SELL", category: "Автомобили", title: "Toyota Corolla, 2017, 1.6 CVT, 110 000 км", text: "Надёжный автомобиль, без вложений.", rub: 1_450_000, attrs: { brand: "Toyota", model: "Corolla", year: 2017, mileageKm: 110000, bodyType: "SEDAN", fuelType: "PETROL", transmission: "cvt", ownersCount: 2 } },
   { city: "Нижний Новгород", vertical: "SERVICE", dealType: "SERVICE_OFFER", category: "Красота", title: "Маникюр с покрытием, выезд на дом", text: "Стерильные инструменты, материалы в цене.", rub: 1_300, attrs: { serviceCategory: "Маникюр", format: "client", experienceYears: 5 } },
   { city: "Самара", vertical: "REAL_ESTATE", dealType: "DAILY_RENT", category: "Квартиры", title: "Квартира посуточно у набережной", text: "Две кровати, рядом пляж и кафе.", rub: 2_800, attrs: { propertyType: "APARTMENT", roomsTotal: 2, areaTotal: 46, floor: 6, floorsTotal: 10, furniture: "yes" } },
+  // Заказы для «Фриланса»: разные города и виды работ, чтобы лента не выглядела пустой.
+  // В Новосибирске заказов нарочно нет: на нём проверяется пустая лента «Только мой город».
+  { city: "Москва", vertical: "SERVICE", dealType: "SERVICE_REQUEST", category: "IT и разработка", title: "Нужен лендинг для студии йоги", text: "Одна страница: расписание, цены, запись через форму. Тексты и фото есть.", rub: 30_000, attrs: { serviceCategory: "Разработка сайтов", format: "online" } },
+  { city: "Санкт-Петербург", vertical: "SERVICE", dealType: "SERVICE_REQUEST", category: "Дизайн", title: "Логотип и визитки для кофейни", text: "Нужны 3 варианта логотипа и макет визитки. Срок 2 недели.", rub: 15_000, attrs: { serviceCategory: "Дизайн", format: "online" } },
+  { city: "Екатеринбург", vertical: "SERVICE", dealType: "SERVICE_REQUEST", category: "Ремонт", title: "Собрать кухню и повесить шкафы", text: "Кухня 3,2 м, всё в коробках. Нужен свой инструмент.", rub: 8_000, attrs: { serviceCategory: "Сборка мебели", format: "client" } },
+  { city: "Краснодар", vertical: "SERVICE", dealType: "SERVICE_REQUEST", category: "Тексты и переводы", title: "Описания 40 товаров для интернет-магазина", text: "Садовый инвентарь, по 500–800 знаков на товар, без копирайта с чужих сайтов.", rub: 12_000, attrs: { serviceCategory: "Копирайтинг", format: "online" } },
+  { city: "Нижний Новгород", vertical: "SERVICE", dealType: "SERVICE_REQUEST", category: "Фото и видео", title: "Фотограф на детский день рождения", text: "Суббота, 3 часа, кафе в центре. Нужна обработка 50 кадров.", rub: 9_000, attrs: { serviceCategory: "Фотосъёмка", format: "client" } },
+  { city: "Самара", vertical: "SERVICE", dealType: "SERVICE_REQUEST", category: "Обучение", title: "Репетитор английского для школьника 7 класса", text: "Два занятия в неделю онлайн, цена за месяц.", rub: 10_000, attrs: { serviceCategory: "Репетитор по английскому", format: "online" } },
 ];
 
 /** Пора ли убрать примеры: настоящих объявлений уже достаточно. */
