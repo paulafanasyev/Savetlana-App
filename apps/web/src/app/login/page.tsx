@@ -156,6 +156,7 @@ function LoginInner() {
   const [busy, setBusy] = useState(false);
   const [consentTarget, setConsentTarget] = useState<string | null>(null);
   const [codeStep, setCodeStep] = useState<{ challenge: string; sentTo: string; device: string; reason: CodeReason } | null>(null);
+  const registerHref = next !== "/" ? `/register?next=${encodeURIComponent(next)}` : "/register";
 
   // Общий финал: и после пароля, и после кода.
   const done = (data: { user?: { role?: string }; needsConsent?: boolean }) => {
@@ -210,6 +211,13 @@ function LoginInner() {
       <div className="card p-8">
         <h1 className="text-2xl font-bold text-ink">Вход</h1>
         <p className="mt-1 text-sm text-ink-soft">Рады видеть вас снова.</p>
+        {next !== "/" && (
+          <p className="mt-3 rounded-lg bg-svetlana-50 px-3 py-2 text-sm text-ink" role="status" data-testid="login-next-hint">
+            Этот раздел открывается после входа. Нет аккаунта?{" "}
+            <Link href={registerHref} className="font-medium text-svetlana-700 hover:underline">Регистрация займёт минуту</Link>,
+            после неё вернём вас сюда.
+          </p>
+        )}
         <form className="mt-6 space-y-4" onSubmit={submit}>
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-ink">Email</span>
@@ -254,7 +262,7 @@ function LoginInner() {
         </div>
         <div className="mt-4 text-center text-sm text-ink-soft">
           Нет аккаунта?{" "}
-          <Link href="/register" className="font-medium text-svetlana-700 hover:underline">
+          <Link href={registerHref} className="font-medium text-svetlana-700 hover:underline">
             Зарегистрироваться
           </Link>
         </div>
