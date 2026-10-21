@@ -168,6 +168,26 @@ export async function decideQuote(quoteId: string, sellerId: string, actorUserId
 }
 
 /**
+ * Демо-оптовики (магазины demo-b2b-* из demo-b2b.ts): за их кабинетами нет живого
+ * человека, войти туда нельзя. Чтобы покупатель на демо мог дойти до заказа по КП,
+ * такой продавец подтверждает КП сразу (запись в аудите как обычное решение). У настоящих
+ * продавцов и при JURY_DEMO=0 решает человек.
+ */
+export const DEMO_AUTO_CONFIRM_PREFIX = "demo-b2b-";
+
+export async function autoConfirmDemoQuote(quote: Pick<Quote, "id" | "sellerId" | "sellerUserId">): Promise<boolean> {
+  if ((process.env.JURY_DEMO ?? "").trim() === "0") return false;
+  const seller = await prisma.sellerProfile.findUnique({ where: { id: quote.sellerId }, select: { slug: true } });
+  if (!seller?.slug || !seller.slug.startsWith(DEMO_AUTO_CONFIRM_PREFIX)) return false;
+  try {
+    await decideQuote(quote.id, quote.sellerId, quote.sellerUserId, true);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Покупатель оформляет заказ по подтверждённому КП. Атомарно: КП помечается
  * «заказ оформлен», остаток резервируется, создаётся заказ на оплату. Не
  * хватило остатка — ничего не создаётся и КП остаётся подтверждённым.
