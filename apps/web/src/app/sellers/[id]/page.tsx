@@ -73,7 +73,7 @@ export default async function SellerPage({ params }: PageProps) {
               </div>
               <div>
                 <div className="text-lg font-bold text-ink">
-                  {stats.reviewsCount > 0 ? `★ ${stats.rating.toFixed(1)}` : "—"}
+                  {stats.reviewsCount > 0 ? `★ ${stats.rating.toFixed(1)}` : "☆"}
                 </div>
                 <div className="text-xs text-ink-soft">
                   {stats.reviewsCount > 0 ? `рейтинг, ${stats.reviewsCount} ${plural(stats.reviewsCount, REVIEW_FORMS)}` : "пока нет отзывов"}
@@ -85,10 +85,10 @@ export default async function SellerPage({ params }: PageProps) {
               </div>
               <div>
                 <div className="text-lg font-bold text-ink">
-                  {stats.successRate === null ? "—" : `${Math.round(stats.successRate * 100)}%`}
+                  {stats.successRate === null ? "новичок" : `${Math.round(stats.successRate * 100)}%`}
                 </div>
                 <div className="text-xs text-ink-soft">
-                  {stats.successRate === null ? "мало сделок для оценки" : "сделок без отмен и возвратов"}
+                  {stats.successRate === null ? "оценка после 3 сделок" : "сделок без отмен и возвратов"}
                 </div>
               </div>
             </div>
