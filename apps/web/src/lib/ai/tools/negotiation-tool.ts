@@ -5,7 +5,8 @@
  * действует строго в пределах правил торга этого продавца (кабинет →
  * «Торг B2B»); выключил торг — цена только по прайсу. Договорились —
  * сохраняется КП (b2b-quotes.ts): его подтверждает продавец, потом покупатель
- * оформляет заказ (человек в контуре).
+ * оформляет заказ (человек в контуре). Демо-оптовики demo-b2b-* подтверждают
+ * сразу (за их кабинетами нет человека), и Светлана прямо это говорит.
  *
  * Два режима: с productId — торг с одним продавцом; с query — запрос цены
  * у нескольких продавцов (реверсивный аукцион), КП уходит лучшему. К цене
@@ -17,7 +18,7 @@ import type { ToolDefinition, ToolContext, ToolResult } from "./registry";
 import { prisma } from "../../prisma";
 import { negotiate, type NegotiationResult } from "../../negotiation";
 import { getSellerNegotiationPolicy } from "../../domains/negotiation-policy";
-import { createQuote } from "../../domains/b2b-quotes";
+import { autoConfirmDemoQuote, createQuote, type Quote } from "../../domains/b2b-quotes";
 import { audit } from "../../domains/audit";
 import { NEGOTIATION_AUDIT, type NegotiationAuditEntry } from "../../domains/agent-effectiveness";
 import { applyTerms, PAYMENT_LABEL, type AppliedTerms, type PaymentTerms, type SellerTerms, type TermsRequest } from "../../negotiation-terms";
@@ -32,6 +33,17 @@ const rub = (k: number) => `${Math.round(k / 100).toLocaleString("ru-RU")} ₽`;
 /** Запись запуска торга в журнал аудита (для дашборда админки). */
 async function logNegotiation(ctx: ToolContext, targetType: string, targetId: string, entry: NegotiationAuditEntry): Promise<void> {
   await audit({ actorId: ctx.userId ?? undefined, actorRole: "buyer", action: NEGOTIATION_AUDIT, targetType, targetId: targetId.slice(0, 120), after: entry });
+}
+
+/**
+ * КП создано: у демо-оптовика оно подтверждается сразу, у остальных ждёт
+ * продавца. Возвращает фразу для ответа в чате.
+ */
+async function quoteNoteFor(quote: Quote, lead: string): Promise<string> {
+  if (await autoConfirmDemoQuote(quote)) {
+    return ` ${quote.number}${lead}: демо-оптовик подтвердил его автоматически (у настоящего продавца решает человек). Оформить заказ по цене КП: [Мои КП](/quotes).`;
+  }
+  return ` ${quote.number}${lead} отправлено продавцу на подтверждение, следить и оформить заказ: [Мои КП](/quotes).`;
 }
 
 /** Условия, о которых просил покупатель: срок и оплата. Ничего не просил — null. */
@@ -179,7 +191,7 @@ export const negotiateQuoteTool: ToolDefinition = {
           ...(applied ? { leadDays: applied.leadDays, payment: applied.payment, deferralDays: applied.deferralDays || undefined, termsLines: applied.lines } : {}),
         });
         quoteId = quote.id;
-        quoteNote = ` ${quote.number} отправлено продавцу на подтверждение, следить и оформить заказ: [Мои КП](/quotes).`;
+        quoteNote = await quoteNoteFor(quote, "");
       } catch {
         quoteNote = "";
       }
@@ -344,7 +356,7 @@ async function rfq(ctx: ToolContext, query: string, args: Record<string, unknown
         ...(winner.terms ? { leadDays: winner.terms.leadDays, payment: winner.terms.payment, deferralDays: winner.terms.deferralDays || undefined, termsLines: winner.terms.lines } : {}),
       });
       quoteId = quote.id;
-      quoteNote = ` ${quote.number} с лучшим продавцом отправлено ему на подтверждение: [Мои КП](/quotes).`;
+      quoteNote = await quoteNoteFor(quote, " с лучшим продавцом");
     } catch {
       quoteNote = "";
     }
