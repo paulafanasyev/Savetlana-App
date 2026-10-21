@@ -8,6 +8,7 @@ import { autoConfirmDemoQuote, createQuote, decideQuote, listSellerQuotes } from
 
 const ORIGINAL = process.env.JURY_DEMO;
 const rnd = () => randomBytes(4).toString("hex");
+const TITLE = "Автоподтверждение тестовый товар";
 
 afterEach(() => {
   if (ORIGINAL === undefined) delete process.env.JURY_DEMO;
@@ -17,7 +18,7 @@ afterEach(() => {
 async function shop(slug: string) {
   const u = await prisma.user.create({ data: { email: `${slug}@shop.test`, name: slug, role: "SELLER", passwordHash: await hashPassword("password123") } });
   const s = await prisma.sellerProfile.create({ data: { userId: u.id, slug, displayName: slug, isActivated: true } });
-  const p = await prisma.product.create({ data: { sellerId: s.id, sku: `T-${slug}`, title: "Перчатки тест", priceKopecks: 5000, status: "ACTIVE" } });
+  const p = await prisma.product.create({ data: { sellerId: s.id, sku: `T-${slug}`, title: TITLE, priceKopecks: 5000, status: "ACTIVE" } });
   return { sellerId: s.id, productId: p.id };
 }
 
@@ -55,7 +56,7 @@ describe("Вход продавцом для жюри", () => {
 describe("Демо-оптовик подтверждает КП сам", () => {
   const buyer = async () => (await prisma.user.create({ data: { email: `b-${rnd()}@buyer.test`, name: "Закупщик", passwordHash: await hashPassword("password123") } })).id;
   const quoteFor = async (sellerId: string, productId: string, buyerId: string) =>
-    createQuote({ productId, sellerId, buyerId, title: "Перчатки тест", quantity: 10, unitPriceKopecks: 4500, listPriceKopecks: 5000, totalKopecks: 45000, discountPercent: 10, rounds: 2, chain: "тест" });
+    createQuote({ productId, sellerId, buyerId, title: TITLE, quantity: 10, unitPriceKopecks: 4500, listPriceKopecks: 5000, totalKopecks: 45000, discountPercent: 10, rounds: 2, chain: "тест" });
 
   it("у demo-b2b-* КП сразу подтверждено", async () => {
     delete process.env.JURY_DEMO;
