@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { negotiate, type NegotiationResult } from "@/lib/negotiation";
 
@@ -139,8 +140,8 @@ export default function B2BNegotiationPage() {
           <button type="button" disabled={liveBusy || livePrompt.trim().length === 0} className="rounded bg-blue-900 px-4 py-2 font-medium text-white disabled:opacity-60" onClick={runLiveNegotiation}>
             {liveBusy ? "Запрос выполняется…" : "Отправить запрос серверному агенту"}
           </button>
-          <a className="text-sm underline" href="/login?next=%2Fb2b%2Fnegotiation">Войти, чтобы сохранить КП</a>
-          <a className="text-sm underline" href="/quotes">Мои КП</a>
+          <Link className="text-sm underline" href="/login?next=%2Fb2b%2Fnegotiation">Войти, чтобы сохранить КП</Link>
+          <Link className="text-sm underline" href="/quotes">Мои КП</Link>
         </div>
         {liveError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900">{liveError}</p>}
         {liveResult && (
