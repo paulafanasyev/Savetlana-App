@@ -4,6 +4,7 @@ import { prisma } from "../src/lib/prisma";
 import { hashPassword } from "../src/lib/auth";
 import { toolRegistry } from "../src/lib/ai/tools";
 import { AGENT_TOOLS } from "../src/lib/ai/agents/router";
+import { listBuyerQuotes } from "../src/lib/domains/b2b-quotes";
 
 const SELLER = { listPriceKopecks: 100000, stockQty: 500 };
 
@@ -100,6 +101,7 @@ describe("инструмент negotiate_quote", () => {
   const W = process.env.VITEST_WORKER_ID ?? "0";
   let productId = "";
   let unconfirmedId = "";
+  let buyerId = "";
   const ctx = { userId: "", role: "buyer", traceId: `neg-${W}` };
 
   beforeAll(async () => {
@@ -120,6 +122,18 @@ describe("инструмент negotiate_quote", () => {
       },
     });
     productId = product.id;
+    await prisma.listing.create({
+      data: {
+        productId: product.id,
+        publishedAt: new Date(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        isLive: true,
+      },
+    });
+    const buyer = await prisma.user.create({
+      data: { email: `neg-buyer@${W}.test`, name: "Покупатель", role: "BUYER", passwordHash: await hashPassword("password123") },
+    });
+    buyerId = buyer.id;
     const unconfirmed = await prisma.product.create({
       data: {
         sellerId: seller.id,
@@ -148,6 +162,29 @@ describe("инструмент negotiate_quote", () => {
     expect(res.summary).toContain("проект КП");
     const after = await prisma.product.findUnique({ where: { id: productId }, select: { priceKopecks: true } });
     expect(after?.priceKopecks).toBe(100000);
+  });
+
+  it("RFQ ищет активные товары нескольких продавцов и сохраняет КП покупателю", async () => {
+    const tool = toolRegistry.get("negotiate_quote")!;
+    const res = await tool.execute(
+      { ...ctx, userId: buyerId, traceId: `rfq-${W}` },
+      { query: "перчатки рабочие", quantity: 100, targetPriceRub: 800, maxPriceRub: 900, leadDays: 7, payment: "SAFE_DEAL" }
+    );
+    expect(res.ok).toBe(true);
+    expect(res.verification).toBe("VERIFIED");
+    expect(res.summary).toContain("Запросила цену у");
+    const data = res.data as { mode: string; query: string; quantity: number; quoteId: string | null; offers: Array<{ title: string; seller: string; status: string }> };
+    expect(data.mode).toBe("rfq");
+    expect(data.query).toBe("перчатки рабочие");
+    expect(data.quantity).toBe(100);
+    expect(data.offers.some((offer) => offer.title === "Перчатки рабочие" && offer.seller === "Оптовик")).toBe(true);
+    expect(data.quoteId).toBeTruthy();
+    const saved = await listBuyerQuotes(buyerId);
+    const quote = saved.find((item) => item.id === data.quoteId);
+    expect(quote).toBeDefined();
+    expect(quote?.status).toBe("AWAITING_SELLER");
+    expect(quote?.leadDays).toBe(7);
+    expect(quote?.payment).toBe("SAFE_DEAL");
   });
 
   it("не обещает партию, если продавец не подтвердил наличие", async () => {
