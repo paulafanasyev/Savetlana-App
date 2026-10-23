@@ -2,10 +2,10 @@
 
 *Материалы к чек-поинту RLT.Startup (Росэлторг.Университет)*
 
-**Проект:** АИКО, маркетплейс с ИИ-помощником «Светлана» (собственная обученная модель)\
+**Проект:** АИКО, маркетплейс с ИИ-помощником «Светлана» через AI Gateway; наличие отдельно обученной production-модели нужно подтвердить runtime-доказательством\
 **Прототип:** https://savetlana-app-web.vercel.app\
 **Презентация:** https://savetlana-app-web.vercel.app/checkpoint/aiko-deck.html\
-**B2B-торг агентов (живое демо без входа):** https://savetlana-app-web.vercel.app/b2b/negotiation\
+**Демонстрация B2B-переговоров:** https://savetlana-app-web.vercel.app/b2b/negotiation (серверный вызов требует входа для сохранения КП; локальный sandbox отдельно помечен)\
 **КП покупателя / продавца:** `/quotes`, `/seller/quotes` · **правила торга:** `/seller/negotiation` · **дашборд агента:** `/admin/agents`\
 **Код:** https://github.com/paulafanasyev/Savetlana-App (ветка `svetlana/initial-implementation`)\
 **Автор и разработчик:** Афанасьев Павел Петрович, технический директор (CTO), руководитель направления ИИ-разработок и внедрения АНО ЦПС «Мир Самозанятых», xongphavietnam@gmail.com
