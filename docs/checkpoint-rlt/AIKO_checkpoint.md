@@ -297,10 +297,11 @@ xongphavietnam@gmail.com
 
 ### Реестр результатов
 
-- URL зелёного CI и проверенный commit: PENDING.
-- Preview deployment и совпадение SHA деплоя с PR: PENDING.
-- Живой RFQ с реальными товарами: PENDING.
-- Сохранённое КП и подтверждение продавца: PENDING.
+- [Release pipeline #957](https://github.com/paulafanasyev/Savetlana-App/actions/runs/39903410474): PASS на кодовом SHA `c7a213f84f4ba4a6e8d67e80d7b4645fbf3095aa`. Typecheck, security, PostgreSQL schema, два shards (972 теста / 180 файлов), production build и release gate прошли. Следующий коммит этого раздела меняет только конкурсную документацию.
+- [Browser E2E #218](https://github.com/paulafanasyev/Savetlana-App/actions/runs/39903414622): PASS на SHA `c7a213f84f4ba4a6e8d67e80d7b4645fbf3095aa`.
+- Preview deployment и совпадение SHA развертывания с PR: PENDING — GitHub показывает «This branch has not been deployed», создание Vercel preview блокируется scope-авторизацией `xongphavietnam-8810`.
+- RFQ по реальному каталогу в развёрнутом preview: PENDING.
+- Сохранение КП и подтверждение продавца: VERIFIED в интеграционных тестах CI через изолированную тестовую БД (`negotiation.test.ts`, `b2b-quotes.test.ts`); RUNTIME VERIFIED для production/preview: PENDING.
 - Health/status живого ИИ: проверено 2026-10-23, endpoint вернул available=true, liveModel=true, mode=LIVE; это не подтверждает принадлежность модели к собственной обученной модели «Светлана».
 - Подтверждение отдельной собственной модели, реального OCR и внешних провайдеров: PENDING.
 
