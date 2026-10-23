@@ -31,7 +31,7 @@ const PRESETS: Array<{ id: string; label: string; form: Form }> = [
 ];
 
 const STATUS: Record<NegotiationResult["status"], { text: string; cls: string }> = {
-  AGREED: { text: "Договорились: проект КП", cls: "border-emerald-300 bg-emerald-50 text-emerald-900" },
+  AGREED: { text: "Sandbox: расчёт сошёлся", cls: "border-emerald-300 bg-emerald-50 text-emerald-900" },
   NO_DEAL: { text: "Сделки нет", cls: "border-rose-300 bg-rose-50 text-rose-900" },
   NEEDS_HUMAN: { text: "Нужно решение человека", cls: "border-amber-300 bg-amber-50 text-amber-900" },
 };
@@ -259,14 +259,15 @@ export default function B2BNegotiationPage() {
           </ul>
           {result.status === "AGREED" && (
             <div className="space-y-2 border-t pt-3">
-              <h3 className="text-sm font-semibold">Подтверждают люди</h3>
+              <h3 className="text-sm font-semibold">Имитация подтверждений (локально)</h3>
+              <p className="text-xs text-ink-soft">Эти кнопки меняют только состояние экрана. Они не подтверждают сохранённое КП и не создают заказ в базе.</p>
               <button type="button" disabled={sellerOk} className="w-full rounded border px-3 py-2 text-sm disabled:opacity-60" onClick={() => setSellerOk(true)}>
-                {sellerOk ? "Продавец подтвердил КП" : "1. Продавец: подтвердить КП"}
+                {sellerOk ? "Симуляция: продавец согласен" : "1. Симулировать согласие продавца"}
               </button>
               <button type="button" disabled={!sellerOk || buyerOk} className="w-full rounded border px-3 py-2 text-sm disabled:opacity-60" onClick={() => setBuyerOk(true)}>
-                {buyerOk ? "Покупатель принял КП" : "2. Покупатель: принять КП"}
+                {buyerOk ? "Симуляция: покупатель согласен" : "2. Симулировать согласие покупателя"}
               </button>
-              {buyerOk && <p className="text-sm">Обе стороны согласны. В рабочем режиме дальше создаётся заказ с безопасной сделкой и чеком. В этом демо заказ не создаётся.</p>}
+              {buyerOk && <p className="text-sm">В локальном sandbox обе стороны отмечены согласными только в интерфейсе. КП не сохраняется, реальный заказ и платёж не создаются.</p>}
             </div>
           )}
         </section>
