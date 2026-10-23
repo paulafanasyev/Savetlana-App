@@ -11,7 +11,13 @@ npx vitest run <file>     # конкретный файл
 
 ## Текущее состояние
 
-**285 тестов, 32 файла — все проходят.**
+**Последний подтверждённый прогон кода: PASS — commit `71c437d9e058254c5cfe27184f740a8be897bc37`.**
+
+- [Release pipeline #956](https://github.com/paulafanasyev/Savetlana-App/actions/runs/39903038753): `Lint & Typecheck`, `Security scan`, `PostgreSQL schema`, `Production build`, `Tests (1)`, `Tests (2)` и `Release gate` завершились успешно.
+- `Tests (1)`: 90 файлов, 463 теста пройдены. `Tests (2)`: 90 файлов, 509 тестов пройдены. Всего: **180 test files, 972 tests passed**.
+- [Browser E2E check #217](https://github.com/paulafanasyev/Savetlana-App/actions/runs/39903055746): браузерный smoke-сценарий завершился успешно; артефакт [browser-check](https://github.com/paulafanasyev/Savetlana-App/actions/runs/39903055746) прикреплён к запуску.
+- Этот CI подтверждает конкретный SHA выше. Любое последующее изменение кода требует проверки соответствующего нового commit.
+- **Runtime preview B2B для этой ветки: PENDING.** GitHub сообщает, что ветка не развёрнута. Создание preview через Vercel не удалось из-за отсутствия авторизации на командный scope `xongphavietnam-8810`. Production не изменялся.
 
 | Файл | Тестов | Что покрывает |
 |------|--------|---------------|
@@ -73,7 +79,7 @@ npx vitest run <file>     # конкретный файл
 
 ## Runtime verification
 
-Помимо тестов, критический путь проверен в **живом runtime** на работающем сервере:
+Следующий путь приводился в предыдущей версии документа как runtime-сценарий. Он не является частью текущего CI #956 и не заменяет live-проверку RFQ и сохранённого КП:
 
 ```
 register → login → search → cart → checkout (risk LOW)

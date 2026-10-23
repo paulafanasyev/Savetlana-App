@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { negotiate, type NegotiationResult } from "@/lib/negotiation";
 
 /**
- * Демо B2B-переговоров: агент покупателя и агент продавца торгуются о цене
- * партии в пределах правил, которые задали люди. Всё считается в браузере
- * тем же кодом, что использует Светлана (инструмент negotiate_quote).
+ * Страница разделяет два разных уровня доказательств:
+ * - live-запрос вызывает серверный Master Agent через /api/ai/chat;
+ * - sandbox ниже локально иллюстрирует детерминированные правила и не сохраняет КП.
  */
 
 interface Form {
@@ -30,9 +31,19 @@ const PRESETS: Array<{ id: string; label: string; form: Form }> = [
 ];
 
 const STATUS: Record<NegotiationResult["status"], { text: string; cls: string }> = {
-  AGREED: { text: "Договорились: проект КП", cls: "border-emerald-300 bg-emerald-50 text-emerald-900" },
+  AGREED: { text: "Sandbox: расчёт сошёлся", cls: "border-emerald-300 bg-emerald-50 text-emerald-900" },
   NO_DEAL: { text: "Сделки нет", cls: "border-rose-300 bg-rose-50 text-rose-900" },
   NEEDS_HUMAN: { text: "Нужно решение человека", cls: "border-amber-300 bg-amber-50 text-amber-900" },
+};
+
+type LiveChatResult = {
+  answer?: string;
+  error?: string;
+  verification?: string;
+  guest?: boolean;
+  conversationId?: string | null;
+  traceId?: string;
+  steps?: Array<{ tool: string; ok: boolean; summary?: string }>;
 };
 
 const rub = (k: number) => `${(k / 100).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽`;
@@ -51,7 +62,33 @@ export default function B2BNegotiationPage() {
   const [form, setForm] = useState<Form>(PRESETS[0].form);
   const [sellerOk, setSellerOk] = useState(false);
   const [buyerOk, setBuyerOk] = useState(false);
+  const [livePrompt, setLivePrompt] = useState("Собери КП на перчатки рабочие, 100 штук, хочу по 800 ₽ за штуку, потолок 900 ₽, поставка за 7 дней, безопасная сделка.");
+  const [liveBusy, setLiveBusy] = useState(false);
+  const [liveError, setLiveError] = useState("");
+  const [liveResult, setLiveResult] = useState<LiveChatResult | null>(null);
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
+
+  const runLiveNegotiation = async () => {
+    setLiveBusy(true);
+    setLiveError("");
+    setLiveResult(null);
+    try {
+      const response = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: livePrompt, side: "buyer" }),
+      });
+      const data = await response.json().catch(() => null) as LiveChatResult | null;
+      if (!response.ok || !data) {
+        throw new Error(data?.error ?? "Сервер не ответил. Проверьте вход и повторите запрос.");
+      }
+      setLiveResult(data);
+    } catch (error) {
+      setLiveError(error instanceof Error ? error.message : "Не удалось выполнить запрос.");
+    } finally {
+      setLiveBusy(false);
+    }
+  };
 
   const result = useMemo(() => {
     const stock = form.stock.trim() === "" ? null : Number(form.stock);
@@ -80,10 +117,67 @@ export default function B2BNegotiationPage() {
       <div>
         <h1 className="text-2xl font-semibold">B2B-переговоры агентов</h1>
         <p className="mt-1 text-ink-soft">
-          Агент покупателя и агент продавца сами торгуются о цене партии. Каждый действует только в пределах, которые задал его человек:
-          продавец не опустится ниже своего минимума, покупатель не выйдет за бюджет. Итог — проект коммерческого предложения, его подтверждают люди.
+          Сначала попробуйте серверный сценарий со Светланой: он проходит через API Master Agent и может вызвать инструмент запроса КП по активному каталогу.
+          Ниже также оставлен отдельный локальный sandbox для проверки ценовых ограничений.
         </p>
       </div>
+
+      <section className="space-y-4 rounded-xl border-2 border-blue-300 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">Реальный сценарий со Светланой</h2>
+          <span className="rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-900">SERVER API</span>
+        </div>
+        <p className="text-sm text-ink-soft">
+          Запрос отправляется на /api/ai/chat. Ответ, шаги инструментов и метка проверки берутся из сервера.
+          Успешное согласование использует каталог и правила продавцов; у вошедшего покупателя КП может сохраниться в «Мои КП».
+          Этот путь не оформляет заказ и не запускает оплату автоматически.
+        </p>
+        <label className="block text-sm">
+          <span className="font-medium">Запрос покупателя</span>
+          <textarea className="mt-1 w-full rounded border px-3 py-2" rows={3} maxLength={4000} value={livePrompt} onChange={(e) => setLivePrompt(e.target.value)} />
+        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" disabled={liveBusy || livePrompt.trim().length === 0} className="rounded bg-blue-900 px-4 py-2 font-medium text-white disabled:opacity-60" onClick={runLiveNegotiation}>
+            {liveBusy ? "Запрос выполняется…" : "Отправить запрос серверному агенту"}
+          </button>
+          <Link className="text-sm underline" href="/login?next=%2Fb2b%2Fnegotiation">Войти, чтобы сохранить КП</Link>
+          <Link className="text-sm underline" href="/quotes">Мои КП</Link>
+        </div>
+        {liveError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900">{liveError}</p>}
+        {liveResult && (
+          <div data-testid="live-rfq-result" className="space-y-3 rounded-lg border p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <strong>Метка сервера: {liveResult.verification ?? "NOT_PROVEN"}</strong>
+              {liveResult.guest && <span className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">Гостевой режим — КП не сохранится</span>}
+            </div>
+            <p className="whitespace-pre-wrap text-sm">{liveResult.answer ?? "Сервер не вернул текст ответа."}</p>
+            {liveResult.steps && liveResult.steps.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold">Шаги инструментов на сервере</h3>
+                <ol className="mt-2 space-y-2">
+                  {liveResult.steps.map((step, index) => (
+                    <li key={`${step.tool}-${index}`} className="rounded border p-3 text-sm">
+                      <div className="font-medium">{step.tool} · {step.ok ? "успешно" : "ошибка"}</div>
+                      {step.summary && <div className="mt-1 text-ink-soft">{step.summary}</div>}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {liveResult.conversationId && <p className="break-all text-xs text-ink-soft">Conversation ID: {liveResult.conversationId}</p>}
+            {liveResult.traceId && <p className="break-all text-xs text-ink-soft">Trace ID: {liveResult.traceId}</p>}
+            <p className="text-xs text-ink-soft">
+              Ответ модели сам по себе не доказывает действие: ищите успешный шаг negotiate_quote, метку проверки и сохранённое КП в /quotes.
+              Если инструмент не вызван или метка не подтверждающая, отмечайте результат как NOT PROVEN.
+            </p>
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Локальный sandbox: правила цены и остатка</h2>
+        <p className="text-sm text-ink-soft">Этот блок работает в браузере на демонстрационных числах. Он не обращается к каталогу, не вызывает модель и не сохраняет коммерческое предложение.</p>
+      </section>
 
       <div className="flex flex-wrap gap-2">
         {PRESETS.map((p) => (
@@ -165,14 +259,15 @@ export default function B2BNegotiationPage() {
           </ul>
           {result.status === "AGREED" && (
             <div className="space-y-2 border-t pt-3">
-              <h3 className="text-sm font-semibold">Подтверждают люди</h3>
+              <h3 className="text-sm font-semibold">Имитация подтверждений (локально)</h3>
+              <p className="text-xs text-ink-soft">Эти кнопки меняют только состояние экрана. Они не подтверждают сохранённое КП и не создают заказ в базе.</p>
               <button type="button" disabled={sellerOk} className="w-full rounded border px-3 py-2 text-sm disabled:opacity-60" onClick={() => setSellerOk(true)}>
-                {sellerOk ? "Продавец подтвердил КП" : "1. Продавец: подтвердить КП"}
+                {sellerOk ? "Симуляция: продавец согласен" : "1. Симулировать согласие продавца"}
               </button>
               <button type="button" disabled={!sellerOk || buyerOk} className="w-full rounded border px-3 py-2 text-sm disabled:opacity-60" onClick={() => setBuyerOk(true)}>
-                {buyerOk ? "Покупатель принял КП" : "2. Покупатель: принять КП"}
+                {buyerOk ? "Симуляция: покупатель согласен" : "2. Симулировать согласие покупателя"}
               </button>
-              {buyerOk && <p className="text-sm">Обе стороны согласны. В рабочем режиме дальше создаётся заказ с безопасной сделкой и чеком. В этом демо заказ не создаётся.</p>}
+              {buyerOk && <p className="text-sm">В локальном sandbox обе стороны отмечены согласными только в интерфейсе. КП не сохраняется, реальный заказ и платёж не создаются.</p>}
             </div>
           )}
         </section>
